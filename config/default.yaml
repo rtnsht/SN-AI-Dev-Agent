@@ -1,0 +1,81 @@
+# SN AI Dev - Default Configuration
+
+instance:
+  # Instance URL (can be overridden by environment variable)
+  url: ${SN_INSTANCE_URL}
+  
+  # Authentication method: basic, oauth
+  auth_method: basic
+  
+  # API version
+  api_version: "now/v2"
+
+development:
+  # Default application scope for new artifacts
+  default_scope: "global"
+  
+  # Update set naming pattern
+  update_set_pattern: "${prefix}_${date}_${requirement_id}"
+  
+  # Auto-commit update sets after deployment
+  auto_commit: false
+
+artifacts:
+  # Supported artifact types
+  types:
+    - business_rule
+    - script_include
+    - client_script
+    - ui_action
+    - ui_policy
+    - scheduled_job
+    - rest_api
+    - flow
+    - widget
+    - acl
+    
+  # Tables for each artifact type
+  tables:
+    business_rule: sys_script
+    script_include: sys_script_include
+    client_script: sys_script_client
+    ui_action: sys_ui_action
+    ui_policy: sys_ui_policy
+    scheduled_job: sysauto_script
+    rest_api: sys_ws_operation
+    flow: sys_hub_flow
+    widget: sp_widget
+    acl: sys_security_acl
+
+context:
+  # Tables to analyze for brownfield context
+  analyze_tables:
+    - sys_db_object        # Tables
+    - sys_dictionary       # Fields
+    - sys_script           # Business Rules
+    - sys_script_include   # Script Includes
+    - sys_script_client    # Client Scripts
+    - sys_ui_policy        # UI Policies
+    - sys_choice           # Choice Lists
+    - sys_documentation    # Documentation
+    
+  # Max records to fetch per table
+  max_records: 100
+
+output:
+  # Output directory for generated artifacts
+  artifacts_dir: "./output/artifacts"
+  
+  # Update sets directory
+  update_sets_dir: "./output/update_sets"
+  
+  # Specs and documentation
+  docs_dir: "./output/docs"
+  
+  # Task breakdown
+  tasks_dir: "./output/tasks"
+
+logging:
+  level: info
+  file: "./logs/sn-ai-dev.log"
+

@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "servicenow": {
+      "command": "node",
+      "args": ["mcp-servicenow/dist/index.js"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "SN_INSTANCE_URL": "${env:SN_INSTANCE_URL}",
+        "SN_USERNAME": "${env:SN_USERNAME}",
+        "SN_PASSWORD": "${env:SN_PASSWORD}"
+      }
+    }
+  }
+}
+

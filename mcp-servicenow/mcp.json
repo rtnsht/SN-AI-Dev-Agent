@@ -1,0 +1,89 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/model-context-protocol/main/schema/mcp.schema.json",
+  "name": "mcp-servicenow",
+  "version": "1.0.0",
+  "description": "MCP Server for ServiceNow - Enables AI assistants to interact with ServiceNow instances",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "tools": [
+    {
+      "name": "sn_test_connection",
+      "description": "Test connection to the ServiceNow instance"
+    },
+    {
+      "name": "sn_get_instance_info",
+      "description": "Get information about the connected ServiceNow instance"
+    },
+    {
+      "name": "sn_get_tables",
+      "description": "List available tables in the instance"
+    },
+    {
+      "name": "sn_get_table_schema",
+      "description": "Get the schema (fields) for a specific table"
+    },
+    {
+      "name": "sn_query_records",
+      "description": "Query records from any ServiceNow table"
+    },
+    {
+      "name": "sn_get_record",
+      "description": "Get a single record by sys_id"
+    },
+    {
+      "name": "sn_create_record",
+      "description": "Create a new record in any table"
+    },
+    {
+      "name": "sn_update_record",
+      "description": "Update an existing record"
+    },
+    {
+      "name": "sn_get_business_rules",
+      "description": "Get business rules for a table"
+    },
+    {
+      "name": "sn_create_business_rule",
+      "description": "Create a new business rule"
+    },
+    {
+      "name": "sn_get_script_includes",
+      "description": "Get script includes"
+    },
+    {
+      "name": "sn_create_script_include",
+      "description": "Create a new script include"
+    },
+    {
+      "name": "sn_get_client_scripts",
+      "description": "Get client scripts for a table"
+    },
+    {
+      "name": "sn_create_client_script",
+      "description": "Create a new client script"
+    },
+    {
+      "name": "sn_list_update_sets",
+      "description": "List update sets in the instance"
+    },
+    {
+      "name": "sn_get_update_set",
+      "description": "Get details of a specific update set"
+    },
+    {
+      "name": "sn_create_update_set",
+      "description": "Create a new update set"
+    },
+    {
+      "name": "sn_complete_update_set",
+      "description": "Mark an update set as complete"
+    },
+    {
+      "name": "sn_get_update_set_contents",
+      "description": "Get the contents/changes in an update set"
+    }
+  ]
+}
+
