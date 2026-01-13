@@ -17,8 +17,12 @@ const instanceUrl = process.env.SN_INSTANCE_URL;
 const auth = { username: process.env.SN_USERNAME, password: process.env.SN_PASSWORD };
 const headers = { 'Accept': 'application/json', 'Content-Type': 'application/json' };
 
-// Load script files
-const loadScript = (filename) => fs.readFileSync(path.join(__dirname, filename), 'utf8');
+// Path to implementation files in requirements folder
+const IMPL_PATH = path.join(__dirname, '../../../requirements/REQ-002/3-implementation');
+
+// Load script files from requirements folder
+const loadScriptInclude = (filename) => fs.readFileSync(path.join(IMPL_PATH, 'script-includes', filename), 'utf8');
+const loadBusinessRule = (filename) => fs.readFileSync(path.join(IMPL_PATH, 'business-rules', filename), 'utf8');
 
 async function createRecord(table, data) {
     const response = await axios.post(`${instanceUrl}/api/now/table/${table}`, data, { auth, headers });
@@ -155,7 +159,7 @@ async function deployScriptIncludes() {
     ];
 
     for (const si of scriptIncludes) {
-        const script = loadScript(si.file);
+        const script = loadScriptInclude(si.file);
 
         // Check if exists
         const existing = await query('sys_script_include', {
@@ -184,7 +188,7 @@ async function deployScriptIncludes() {
 }
 
 async function deployBusinessRule() {
-    const brScript = loadScript('IncidentDeduplicationTrigger.js');
+    const brScript = loadBusinessRule('IncidentDeduplicationTrigger.js');
     const brName = 'Incident Deduplication Trigger';
 
     const existing = await query('sys_script', {
