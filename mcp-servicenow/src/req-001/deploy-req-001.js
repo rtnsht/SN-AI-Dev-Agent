@@ -9,22 +9,27 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 const instanceUrl = process.env.SN_INSTANCE_URL;
 const auth = { username: process.env.SN_USERNAME, password: process.env.SN_PASSWORD };
 const headers = { 'Accept': 'application/json', 'Content-Type': 'application/json' };
 
-const UPDATE_SET_ID = '42715563939232102f57f0ba2bba10eb';
+// Path to implementation files in requirements folder
+const IMPL_PATH = path.join(__dirname, '../../../requirements/REQ-001/3-implementation');
 
 async function createRecord(table, data) {
   const response = await axios.post(`${instanceUrl}/api/now/table/${table}`, data, { auth, headers });
   return response.data.result;
 }
 
-function readScript(filename) {
-  return fs.readFileSync(path.join(__dirname, 'scripts', filename), 'utf8');
+function readScriptInclude(filename) {
+  return fs.readFileSync(path.join(IMPL_PATH, 'script-includes', filename), 'utf8');
+}
+
+function readBusinessRule(filename) {
+  return fs.readFileSync(path.join(IMPL_PATH, 'business-rules', filename), 'utf8');
 }
 
 async function main() {
@@ -46,7 +51,7 @@ async function main() {
 
   for (const si of scriptIncludes) {
     try {
-      const script = readScript(si.file);
+      const script = readScriptInclude(si.file);
       const result = await createRecord('sys_script_include', {
         name: si.name,
         api_name: 'global.' + si.name,
@@ -66,7 +71,7 @@ async function main() {
   console.log('\n━━━ Deploying Business Rule ━━━\n');
 
   try {
-    const brScript = readScript('BR_IncidentAssignmentOrchestrator.js');
+    const brScript = readBusinessRule('BR_IncidentAssignmentOrchestrator.js');
     // Extract just the function body for the BR
     const scriptBody = brScript.replace(/\/\*\*[\s\S]*?\*\/\s*/, '');
     
