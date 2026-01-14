@@ -8,7 +8,7 @@ An MCP (Model Context Protocol) server that enables AI assistants like Augment t
 - **Schema Discovery**: Get table schemas and field information
 - **Record Operations**: Query, create, update, delete records
 - **Script Management**: Create/read Business Rules, Script Includes, Client Scripts
-- **Update Sets**: Create and manage update sets
+- **Update Sets**: Create, manage, and **capture artifacts via REST API**
 
 ## Quick Start
 
@@ -35,7 +35,22 @@ SN_USERNAME=admin
 SN_PASSWORD=your-password
 ```
 
-### 4. Test the Server
+### 4. First-Time Setup: UpdateSetHelper API
+
+**Important:** To capture artifacts in update sets via REST API, you need to deploy the UpdateSetHelper API to your instance:
+
+```bash
+node src/deployer/setup-updateset-api.js
+```
+
+If the API already exists on your instance, get the full path from ServiceNow:
+1. Go to: System Web Services → Scripted REST APIs → UpdateSetHelper
+2. Note the "Base API path" (e.g., `/api/1852730/update_set_helper`)
+3. Add to `.env`: `SN_UPDATE_SET_API_PATH=/api/<namespace>/update_set_helper/set_current`
+
+See [Update Set Artifact Capture](#update-set-artifact-capture) for details.
+
+### 5. Test the Server
 
 ```bash
 npm start
@@ -95,9 +110,176 @@ Once connected, ask Augment:
 - "Create a business rule on incident that..."
 - "Create an update set called 'My Feature'"
 
+## Deployment Framework
+
+The MCP ServiceNow server includes a **generic deployment framework** for deploying artifacts to ServiceNow instances.
+
+### Quick Deploy
+
+```bash
+# Deploy using a manifest file
+node src/deployer/cli.js --config src/deployments/inc-simple-002.json
+```
+
+### Creating a Deployment Manifest
+
+Create a JSON manifest file that describes your deployment:
+
+```json
+{
+  "name": "MY-FEATURE-001",
+  "description": "Description of your feature",
+  "updateSet": {
+    "name": "My Feature Update Set",
+    "description": "Contains all artifacts for my feature"
+  },
+  "artifacts": [
+    {
+      "type": "script_include",
+      "name": "MyScriptInclude",
+      "file": "./path/to/MyScriptInclude.js",
+      "client_callable": true
+    },
+    {
+      "type": "client_script",
+      "name": "MyClientScript",
+      "file": "./path/to/MyClientScript.js",
+      "table": "incident",
+      "type": "onChange",
+      "field": "caller_id"
+    },
+    {
+      "type": "business_rule",
+      "name": "MyBusinessRule",
+      "file": "./path/to/MyBusinessRule.js",
+      "table": "incident",
+      "when": "before",
+      "insert": true
+    }
+  ]
+}
+```
+
+### Supported Artifact Types
+
+| Type | Table | Description |
+|------|-------|-------------|
+| `script_include` | sys_script_include | Server-side reusable scripts |
+| `client_script` | sys_script_client | Browser-side form scripts |
+| `business_rule` | sys_script | Server-side table triggers |
+
+### Programmatic Usage
+
+```javascript
+import { ServiceNowDeployer } from './src/deployer/index.js';
+
+const deployer = new ServiceNowDeployer({
+    instanceUrl: 'https://your-instance.service-now.com',
+    username: 'admin',
+    password: 'password'
+});
+
+// Deploy from manifest file
+await deployer.deployFromManifest('./my-manifest.json');
+
+// Or deploy programmatically
+await deployer.deploy({
+    name: 'My Feature',
+    updateSet: { name: 'My Update Set' },
+    artifacts: [/* ... */]
+}, './base/path');
+```
+
+## Update Set Artifact Capture
+
+### The Challenge
+
+ServiceNow's REST API does **not automatically respect session-based update sets** the way the UI does. When you create/update records via REST API, they typically go into the "Default" update set.
+
+### The Solution
+
+This project includes an **UpdateSetHelper API** that replicates the OOTB "Make This My Current Set" UI Action using `GlideUpdateSet().set()`.
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  1. Create Update Set (sys_update_set)                          │
+│     └─> state: 'in progress'                                    │
+│                                                                 │
+│  2. Set as Current via UpdateSetHelper API                      │
+│     └─> POST /api/<namespace>/update_set_helper/set_current     │
+│     └─> Calls GlideUpdateSet().set(sys_id)                      │
+│                                                                 │
+│  3. Deploy Artifacts (using same session via cookie jar)        │
+│     └─> Script Includes, Business Rules, Client Scripts, etc.  │
+│     └─> Artifacts automatically captured in update set         │
+│                                                                 │
+│  4. Validate Update Set Contents                                │
+│     └─> Query sys_update_xml for update_set=<your_id>          │
+│                                                                 │
+│  5. Complete Update Set                                         │
+│     └─> state: 'complete'                                       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### First-Time Setup
+
+Each ServiceNow instance has a **unique API namespace**. You have two options:
+
+**Option 1: Run the setup script** (if API doesn't exist yet)
+
+```bash
+node src/deployer/setup-updateset-api.js
+```
+
+The script will deploy the API and save the path to your `.env` file.
+
+**Option 2: Manual configuration** (if API already exists)
+
+1. Go to: **System Web Services → Scripted REST APIs → UpdateSetHelper**
+2. Note the **Base API path** (e.g., `/api/1852730/update_set_helper`)
+3. Add to `.env`:
+
+```env
+SN_UPDATE_SET_API_PATH=/api/<namespace>/update_set_helper/set_current
+```
+
+### Configuring ACLs
+
+If you get a **403 Forbidden** error, configure the Default ACL:
+
+1. Go to **System Web Services → Scripted REST APIs → UpdateSetHelper**
+2. Click the **Security** tab
+3. Set **Default ACLs** to an appropriate ACL (e.g., "ACE Admin - REST Endpoint")
+4. Click **Update**
+
+### Testing the Setup
+
+```bash
+node test-updateset-flow.js
+```
+
+This will:
+1. Create a new update set (with duplicate name check)
+2. Set it as current via the API
+3. Create a test script include
+4. Verify the artifact was captured
+
+### Environment Configuration
+
+Your `.env` must include the API path:
+
+```env
+# UpdateSetHelper API path (required for update set artifact capture)
+SN_UPDATE_SET_API_PATH=/api/<namespace>/update_set_helper/set_current
+```
+
+Replace `<namespace>` with your instance's namespace (e.g., `1852730`).
+
 ## Security Notes
 
 - Store credentials in environment variables, not in code
 - Use a service account with minimum required permissions
 - Consider using OAuth for production environments
-
+- Configure appropriate ACLs on the UpdateSetHelper API

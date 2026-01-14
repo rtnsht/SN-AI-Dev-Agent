@@ -222,16 +222,7 @@ node src/req-001/deploy-req-001.js
 
 ---
 
-## 📁 Implemented Requirements
-
-| ID | Title | Status | Update Set |
-|----|-------|--------|------------|
-| REQ-001 | Dynamic Assignment Orchestrator | ✅ Deployed | [Link](https://dev300943.service-now.com/sys_update_set.do?sys_id=42715563939232102f57f0ba2bba10eb) |
-| REQ-002 | Incident Deduplication Engine | ✅ Deployed | [Link](https://dev300943.service-now.com/sys_update_set.do?sys_id=8fa8516393d232102f57f0ba2bba109a) |
-
----
-
-## 🔧 Available MCP Tools
+##  Available MCP Tools
 
 The MCP server exposes these ServiceNow operations:
 

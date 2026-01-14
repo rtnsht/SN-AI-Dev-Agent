@@ -1,0 +1,40 @@
+{
+  "name": "INC-SIMPLE-002",
+  "description": "Auto-populate Region field from Caller Location",
+  "updateSet": {
+    "name": "INC-SIMPLE-002 Auto-populate Region",
+    "description": "Auto-populate Region field based on the Caller's Location"
+  },
+  "artifacts": [
+    {
+      "type": "script_include",
+      "name": "RegionLookupUtil",
+      "file": "../../requirements/INC-SIMPLE-002/3-implementation/script-includes/RegionLookupUtil.js",
+      "description": "Utility for looking up region from user location",
+      "client_callable": true,
+      "access": "public"
+    },
+    {
+      "type": "client_script",
+      "name": "CallerRegionLookup",
+      "file": "../../requirements/INC-SIMPLE-002/3-implementation/client-scripts/CallerRegionLookup.js",
+      "table": "incident",
+      "type": "onChange",
+      "field": "caller_id",
+      "description": "Auto-populate region when caller changes"
+    },
+    {
+      "type": "business_rule",
+      "name": "BR_AutoPopulateRegion",
+      "file": "../../requirements/INC-SIMPLE-002/3-implementation/business-rules/BR_AutoPopulateRegion.js",
+      "table": "incident",
+      "when": "before",
+      "insert": true,
+      "update": false,
+      "condition": "caller_idISNOTEMPTY^u_regionISEMPTY",
+      "order": 100,
+      "description": "Server-side region auto-population on insert"
+    }
+  ]
+}
+

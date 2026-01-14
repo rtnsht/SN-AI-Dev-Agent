@@ -109,11 +109,61 @@
           "deployedDate": "2026-01-13"
         }
       }
+    },
+    "INC-SIMPLE-002": {
+      "title": "Auto-populate Region from Caller Location",
+      "shortTitle": "Auto-populate Region",
+      "status": "deployed",
+      "priority": "medium",
+      "created": "2026-01-13",
+      "lastUpdated": "2026-01-13",
+      "phases": {
+        "spec": {
+          "status": "complete",
+          "file": "1-spec.md",
+          "signedOff": true,
+          "signedOffBy": "Ratnesh Tiwari",
+          "signedOffDate": "2026-01-13"
+        },
+        "design": {
+          "status": "complete",
+          "file": "2-design.md",
+          "signedOff": true,
+          "signedOffBy": "Ratnesh Tiwari",
+          "signedOffDate": "2026-01-13"
+        },
+        "implementation": {
+          "status": "complete",
+          "artifactCount": 3,
+          "artifacts": [
+            "3-implementation/script-includes/RegionLookupUtil.js",
+            "3-implementation/client-scripts/CallerRegionLookup.js",
+            "3-implementation/business-rules/BR_AutoPopulateRegion.js"
+          ]
+        },
+        "testing": {
+          "status": "complete",
+          "file": "4-testing/test-results.md",
+          "testCases": 5,
+          "passed": 5,
+          "failed": 0,
+          "passRate": "100%",
+          "atfSuiteId": null
+        },
+        "deployment": {
+          "status": "complete",
+          "file": "5-deployment.md",
+          "instance": "dev300943",
+          "updateSetId": "2268ed23935632102f57f0ba2bba10c0",
+          "updateSetName": "INC-SIMPLE-002 Auto-populate Region",
+          "deployedDate": "2026-01-13"
+        }
+      }
     }
   },
   "statistics": {
-    "total": 2,
-    "deployed": 2,
+    "total": 3,
+    "deployed": 3,
     "inProgress": 0,
     "notStarted": 0
   }
