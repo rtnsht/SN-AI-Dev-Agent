@@ -41,6 +41,9 @@ import * as instanceRegistry from './tools/instance-registry.js';
 import * as instanceCompare from './tools/instance-compare.js';
 import * as upgradeReadiness from './tools/upgrade-readiness.js';
 import * as conflictPredictor from './tools/conflict-predictor.js';
+import * as ootbBaselineComparator from './tools/ootb-baseline-comparator.js';
+import * as recommendationEngine from './tools/recommendation-engine.js';
+import * as dashboardReporter from './tools/dashboard-reporter.js';
 
 // Load environment variables
 dotenv.config();
@@ -1519,6 +1522,260 @@ Enables additional rules: try/catch requirement, comment requirements, jQuery bl
       },
       required: ['changeType', 'targetTable']
     }
+  },
+  // OOTB Baseline Comparator - v5 Enhancement
+  {
+    name: 'sn_compare_to_ootb',
+    description: `Compares your instance against a clean OOTB (Out-of-the-Box) baseline.
+
+**PURPOSE:**
+- Identify what's been customized vs what's standard ServiceNow
+- Calculate your "customization footprint" score
+- Assess upgrade readiness based on customizations
+- Find technical debt from OOTB overrides
+
+**RETURNS:**
+- Customization Score (0-100, lower is better)
+- Grade (A-F based on customization level)
+- Upgrade Readiness (excellent/good/fair/poor/critical)
+- Category breakdown (BRs, Scripts, ACLs, etc.)
+- Top customizers and customized tables
+- Prioritized recommendations
+
+**USE CASES:**
+- "How customized is my instance?"
+- "What's been changed from OOTB?"
+- "Is my instance safe to upgrade?"
+- "Show me our customization footprint"
+- "Compare my instance to clean baseline"`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        mode: {
+          type: 'string',
+          enum: ['summary', 'detailed', 'export'],
+          default: 'summary',
+          description: 'Analysis mode'
+        },
+        artifactTypes: {
+          type: 'array',
+          items: {
+            type: 'string',
+            enum: ['business_rules', 'client_scripts', 'script_includes', 'ui_policies', 'ui_actions', 'acls', 'workflows', 'flows', 'notifications', 'scheduled_jobs', 'rest_apis', 'service_portal', 'tables', 'fields', 'all']
+          },
+          default: ['all'],
+          description: 'Types of artifacts to compare'
+        },
+        scope: { type: 'string', description: 'Application scope' },
+        includeSystemUpdates: { type: 'boolean', default: false },
+        targetVersion: { type: 'string', description: 'Target ServiceNow version for baseline' },
+        limit: { type: 'number', default: 500 },
+        includeRecommendations: { type: 'boolean', default: true }
+      },
+      required: []
+    }
+  },
+  // AI-Powered Recommendation Engine - v5 Enhancement
+  {
+    name: 'sn_get_fix_recommendations',
+    description: `Get detailed fix recommendations for a specific issue type.
+
+**PURPOSE:**
+- Provides rich context for generating better fixes
+- Explains why the issue matters and its impact
+- Offers multiple fix patterns with before/after code
+- Includes best practices and related issues
+
+**ISSUE TYPES:**
+- gr_in_client - GlideRecord in client scripts
+- hardcoded_sysid - Hardcoded sys_ids
+- missing_null_check - Missing null checks
+- synchronous_ajax - Synchronous AJAX calls
+- global_business_rule - Global business rules
+- empty_catch - Empty catch blocks
+- current_update_loop - current.update() in loops
+- answer_true_acl - answer=true in ACLs
+- And more...
+
+**RETURNS:**
+- Detailed explanation of the issue
+- Multiple fix patterns with code examples
+- Best practices
+- Related issues to check
+- Documentation links`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        issueType: {
+          type: 'string',
+          enum: ['gr_in_client', 'hardcoded_sysid', 'missing_null_check', 'synchronous_ajax', 'global_business_rule', 'empty_catch', 'current_update_loop', 'no_setworkflow', 'eval_usage', 'document_write', 'innerhtml_usage', 'no_try_catch', 'gs_log_production', 'answer_true_acl', 'no_condition_business_rule', 'select_star', 'missing_index', 'excessive_queries', 'deprecated_api'],
+          description: 'The type of issue to get recommendations for'
+        },
+        code: { type: 'string', description: 'The problematic code snippet' },
+        context: {
+          type: 'object',
+          properties: {
+            table: { type: 'string' },
+            artifactType: { type: 'string' },
+            artifactName: { type: 'string' }
+          }
+        }
+      },
+      required: ['issueType']
+    }
+  },
+  {
+    name: 'sn_get_best_practices',
+    description: `Get comprehensive best practices for a ServiceNow artifact type.
+
+**PURPOSE:**
+- Provides do's and don'ts for creating/modifying artifacts
+- Includes security and performance considerations
+- Offers code templates as starting points
+- Lists common mistakes to avoid
+
+**ARTIFACT TYPES:**
+- business_rule, client_script, script_include
+- ui_policy, ui_action, acl
+- scheduled_job, flow, rest_api
+- transform_map, catalog_client_script, fix_script
+
+**ACTIONS:**
+- create - When building new artifacts
+- modify - When changing existing code
+- review - When auditing code quality
+- optimize - When improving performance
+- secure - When hardening security
+- debug - When troubleshooting issues`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        artifactType: {
+          type: 'string',
+          enum: ['business_rule', 'client_script', 'script_include', 'ui_policy', 'ui_action', 'acl', 'scheduled_job', 'flow', 'rest_api', 'transform_map', 'catalog_client_script', 'fix_script'],
+          description: 'The type of artifact'
+        },
+        action: {
+          type: 'string',
+          enum: ['create', 'modify', 'review', 'optimize', 'secure', 'debug'],
+          default: 'create',
+          description: 'What action you are taking'
+        }
+      },
+      required: ['artifactType']
+    }
+  },
+  {
+    name: 'sn_get_code_templates',
+    description: `Get code templates for common ServiceNow patterns.
+
+**PURPOSE:**
+- Provides ready-to-use code templates
+- Ensures consistent patterns across codebase
+- Includes error handling and best practices
+- Shows variable placeholders to fill in
+
+**PATTERNS:**
+- gliderecord_query, gliderecord_insert, gliderecord_update
+- glideajax_call, rest_message
+- script_include_class
+- business_rule_before, business_rule_after, business_rule_async
+- client_script_onload, client_script_onchange, client_script_onsubmit
+- acl_script, scheduled_job
+- error_handling, null_check, logging, transaction_cancel`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        pattern: {
+          type: 'string',
+          enum: ['gliderecord_query', 'gliderecord_insert', 'gliderecord_update', 'glideajax_call', 'rest_message', 'script_include_class', 'business_rule_before', 'business_rule_after', 'business_rule_async', 'client_script_onload', 'client_script_onchange', 'client_script_onsubmit', 'acl_script', 'scheduled_job', 'error_handling', 'null_check', 'logging', 'transaction_cancel'],
+          description: 'The code pattern to get a template for'
+        },
+        options: {
+          type: 'object',
+          properties: {
+            table: { type: 'string' },
+            includeComments: { type: 'boolean', default: true },
+            includeErrorHandling: { type: 'boolean', default: true }
+          }
+        }
+      },
+      required: ['pattern']
+    }
+  },
+  // Dashboard & Reports - v5 Enhancement
+  {
+    name: 'sn_generate_report',
+    description: `Generate comprehensive HTML/JSON/Markdown reports for stakeholder sharing.
+
+**REPORT TYPES:**
+- instance_health - Overall instance health with metrics and recommendations
+- code_quality - Code quality analysis across all artifacts
+- upgrade_readiness - Readiness assessment for upgrades
+- security_audit - Security-focused analysis
+- customization_summary - Summary of all customizations
+- executive_summary - High-level KPIs for leadership
+
+**FORMATS:**
+- html - Beautiful, printable HTML with charts (default)
+- json - Structured data for integration
+- markdown - Plain text for documentation
+
+**FEATURES:**
+- Visual metrics and grades
+- Customization breakdown tables
+- Prioritized recommendations
+- Print-friendly styling`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        reportType: {
+          type: 'string',
+          enum: ['instance_health', 'code_quality', 'upgrade_readiness', 'security_audit', 'customization_summary', 'executive_summary'],
+          description: 'Type of report to generate'
+        },
+        format: { type: 'string', enum: ['html', 'json', 'markdown'], default: 'html' },
+        includeCharts: { type: 'boolean', default: true },
+        includeRecommendations: { type: 'boolean', default: true },
+        scope: { type: 'string', description: 'Limit to specific application scope' }
+      },
+      required: ['reportType']
+    }
+  },
+  {
+    name: 'sn_get_dashboard_data',
+    description: `Get real-time dashboard metrics for monitoring instance health.
+
+**METRICS:**
+- health_score - Overall instance health (0-100)
+- code_quality_score - Code quality rating
+- customization_count - Total customizations
+- anti_pattern_count - Detected anti-patterns
+- dead_code_count - Inactive/unused artifacts
+- upgrade_readiness - Upgrade readiness status
+- security_issues - Security issue count
+- ootb_overrides - OOTB override count
+
+**USE FOR:**
+- Building custom dashboards
+- CI/CD quality gates
+- Monitoring trends
+- Alerting on thresholds`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        metrics: {
+          type: 'array',
+          items: {
+            type: 'string',
+            enum: ['health_score', 'code_quality_score', 'customization_count', 'anti_pattern_count', 'dead_code_count', 'upgrade_readiness', 'security_issues', 'ootb_overrides']
+          },
+          default: ['health_score', 'code_quality_score', 'customization_count']
+        },
+        scope: { type: 'string', description: 'Limit to specific application scope' }
+      },
+      required: []
+    }
   }
 ];
 
@@ -1787,6 +2044,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'sn_predict_conflicts':
         result = await conflictPredictor.predictConflicts(snClient, conflictPredictor.predictConflictsSchema.parse(args));
+        break;
+
+      case 'sn_compare_to_ootb':
+        result = await ootbBaselineComparator.compareToOotb(snClient, ootbBaselineComparator.compareToOotbSchema.parse(args));
+        break;
+
+      // AI-Powered Recommendation Engine
+      case 'sn_get_fix_recommendations':
+        result = await recommendationEngine.getFixRecommendations(snClient, recommendationEngine.getFixRecommendationsSchema.parse(args));
+        break;
+
+      case 'sn_get_best_practices':
+        result = await recommendationEngine.getBestPractices(snClient, recommendationEngine.getBestPracticesSchema.parse(args));
+        break;
+
+      case 'sn_get_code_templates':
+        result = await recommendationEngine.getCodeTemplates(snClient, recommendationEngine.getCodeTemplatesSchema.parse(args));
+        break;
+
+      // Dashboard & Reports
+      case 'sn_generate_report':
+        result = await dashboardReporter.generateReport(snClient, dashboardReporter.generateReportSchema.parse(args));
+        break;
+
+      case 'sn_get_dashboard_data':
+        result = await dashboardReporter.getDashboardData(snClient, dashboardReporter.getDashboardDataSchema.parse(args));
         break;
 
       default:
