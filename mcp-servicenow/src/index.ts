@@ -44,6 +44,8 @@ import * as conflictPredictor from './tools/conflict-predictor.js';
 import * as ootbBaselineComparator from './tools/ootb-baseline-comparator.js';
 import * as recommendationEngine from './tools/recommendation-engine.js';
 import * as dashboardReporter from './tools/dashboard-reporter.js';
+import * as multiInstanceManager from './tools/multi-instance-manager.js';
+import * as promotionWorkflow from './tools/promotion-workflow.js';
 
 // Load environment variables
 dotenv.config();
@@ -1776,6 +1778,255 @@ Enables additional rules: try/catch requirement, comment requirements, jQuery bl
       },
       required: []
     }
+  },
+  // Multi-Instance Manager - v6 Enhancement
+  {
+    name: 'sn_register_instance_v2',
+    description: `Register a ServiceNow instance for multi-instance operations.
+
+**FEATURES:**
+- Stores credentials securely in memory
+- Tests connection on registration
+- Supports dev/test/stage/prod environments
+- First registered instance becomes active automatically
+
+**USE FOR:**
+- Setting up multi-environment workflows
+- Comparing artifacts across instances
+- Promoting changes from dev to prod`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        instanceId: { type: 'string', description: 'Unique identifier (e.g., dev1, prod)' },
+        name: { type: 'string', description: 'Display name' },
+        url: { type: 'string', description: 'Instance URL (e.g., https://dev12345.service-now.com)' },
+        environment: { type: 'string', enum: ['dev', 'test', 'stage', 'prod'] },
+        username: { type: 'string', description: 'Username for authentication' },
+        password: { type: 'string', description: 'Password for authentication' }
+      },
+      required: ['instanceId', 'name', 'url', 'environment', 'username', 'password']
+    }
+  },
+  {
+    name: 'sn_switch_instance',
+    description: `Switch the active ServiceNow instance.
+
+**BEHAVIOR:**
+- Switches all subsequent operations to the specified instance
+- Tests connection on switch
+- Reports previous and new active instance
+
+**EXAMPLE:**
+"Switch to prod instance" → sn_switch_instance({ instanceId: "prod" })`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        instanceId: { type: 'string', description: 'Instance ID to switch to' }
+      },
+      required: ['instanceId']
+    }
+  },
+  {
+    name: 'sn_get_active_instance',
+    description: `Get the currently active instance and list all registered instances.
+
+**RETURNS:**
+- Active instance details (name, URL, environment)
+- List of all registered instances
+- Connection status`,
+    inputSchema: {
+      type: 'object',
+      properties: {},
+      required: []
+    }
+  },
+  {
+    name: 'sn_test_instance_connection',
+    description: `Test connection to a registered instance.
+
+**RETURNS:**
+- Connection success/failure
+- Response time in milliseconds
+- Instance URL and version info`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        instanceId: { type: 'string', description: 'Instance ID to test' }
+      },
+      required: ['instanceId']
+    }
+  },
+  {
+    name: 'sn_diff_artifact',
+    description: `Compare a specific artifact between two instances.
+
+**FEATURES:**
+- Finds artifact by name in both instances
+- Compares script content
+- Shows which instance has the artifact
+- Highlights differences
+
+**STATUS RESULTS:**
+- identical - Same in both instances
+- modified - Different script content
+- source_only - Only exists in source instance
+- target_only - Only exists in target instance
+- not_found - Doesn't exist in either instance
+
+**EXAMPLE:**
+"Compare MyBusinessRule between dev and prod"`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sourceInstanceId: { type: 'string', description: 'Source instance ID' },
+        targetInstanceId: { type: 'string', description: 'Target instance ID' },
+        artifactType: {
+          type: 'string',
+          enum: ['business_rule', 'client_script', 'script_include', 'ui_policy', 'ui_action', 'acl'],
+          description: 'Type of artifact'
+        },
+        artifactName: { type: 'string', description: 'Name of the artifact to compare' }
+      },
+      required: ['sourceInstanceId', 'targetInstanceId', 'artifactType', 'artifactName']
+    }
+  },
+  // Promotion Workflow - v6 Enhancement
+  {
+    name: 'sn_create_promotion_package',
+    description: `Create a promotion package with artifacts to move between instances.
+
+**WORKFLOW:**
+1. Create package with artifacts from source
+2. Preview changes on target
+3. Validate for conflicts
+4. Execute promotion (with backup)
+5. Rollback if needed
+
+**EXAMPLE:**
+"Create a package with MyBusinessRule and MyScriptInclude from dev"`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        packageName: { type: 'string', description: 'Name for this promotion package' },
+        sourceInstanceId: { type: 'string', description: 'Source instance ID' },
+        artifacts: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              type: { type: 'string', enum: ['business_rule', 'client_script', 'script_include', 'ui_policy', 'ui_action', 'acl', 'ui_page', 'ui_macro'] },
+              name: { type: 'string' },
+              sysId: { type: 'string' }
+            },
+            required: ['type', 'name']
+          }
+        },
+        description: { type: 'string' }
+      },
+      required: ['packageName', 'sourceInstanceId', 'artifacts']
+    }
+  },
+  {
+    name: 'sn_preview_promotion',
+    description: `Preview what changes would be made on target instance.
+
+**SHOWS:**
+- Artifacts to CREATE (new on target)
+- Artifacts to UPDATE (different content)
+- Artifacts UNCHANGED (identical)`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        packageId: { type: 'string', description: 'Promotion package ID' },
+        targetInstanceId: { type: 'string', description: 'Target instance to preview against' }
+      },
+      required: ['packageId', 'targetInstanceId']
+    }
+  },
+  {
+    name: 'sn_validate_promotion',
+    description: `Validate promotion package for conflicts and dependencies.
+
+**CHECKS:**
+- Conflicts: Target modified after source
+- Dependencies: Missing script includes
+- Breaking changes: Removed functions
+
+**RECOMMENDATIONS:**
+- Safe to promote or issues to address`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        packageId: { type: 'string', description: 'Promotion package ID' },
+        targetInstanceId: { type: 'string', description: 'Target instance' },
+        checkConflicts: { type: 'boolean', default: true },
+        checkDependencies: { type: 'boolean', default: true },
+        checkBreakingChanges: { type: 'boolean', default: true }
+      },
+      required: ['packageId', 'targetInstanceId']
+    }
+  },
+  {
+    name: 'sn_execute_promotion',
+    description: `Execute the promotion to apply changes to target instance.
+
+**FEATURES:**
+- Creates backup before overwriting
+- Dry-run mode for preview
+- Tracks what was created/updated/skipped
+
+**SAFETY:**
+- Always use dryRun=true first
+- Backups enable rollback`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        packageId: { type: 'string', description: 'Promotion package ID' },
+        targetInstanceId: { type: 'string', description: 'Target instance' },
+        createBackup: { type: 'boolean', default: true },
+        dryRun: { type: 'boolean', default: true, description: 'Preview only, do not apply' }
+      },
+      required: ['packageId', 'targetInstanceId']
+    }
+  },
+  {
+    name: 'sn_rollback_promotion',
+    description: `Rollback a promotion to restore previous state.
+
+**RESTORES:**
+- All backed-up artifacts to their previous state
+- Only works if backup was created during promotion`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        promotionId: { type: 'string', description: 'Promotion ID to rollback' }
+      },
+      required: ['promotionId']
+    }
+  },
+  {
+    name: 'sn_list_promotion_history',
+    description: `List history of promotions.
+
+**FILTERS:**
+- all, pending, completed, failed, rolled_back`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'number', default: 10 },
+        status: { type: 'string', enum: ['all', 'pending', 'completed', 'failed', 'rolled_back'], default: 'all' }
+      },
+      required: []
+    }
+  },
+  {
+    name: 'sn_list_promotion_packages',
+    description: `List all created promotion packages.`,
+    inputSchema: {
+      type: 'object',
+      properties: {},
+      required: []
+    }
   }
 ];
 
@@ -2070,6 +2321,63 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'sn_get_dashboard_data':
         result = await dashboardReporter.getDashboardData(snClient, dashboardReporter.getDashboardDataSchema.parse(args));
+        break;
+
+      // Multi-Instance Manager - v6 Enhancement
+      case 'sn_register_instance_v2':
+        result = await multiInstanceManager.registerInstanceEnhanced(snClient, args as {
+          instanceId: string;
+          name: string;
+          url: string;
+          environment: 'dev' | 'test' | 'stage' | 'prod';
+          username: string;
+          password: string;
+        });
+        break;
+
+      case 'sn_switch_instance':
+        result = await multiInstanceManager.switchInstance(snClient, multiInstanceManager.switchInstanceSchema.parse(args));
+        break;
+
+      case 'sn_get_active_instance':
+        result = await multiInstanceManager.getActiveInstance(snClient, {});
+        break;
+
+      case 'sn_test_instance_connection':
+        result = await multiInstanceManager.testInstanceConnection(snClient, multiInstanceManager.testInstanceConnectionSchema.parse(args));
+        break;
+
+      case 'sn_diff_artifact':
+        result = await multiInstanceManager.diffArtifact(snClient, multiInstanceManager.diffArtifactSchema.parse(args));
+        break;
+
+      // Promotion Workflow - v6 Enhancement
+      case 'sn_create_promotion_package':
+        result = await promotionWorkflow.createPromotionPackage(snClient, promotionWorkflow.createPromotionPackageSchema.parse(args));
+        break;
+
+      case 'sn_preview_promotion':
+        result = await promotionWorkflow.previewPromotion(snClient, promotionWorkflow.previewPromotionSchema.parse(args));
+        break;
+
+      case 'sn_validate_promotion':
+        result = await promotionWorkflow.validatePromotion(snClient, promotionWorkflow.validatePromotionSchema.parse(args));
+        break;
+
+      case 'sn_execute_promotion':
+        result = await promotionWorkflow.executePromotion(snClient, promotionWorkflow.executePromotionSchema.parse(args));
+        break;
+
+      case 'sn_rollback_promotion':
+        result = await promotionWorkflow.rollbackPromotion(snClient, promotionWorkflow.rollbackPromotionSchema.parse(args));
+        break;
+
+      case 'sn_list_promotion_history':
+        result = await promotionWorkflow.listPromotionHistory(snClient, promotionWorkflow.listPromotionHistorySchema.parse(args));
+        break;
+
+      case 'sn_list_promotion_packages':
+        result = await promotionWorkflow.listPromotionPackages(snClient, {});
         break;
 
       default:
