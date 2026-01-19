@@ -481,19 +481,408 @@ Transform the SN AI Dev Agent into an **intelligent brownfield implementation pa
 
 ---
 
-## 13. Next Steps
+## 13. Implementation Order Decision
+
+### Decision Made: 2026-01-18
+
+**Chosen Approach: Option C - Core Capabilities First (Deep Instance Intelligence)**
+
+### Rationale
+
+The AI agent's effectiveness is directly proportional to its understanding of the instance. Without deep instance intelligence, the agent is partially blind:
+
+| Current Capability | Status |
+|-------------------|--------|
+| Read tables, fields, scripts | ✅ Available |
+| Distinguish OOTB vs custom | ❌ Missing |
+| See dependency graphs | ❌ Missing |
+| Detect anti-patterns | ❌ Missing |
+| Know execution order of business rules | ❌ Missing |
+| Predict conflicts before they happen | ❌ Missing |
+| Identify technical debt hotspots | ❌ Missing |
+
+**Core insight**: Guardrails need something to guard. Guidance needs context to guide. Building persona/4G framework first would be putting the cart before the horse.
+
+### Approved Implementation Order
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                  IMPLEMENTATION ORDER                            │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  STEP 1: Deep Instance Intelligence (Phase 1)     ← START HERE  │
+│  ├── Enhanced Context Gatherer (full artifact inventory)        │
+│  ├── OOTB Override Detection                                    │
+│  ├── Dependency Graph Builder                                   │
+│  └── Anti-Pattern Detection Engine                              │
+│           ↓ provides data for                                   │
+│                                                                  │
+│  STEP 2: Guardrails & Impact Analysis (Phase 2)                 │
+│  ├── Change Impact Preview Engine                               │
+│  ├── Conflict Detection System                                  │
+│  ├── Guardrail Rule Engine                                      │
+│  └── Breaking Change Alerts                                     │
+│           ↓ enables                                              │
+│                                                                  │
+│  STEP 3: Persona & 4G Framework (Phase 0 + 3)                   │
+│  ├── Persona Detection Engine                                   │
+│  ├── 4G Framework Integration                                   │
+│  ├── Skill-Adaptive Messaging                                   │
+│  └── Approval Gate System                                       │
+│           ↓ completes                                            │
+│                                                                  │
+│  STEP 4: Multi-Instance & Predictive (Phase 4 + 5)              │
+│  ├── Instance Registry & Promotion                              │
+│  ├── Upgrade Readiness Scoring                                  │
+│  └── Conflict Prediction                                        │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Step 1 Priority Order (Deep Instance Intelligence)
+
+| Priority | Capability | New MCP Tool | Effort | Status |
+|----------|------------|--------------|--------|--------|
+| 1.1 | Enhanced Context Gatherer | `sn_analyze_instance` | L | ✅ COMPLETE |
+| 1.2 | OOTB Override Detection | `sn_detect_ootb_overrides` | M | ✅ COMPLETE |
+| 1.3 | Dependency Graph Builder | `sn_get_dependency_graph` | L | ✅ COMPLETE |
+| 1.4 | Anti-Pattern Detection | `sn_find_anti_patterns` | M | ✅ COMPLETE |
+| 1.5 | Code Quality Analyzer | `sn_code_quality_score` | L | ✅ COMPLETE |
+| 1.6 | Dead Code Finder | `sn_find_dead_code` | M | ✅ COMPLETE |
+
+### 1.1 `sn_analyze_instance` - COMPLETED (2026-01-18) - ENHANCED
+
+**Comprehensive Coverage - 150+ Artifact Types across 40+ Categories:**
+
+| Category Group | Categories | Artifact Types |
+|----------------|------------|---------------|
+| **Core Development** | | |
+| Server Scripts | `server_scripts` | Business Rules, Script Includes, Fix Scripts, Script Actions, Processors, Scheduled Jobs, MID Server Script Includes, Script Validators |
+| Client Scripts | `client_scripts` | Client Scripts, UI Scripts, UI Macros, Catalog Client Scripts, Wizard Client Scripts |
+| UI | `ui` | UI Policies, UI Actions, UI Pages, Form Layouts, List Layouts, Views, Formatters, Context Menus, Related Lists, Form Sections, Field Styles, UI Messages, Homepages, UI Notifications |
+| Flow Designer | `flow_designer` | Flows, Subflows, Flow Actions, Flow Triggers, Flow Inputs, Flow Outputs |
+| Process Automation | `process_automation` | Playbooks, Decision Tables, Decision Questions, Document Task Types |
+| Integration Hub | `integration_hub` | Spokes, Connection Aliases, Connections, Credentials, Certificates |
+| Legacy Workflows | `legacy_workflows` | Workflows, Workflow Activities, Workflow Versions, Workflow Stages |
+| **Events & Email** | | |
+| Events | `events` | Event Registry, Script Actions, Scheduled Triggers |
+| Email | `email` | Notifications, Email Scripts, Email Templates, Inbound Email Actions, Email Layouts, Notification Devices |
+| **Portals & Experiences** | | |
+| Service Portal | `service_portal` | Widgets, Portal Pages, Portals, Themes, Angular Providers, CSS Includes, JS Includes, Headers/Footers |
+| Now Experience | `now_experience` | UX Applications, UX Pages, Macroponents, UX Client Scripts, Data Brokers, UX Events, UX Themes, Library Components, Screen Types |
+| Workspace | `workspace` | Workspace Configs, Form Configs, List Configs, Related Lists, Table Configs, Record Pages |
+| **Analytics & AI** | | |
+| Analytics | `analytics` | Reports, Report Sources, PA Dashboards, PA Indicators (KPIs), PA Breakdowns, PA Widgets, PA Scorecards, Homepage Widgets, Portal Pages |
+| Virtual Agent | `virtual_agent` | VA Topics, Topic Goals, NLU Models, NLU Intents, NLU Utterances |
+| AI/ML | `ai_ml` | ML Solutions, ML Capabilities, AI Search Configs, Search Sources, Agent Assist Actions |
+| **Applications** | | |
+| Service Catalog | `service_catalog` | Catalog Items, Categories, Record Producers, Catalog Variables, Variable Sets, Catalog UI Policies, Order Guides, Content Items |
+| Knowledge | `knowledge` | Knowledge Articles, Knowledge Bases, KB Categories, KB Templates |
+| Employee Center | `employee_center` | HR Service Portals, HR Case Types, HR Topics, HR Content Blocks |
+| Customer Service | `customer_service` | CSM Consumers, CSM Case Types, CSM Cases |
+| CMDB | `cmdb` | CMDB CI Types, Relationship Types, Identification Rules, Business Services |
+| GRC | `grc` | GRC Policies, Risks, Compliance Controls, Audit Engagements, GRC Profiles |
+| Field Service | `field_service` | Work Order Types, FSM Agents, Territories, Dispatcher Configs |
+| APM | `apm` | Business Applications, App Assessments |
+| **Integration & Discovery** | | |
+| REST/SOAP | `rest_soap` | REST Messages, REST Message Functions, Scripted REST APIs, Scripted REST Resources, SOAP Messages, SOAP Message Functions |
+| Data Import | `data_import` | Transform Maps, Data Sources, Scheduled Imports, Import Set Tables |
+| Discovery | `discovery` | Discovery Schedules, Probes, Sensors, Patterns, MID Servers, MID Server Script Includes, Discovery Credentials |
+| Service Mapping | `service_mapping` | Service Mapping Patterns, Service Extensions, CI Associations |
+| **Configuration** | | |
+| Rules Engine | `rules_engine` | Assignment Rules, Approval Rules, Escalation Rules, Data Lookup Definitions, Data Lookup Matchers, System Rules, View Rules |
+| SLA Management | `sla_management` | SLA Definitions, SLA Condition Classes, Relative Durations, Service Offerings |
+| Navigation | `navigation` | Application Menus, Modules, Application Categories, Perspectives, UX App Configurations |
+| Localization | `localization` | Field Labels, Translated Names/Fields, Translated Text, Choice Lists |
+| Guided Setup | `guided_setup` | Guided Setup Content, Guided Setup Groups, Wizards, Wizard Panels |
+| Documents | `documents` | Templates, Document Templates, Content Blocks, Embedded Help |
+| Assessments | `assessments` | Assessment Metric Types, Assessment Metrics, Assessment Categories, Assessment Templates, Survey Templates |
+| Metrics | `metrics` | Metric Definitions, System Metrics, Transaction Logs |
+| Scheduled Jobs | `scheduled_jobs` | Scheduled Jobs (All), Scheduled Reports, Scheduled PA Jobs, Table Cleaner Rules |
+| Interceptors | `interceptors` | Run As Configurations, Import Export Maps |
+| **Admin & Deployment** | | |
+| Testing | `testing` | ATF Tests, ATF Test Suites, ATF Test Steps |
+| Security | `security` | ACLs, Data Policies, Roles, Role Assignments |
+| Properties | `properties` | System Properties, Property Categories |
+| Deployment | `deployment` | Update Sets, Scoped Applications, Store Applications, Plugins, Remote Update Sets |
+| Tables | `tables` | Custom Tables, Dictionary Entries, Database Views, M2M Relationships |
+
+**Features:**
+- ✅ Custom vs OOTB detection
+- ✅ OOTB-modified artifact detection
+- ✅ Instance health scoring (0-100) with bonuses for modern platform usage
+- ✅ Category-based filtering (40+ categories)
+- ✅ Actionable recommendations for all major areas
+- ✅ Parallel API calls with batching for performance
+- ✅ Graceful handling of missing tables/plugins (e.g., HRSD, CSM, GRC not installed)
+- ✅ Comprehensive ServiceNow development coverage: Flow Designer, UI Builder, Service Portal, Workspace, Discovery, CMDB, GRC, Field Service, AI/ML, and more
+
+**Future Extensibility:**
+
+The `sn_analyze_instance` tool is designed for easy extension when ServiceNow introduces new artifact types or features:
+
+1. **Adding New Artifact Types**: Simply add entries to `ARTIFACT_DEFINITIONS` in `instance-analyzer.ts`
+2. **Adding New Categories**: Add category to schema enum, add to `ARTIFACT_DEFINITIONS`, update recommendations
+3. **Graceful Degradation**: Tables that don't exist (plugins not installed) are handled automatically
+4. **Self-Documenting**: Inline code comments explain exactly how to extend
+
+**Example - Adding Future "App Engine Studio" Support:**
+```typescript
+// In ARTIFACT_DEFINITIONS:
+app_engine_studio: [
+  { table: 'sys_appbuilder_application', type: 'AES Applications', nameField: 'name' },
+  { table: 'sys_appbuilder_table', type: 'AES Tables', nameField: 'name' },
+],
+```
+
+See `mcp-servicenow/src/tools/instance-analyzer.ts` for detailed extensibility guide in code comments.
+
+### 1.2 `sn_detect_ootb_overrides` - COMPLETED (2026-01-18)
+
+**Purpose:** Detects Out-of-the-Box (OOTB) artifacts that have been modified/customized.
+
+**Key Features:**
+- ✅ Queries `sys_update_xml` (Customer Updates) to find all OOTB modifications
+- ✅ Classifies overrides by severity: CRITICAL, HIGH, MEDIUM, LOW
+- ✅ Tracks "Replace on Upgrade" settings (protected vs unprotected items)
+- ✅ Retrieves skipped updates from `sys_upgrade_history_log`
+- ✅ Calculates overall upgrade risk score (0-100)
+- ✅ Provides actionable recommendations
+
+**Severity Classification:**
+| Severity | Criteria |
+|----------|----------|
+| CRITICAL | Business Rules, Script Includes, ACLs, Dictionary entries on core tables |
+| HIGH | UI Policies, UI Actions, Client Scripts, Notifications on core tables |
+| MEDIUM | Form layouts, List layouts, Service Portal widgets, Properties |
+| LOW | Other customizations with minimal upgrade impact |
+
+**Input Parameters:**
+- `artifactTypes` - Filter by artifact types (e.g., sys_script, sys_script_include)
+- `tables` - Filter by target tables (e.g., incident, change_request)
+- `includeSkippedUpdates` - Include skipped updates from upgrade history (default: true)
+- `includeUpgradeRisk` - Calculate upgrade risk score (default: true)
+- `scope` - Filter by application scope
+- `limit` - Maximum number of overrides to return (default: 500)
+- `severity` - Filter by severity level (all, critical, high, medium, low)
+
+**Output:**
+- Upgrade risk score (0-100)
+- Override counts by severity, type, and table
+- Skipped updates list with upgrade version info
+- Actionable recommendations for risk mitigation
+
+**File:** `mcp-servicenow/src/tools/ootb-override-detector.ts`
+
+### 1.3 `sn_get_dependency_graph` - COMPLETED (2026-01-18)
+
+**Purpose:** Builds a dependency graph showing relationships between ServiceNow artifacts.
+
+**Key Features:**
+- ✅ Parses script content to find Script Include references
+- ✅ Detects GlideAjax calls (Client Script → Script Include)
+- ✅ Tracks GlideRecord table usage
+- ✅ Identifies class inheritance (extends)
+- ✅ Maps table triggers (Business Rule/Client Script → Table)
+- ✅ Finds orphaned artifacts with no connections
+- ✅ Identifies highly connected "hub" artifacts
+
+**Dependency Types Detected:**
+| Type | Description |
+|------|-------------|
+| `calls_script_include` | new ClassName() or ClassName.method() |
+| `glide_ajax` | GlideAjax call from Client Script |
+| `glide_record` | GlideRecord query on a table |
+| `extends_class` | Script Include extends another |
+| `triggers_on_table` | Business Rule/Client Script on table |
+
+**Artifact Types Analyzed:**
+- Script Includes, Business Rules, Client Scripts
+- UI Actions, UI Policies, Scheduled Jobs
+- ACLs, Notifications
+
+**Input Parameters:**
+- `artifactType` - Type to analyze (script_include, business_rule, etc., or 'all')
+- `artifactName` - Filter to specific artifact name
+- `scope` - Filter by application scope
+- `direction` - upstream, downstream, or both
+- `depth` - How many levels deep (1-5)
+- `includeTableDependencies` - Include GlideRecord table refs
+- `limit` - Max artifacts to analyze
+
+**Output:**
+- Nodes: All artifacts with type, name, scope
+- Edges: Relationships with dependency type and context
+- Summary: Counts, orphaned artifacts, highly connected hubs
+- Recommendations: Based on graph analysis
+
+**File:** `mcp-servicenow/src/tools/dependency-graph.ts` (618 lines)
+
+### 1.4 `sn_find_anti_patterns` - COMPLETED (2026-01-18)
+
+**Purpose:** Detects common anti-patterns and bad practices in ServiceNow code.
+
+**Key Features:**
+- ✅ 25+ anti-pattern detection rules with regex-based scanning
+- ✅ 5 categories: performance, security, maintainability, upgradability, user_experience
+- ✅ 4 severity levels: critical, high, medium, low
+- ✅ Special case checks via table queries (global scripts, missing conditions, etc.)
+- ✅ Health score calculation (0-100)
+- ✅ Actionable recommendations
+
+**Anti-Pattern Categories:**
+
+| Category | Key Patterns Detected |
+|----------|----------------------|
+| **Performance** | current.update(), getXMLWait(), getRowCount(), global scripts, GlideRecord in ACLs, gs.sleep(), cache flush |
+| **Security** | eval(), GlideRecord in client scripts, setBasicAuth(), undeclared variables, REST APIs without auth |
+| **Maintainability** | hardcoded sys_ids, hardcoded URLs, debug statements (gs.log, console.log), document object in server |
+| **Upgradability** | GlideRecord without new, unsupported APIs |
+| **User Experience** | alert(), confirm(), setWorkflow(false), missing isLoading check |
+
+**Special Case Checks (Table Queries):**
+- Global Business Rules (no table restriction)
+- Global Client Scripts
+- Client-callable Script Includes without GlideRecordSecure
+- Business Rules without conditions
+- onChange Client Scripts missing isLoading check
+- Scripted REST APIs without authentication
+
+**Input Parameters:**
+- `categories` - Categories to check (all, performance, security, etc.)
+- `scope` - Filter by application scope
+- `severity` - Minimum severity level to report
+- `artifactTypes` - Types of artifacts to scan
+- `limit` - Max artifacts per type to scan
+
+**Output:**
+- Summary with health score and counts by category/severity
+- Issues array with full details (artifact, pattern, code snippet, line number)
+- Recommendations based on findings
+
+**File:** `mcp-servicenow/src/tools/anti-pattern-detector.ts` (921 lines)
+
+### 1.5 `sn_code_quality_score` - COMPLETED (2026-01-18)
+
+**Purpose:** Analyzes ServiceNow script quality and provides metrics and recommendations.
+
+**Key Features:**
+- ✅ Calculates quality scores (0-100) with letter grades (A-F)
+- ✅ Analyzes multiple quality dimensions
+- ✅ Provides per-artifact detailed metrics
+- ✅ Score distribution and top issues summary
+- ✅ Category-specific scores for targeted improvement
+
+**Quality Metrics Analyzed:**
+
+| Category | Metrics |
+|----------|---------|
+| **Complexity** | Cyclomatic complexity, nesting depth |
+| **Documentation** | Comment ratio, JSDoc presence |
+| **Best Practices** | Error handling, strict mode, constants usage |
+| **Code Style** | Function length, naming conventions |
+| **Maintainability** | Script size, modularization |
+
+**Grading Scale:**
+- A (90-100): Excellent quality
+- B (80-89): Good quality
+- C (70-79): Fair quality
+- D (60-69): Poor quality
+- F (0-59): Needs attention
+
+**Input Parameters:**
+- `artifactType` - Type of artifact to analyze (script_include, business_rule, etc., or 'all')
+- `artifactName` - Filter to specific artifact name
+- `scope` - Filter by application scope
+- `includeDetails` - Include detailed metrics per artifact
+- `minScore` - Only return artifacts below this score (find problem scripts)
+- `limit` - Maximum artifacts to analyze
+
+**Output:**
+- Summary with overall grade and average score
+- Score distribution (excellent/good/fair/poor/failing counts)
+- Top issues with occurrence counts
+- Category-specific scores
+- Per-artifact details with full metrics and issues
+
+**File:** `mcp-servicenow/src/tools/code-quality-analyzer.ts` (405 lines)
+
+### 1.6 `sn_find_dead_code` - COMPLETED (2026-01-18)
+
+**Purpose:** Identifies unused, orphaned, or dead code in ServiceNow instances.
+
+**Key Features:**
+- ✅ Finds unreferenced Script Includes (scans all script tables)
+- ✅ Detects artifacts with empty scripts
+- ✅ Identifies artifacts referencing non-existent tables
+- ✅ Finds stale inactive artifacts (2+ years old)
+- ✅ Confidence levels: high, medium, low
+- ✅ Estimated cleanup effort calculation
+
+**Detection Methods:**
+
+| Method | Description |
+|--------|-------------|
+| **Reference Checking** | Scans Business Rules, Client Scripts, UI Actions, Scheduled Jobs for Script Include references |
+| **Table Validation** | Verifies tables still exist for Business Rules and Client Scripts |
+| **Empty Script Detection** | Finds active artifacts with no actual code |
+| **Staleness Analysis** | Identifies artifacts inactive for 2+ years |
+
+**Confidence Levels:**
+- **High**: Confirmed dead (unreferenced, empty, or referencing deleted table)
+- **Medium**: Likely dead (inactive but may have external references)
+- **Low**: Possibly dead (needs manual verification)
+
+**Input Parameters:**
+- `scope` - Filter by application scope
+- `artifactTypes` - Types to check (script_includes, business_rules, etc.)
+- `includeInactive` - Include inactive artifacts
+- `checkReferences` - Check Script Include references (slower but more accurate)
+- `limit` - Maximum artifacts per type to analyze
+
+**Output:**
+- Summary with counts by type, reason, and confidence
+- Estimated cleanup effort
+- Sorted list of dead code candidates
+- Actionable recommendations
+
+**File:** `mcp-servicenow/src/tools/dead-code-finder.ts` (563 lines)
+
+---
+
+## 14. Next Steps
 
 ### Immediate Actions (This Week)
-1. [ ] Review and approve this plan
-2. [ ] Prioritize Phase 1 tasks
-3. [ ] Define persona detection approach
-4. [ ] Set up enhancement tracking (GitHub issues / ServiceNow stories)
+1. [x] Review and approve this plan
+2. [x] Decide implementation order (Option C chosen)
+3. [x] Build `sn_analyze_instance` MCP tool (Step 1.1) - **COMPLETED 2026-01-18**
+4. [x] Build `sn_detect_ootb_overrides` MCP tool (Step 1.2) - **COMPLETED 2026-01-18**
+5. [x] Build `sn_get_dependency_graph` MCP tool (Step 1.3) - **COMPLETED 2026-01-18**
+6. [x] Build `sn_find_anti_patterns` MCP tool (Step 1.4) - **COMPLETED 2026-01-18**
+7. [x] Build `sn_code_quality_score` MCP tool (Step 1.5) - **COMPLETED 2026-01-18**
+8. [x] Build `sn_find_dead_code` MCP tool (Step 1.6) - **COMPLETED 2026-01-18**
 
-### Short-term (Next 2 Weeks)
-1. [ ] Create detailed technical design for Instance Analyzer
-2. [ ] Define guardrail rule schema
-3. [ ] Prototype dependency graph visualization
-4. [ ] Set up multi-instance test environment
+### Step 1 Enhancements (Future)
+1. [ ] Add option to analyze OOTB artifacts in `sn_analyze_instance` (currently filters to custom/modified only)
+
+### Step 2: Guardrails & Impact Analysis ✅ COMPLETE
+| Priority | Capability | MCP Tool | Effort | Status |
+|----------|------------|----------|--------|--------|
+| 2.1 | Change Impact Preview | `sn_preview_change_impact` | L | ✅ COMPLETE |
+| 2.2 | Conflict Detection | `sn_detect_conflicts` | L | ✅ COMPLETE |
+| 2.3 | Guardrail Validation | `sn_validate_change` | M | ✅ COMPLETE |
+| 2.4 | Breaking Change Alerts | `sn_check_breaking_changes` | M | ✅ COMPLETE |
+| 2.5 | Best Practice Validation | (merged into 2.3 guardrail-validator) | M | ✅ COMPLETE |
+| 2.6 | Audit Logger | `sn_log_change` + `sn_get_audit_history` | S | ✅ COMPLETE |
+
+**Step 2 Implementation Files:**
+- `src/tools/change-impact-analyzer.ts` (540 lines) - Task 2.1
+- `src/tools/conflict-detector.ts` (440 lines) - Task 2.2
+- `src/tools/guardrail-validator.ts` (361 lines) - Task 2.3 + 2.5
+- `src/tools/breaking-change-detector.ts` (322 lines) - Task 2.4
+- `src/tools/audit-logger.ts` (258 lines) - Task 2.6
+
+**Total Step 2: 1,921 lines of new guardrail & impact analysis tools**
 
 ---
 
