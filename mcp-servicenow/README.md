@@ -1,54 +1,71 @@
 # MCP ServiceNow Server
 
-An MCP (Model Context Protocol) server that enables AI assistants like Augment to interact directly with ServiceNow instances. Includes **63 tools** across core CRUD operations and advanced brownfield instance management.
+An MCP (Model Context Protocol) server that enables AI assistants like Augment to interact directly with ServiceNow instances. Includes **80 tools** across core CRUD operations, brownfield instance management, multi-instance support, and promotion workflows.
 
-## Features
+---
 
-### Core Features
-- **Connection Management**: Test and verify instance connectivity
-- **Schema Discovery**: Get table schemas and field information
-- **Record Operations**: Query, create, update, delete records
-- **Script Management**: Create/read Business Rules, Script Includes, Client Scripts
-- **Update Sets**: Create, manage, and **capture artifacts via REST API**
+## 🚀 Quick Start
 
-### Brownfield Enhancement Features (22 Tools)
-- **Instance Analysis**: Comprehensive analysis covering 150+ artifact types across 40+ categories
-- **OOTB Override Detection**: Find modified out-of-the-box artifacts
-- **Dependency Mapping**: Build relationship graphs between artifacts
-- **Anti-Pattern Detection**: Identify code quality issues and bad practices
-- **Code Quality Scoring**: Rate scripts on A-F scale with metrics
-- **Dead Code Detection**: Find unused scripts and orphaned artifacts
-- **Change Impact Analysis**: Preview impact before making changes
-- **Conflict Detection**: Detect conflicts between artifacts
-- **Guardrail Validation**: Validate changes against configurable rules
-- **Breaking Change Detection**: Detect breaking changes before deployment
-- **Audit Logging**: Track AI-assisted changes for compliance
-- **Persona Engine**: Adaptive settings based on user expertise
-- **4G Framework**: Guardrails, Guidance, Governance, Growth
-- **Approval Workflow**: Request and process change approvals
-- **Multi-Instance Support**: Register, compare, and sync instances
-- **Upgrade Readiness**: Analyze instance for upgrade compatibility
-- **Conflict Prediction**: Predict conflicts before making changes
-- **OOTB Comparison**: Compare instance against clean OOTB baseline
+```bash
+# 1. Install
+cd mcp-servicenow && npm install
 
-## Quick Start
+# 2. Configure (.env file)
+SN_INSTANCE_URL=https://your-instance.service-now.com
+SN_USERNAME=admin
+SN_PASSWORD=your-password
 
-### 1. Install Dependencies
+# 3. Build & Run
+npm run build && npm start
+```
+
+**First time?** See [Getting Started Guide](#getting-started-guide) below.
+
+---
+
+## ✨ Features
+
+| Category | Tools | Description |
+|----------|-------|-------------|
+| **Core CRUD** | 19 | Records, schemas, business rules, scripts |
+| **Extended** | 22 | UI policies, ACLs, catalog, notifications |
+| **Brownfield Analysis** | 22 | Anti-patterns, code quality, dead code, OOTB |
+| **AI Recommendations** | 3 | Fix suggestions, best practices, templates |
+| **Dashboard & Reports** | 2 | HTML/JSON/Markdown reports |
+| **Multi-Instance** | 5 | Register, switch, compare instances |
+| **Promotion Workflow** | 7 | Package, preview, validate, promote artifacts |
+
+### Key Capabilities
+
+🔍 **Instance Analysis** - Analyze 150+ artifact types across 40+ categories
+🐛 **Anti-Pattern Detection** - Find GlideRecord in client scripts, hardcoded sys_ids, etc.
+📊 **Code Quality Scoring** - A-F grades with actionable recommendations
+🔄 **Multi-Instance** - Compare and promote artifacts between dev/test/prod
+📦 **Promotion Workflow** - Safe artifact promotion with validation and rollback
+📈 **Upgrade Readiness** - Assess compatibility before upgrades
+🛡️ **4G Framework** - Guardrails, Guidance, Governance, Growth
+
+---
+
+## 📚 Getting Started Guide
+
+### Step 1: Prerequisites
+
+- Node.js 18+
+- ServiceNow instance with admin access
+- REST API enabled on your instance
+
+### Step 2: Installation
 
 ```bash
 cd mcp-servicenow
 npm install
-```
-
-### 2. Build the Server
-
-```bash
 npm run build
 ```
 
-### 3. Configure Environment
+### Step 3: Configuration
 
-Create a `.env` file:
+Create a `.env` file in the `mcp-servicenow` directory:
 
 ```env
 SN_INSTANCE_URL=https://your-instance.service-now.com
@@ -56,48 +73,30 @@ SN_USERNAME=admin
 SN_PASSWORD=your-password
 ```
 
-### 4. First-Time Setup: UpdateSetHelper API
+### Step 4: First-Time Setup (Update Set API)
 
-**Important:** To capture artifacts in update sets via REST API, you need to deploy the UpdateSetHelper API to your instance:
+To capture artifacts in update sets via REST API:
 
 ```bash
 node src/deployer/setup-updateset-api.js
 ```
 
-If the API already exists on your instance, get the full path from ServiceNow:
-1. Go to: System Web Services → Scripted REST APIs → UpdateSetHelper
-2. Note the "Base API path" (e.g., `/api/1852730/update_set_helper`)
+Or manually configure if API exists:
+1. Go to: **System Web Services → Scripted REST APIs → UpdateSetHelper**
+2. Note the **Base API path**
 3. Add to `.env`: `SN_UPDATE_SET_API_PATH=/api/<namespace>/update_set_helper/set_current`
 
-See [Update Set Artifact Capture](#update-set-artifact-capture) for details.
-
-### 5. Test the Server
+### Step 5: Test Connection
 
 ```bash
 npm start
 ```
 
-## VS Code / Augment Integration
+Then ask your AI: *"Test the connection to ServiceNow"*
 
-The MCP server is configured in `.vscode/mcp.json`. Augment will automatically detect and use it.
+---
 
-### Setting Environment Variables
-
-**macOS/Linux:**
-```bash
-export SN_INSTANCE_URL="https://your-instance.service-now.com"
-export SN_USERNAME="admin"
-export SN_PASSWORD="your-password"
-```
-
-**Windows:**
-```cmd
-set SN_INSTANCE_URL=https://your-instance.service-now.com
-set SN_USERNAME=admin
-set SN_PASSWORD=your-password
-```
-
-## Available Tools (63 Total)
+## 🛠️ All 80 Tools
 
 ### Core Tools (19)
 
@@ -153,7 +152,7 @@ set SN_PASSWORD=your-password
 
 | Tool | Description |
 |------|-------------|
-| `sn_analyze_instance` | Comprehensive instance analyzer covering 150+ artifact types |
+| `sn_analyze_instance` | Comprehensive analyzer (150+ artifact types) |
 | `sn_detect_ootb_overrides` | Detect modified OOTB artifacts |
 | `sn_get_dependency_graph` | Build dependency graph between artifacts |
 | `sn_find_anti_patterns` | Detect anti-patterns and bad practices |
@@ -165,46 +164,121 @@ set SN_PASSWORD=your-password
 | `sn_check_breaking_changes` | Detect breaking changes before deployment |
 | `sn_log_change` | Log AI-assisted changes for audit |
 | `sn_get_audit_history` | Retrieve audit history |
-| `sn_detect_persona` | Detect user persona with adaptive settings |
-| `sn_apply_4g_framework` | Apply 4G Framework (Guardrails, Guidance, Governance, Growth) |
+| `sn_detect_persona` | Detect user persona (beginner/intermediate/expert) |
+| `sn_apply_4g_framework` | Apply 4G Framework |
 | `sn_request_approval` | Submit change for approval |
 | `sn_process_approval` | Process approval request |
 | `sn_get_approval_status` | Get approval request status |
-| `sn_register_instance` | Register instance for multi-instance workflows |
+| `sn_register_instance` | Register instance (basic) |
 | `sn_list_instances` | List registered instances |
 | `sn_compare_instances` | Compare artifacts between instances |
 | `sn_assess_upgrade_readiness` | Analyze upgrade compatibility |
 | `sn_predict_conflicts` | Predict conflicts before changes |
-| `sn_compare_to_ootb` | Compare instance against OOTB baseline |
 
-## Example Usage (via AI)
+### AI Recommendations (3)
 
-Once connected, ask Augment:
+| Tool | Description |
+|------|-------------|
+| `sn_get_fix_recommendations` | Get detailed fix suggestions for issues |
+| `sn_get_best_practices` | Get best practices for artifact types |
+| `sn_get_code_templates` | Get ready-to-use code templates |
 
-### Basic Operations
-- "Test the connection to ServiceNow"
-- "Show me the schema for the incident table"
-- "Get all active P1 incidents"
-- "Create a business rule on incident that..."
-- "Create an update set called 'My Feature'"
+### Dashboard & Reports (2)
+
+| Tool | Description |
+|------|-------------|
+| `sn_generate_report` | Generate HTML/JSON/Markdown reports |
+| `sn_get_dashboard_data` | Get real-time dashboard metrics |
+
+### Multi-Instance Management (5)
+
+| Tool | Description |
+|------|-------------|
+| `sn_register_instance_v2` | Register instance with connection test |
+| `sn_switch_instance` | Switch active instance |
+| `sn_get_active_instance` | Get active instance info |
+| `sn_test_instance_connection` | Test connection to instance |
+| `sn_diff_artifact` | Compare artifact between two instances |
+
+### Promotion Workflow (7)
+
+| Tool | Description |
+|------|-------------|
+| `sn_create_promotion_package` | Bundle artifacts for promotion |
+| `sn_preview_promotion` | Preview changes on target instance |
+| `sn_validate_promotion` | Validate for conflicts/dependencies |
+| `sn_execute_promotion` | Apply changes (with backup & dry-run) |
+| `sn_rollback_promotion` | Rollback to previous state |
+| `sn_list_promotion_history` | View promotion history |
+| `sn_list_promotion_packages` | List created packages |
+
+---
+
+## 💡 Usage Examples by Category
+
+### Core CRUD Operations
+
+```
+"Test the connection to ServiceNow"
+"Show me the schema for the incident table"
+"Get all active P1 incidents from the last 7 days"
+"Create a business rule on incident that sets priority based on impact and urgency"
+"Create an update set called 'Sprint 42 Features'"
+"Get all business rules on the change_request table"
+```
 
 ### Brownfield Analysis
-- "Analyze this ServiceNow instance for customizations"
-- "Find all anti-patterns in the business rules on the incident table"
-- "Show me the dependency graph for the IncidentUtils script include"
-- "What's the code quality score for client scripts on the change_request table?"
-- "Find all dead code and unused scripts"
-- "How ready is this instance for an upgrade?"
+
+```
+"Analyze this ServiceNow instance for customizations"
+"Find all anti-patterns in the business rules on the incident table"
+"Show me the dependency graph for the IncidentUtils script include"
+"What's the code quality score for client scripts on the change_request table?"
+"Find all dead code and unused scripts in this instance"
+"How ready is this instance for an upgrade to Washington DC?"
+"Compare this instance to OOTB baseline"
+```
+
+### AI Recommendations
+
+```
+"Get fix recommendations for the anti-patterns you found"
+"What are the best practices for business rules on incident?"
+"Give me a code template for a client script that validates email format"
+"Generate a report of all code quality issues"
+```
+
+### Multi-Instance Management
+
+```
+"Register my dev instance at dev123.service-now.com"
+"Register my prod instance at prod123.service-now.com"
+"Switch to the prod instance"
+"Compare the IncidentUtils script include between dev and prod"
+"Show me all registered instances"
+```
+
+### Promotion Workflow
+
+```
+"Create a promotion package called 'Sprint 42' with MyBusinessRule and MyUtils"
+"Preview what will change if I promote this package to prod"
+"Validate the promotion for conflicts and missing dependencies"
+"Execute the promotion to prod with dry-run first"
+"Execute the promotion to prod"
+"Rollback the last promotion"
+"Show me the promotion history"
+```
 
 ### Change Governance
-- "Preview the impact of adding a new business rule on incident"
-- "Validate my proposed ACL change against guardrails"
-- "Apply the 4G framework to my proposed script include"
-- "Check for breaking changes before I modify this script"
 
-### Multi-Instance
-- "Compare the incident table customizations between dev and prod"
-- "Predict conflicts for promoting my update set to production"
+```
+"Preview the impact of adding a new ACL on sys_user"
+"Validate my proposed business rule against guardrails"
+"Apply the 4G framework to my proposed script include"
+"Check for breaking changes before I modify IncidentUtils"
+"Submit this change for approval"
+```
 
 ---
 
@@ -493,8 +567,8 @@ npm run test:coverage
 
 ### Test Coverage
 
-| Tool | Tests |
-|------|-------|
+| Test File | Tests |
+|-----------|-------|
 | `instance-analyzer` | 9 |
 | `anti-pattern-detector` | 7 |
 | `code-quality-analyzer` | 8 |
@@ -505,48 +579,60 @@ npm run test:coverage
 | `persona-engine` | 9 |
 | `upgrade-readiness` | 9 |
 | `ootb-baseline-comparator` | 11 |
+| `recommendation-engine` | 14 |
+| `dashboard-reporter` | 12 |
+| `multi-instance-manager` | 10 |
+| `promotion-workflow` | 11 |
 
-**Total: 87 tests**
+**Total: 14 test files, 134 tests**
 
-## Security Notes
+---
+
+## 🔒 Security Notes
 
 - Store credentials in environment variables, not in code
 - Use a service account with minimum required permissions
 - Consider using OAuth for production environments
 - Configure appropriate ACLs on the UpdateSetHelper API
+- Multi-instance credentials are stored in memory (not persisted)
 
-## Project Structure
+---
+
+## 📁 Project Structure
 
 ```
 mcp-servicenow/
 ├── src/
-│   ├── index.ts              # MCP server entry point
-│   ├── client/               # ServiceNow REST client
-│   ├── tools/                # Tool implementations
-│   │   ├── instance-analyzer.ts
-│   │   ├── anti-pattern-detector.ts
-│   │   ├── code-quality-analyzer.ts
-│   │   ├── dead-code-finder.ts
-│   │   ├── dependency-graph.ts
-│   │   ├── ootb-override-detector.ts
-│   │   ├── change-impact-analyzer.ts
-│   │   ├── conflict-detector.ts
-│   │   ├── guardrail-validator.ts
-│   │   ├── breaking-change-detector.ts
-│   │   ├── audit-logger.ts
-│   │   ├── persona-engine.ts
-│   │   ├── four-g-framework.ts
-│   │   ├── approval-gate.ts
-│   │   ├── instance-registry.ts
-│   │   ├── instance-compare.ts
-│   │   ├── upgrade-readiness.ts
-│   │   ├── conflict-predictor.ts
-│   │   └── ootb-baseline-comparator.ts
-│   └── deployer/             # Deployment framework
+│   ├── index.ts                    # MCP server (80 tools)
+│   ├── client/                     # ServiceNow REST client
+│   └── tools/                      # Tool implementations
+│       ├── instance-analyzer.ts    # Instance analysis
+│       ├── anti-pattern-detector.ts
+│       ├── code-quality-analyzer.ts
+│       ├── dead-code-finder.ts
+│       ├── dependency-graph.ts
+│       ├── ootb-override-detector.ts
+│       ├── change-impact-analyzer.ts
+│       ├── conflict-detector.ts
+│       ├── guardrail-validator.ts
+│       ├── breaking-change-detector.ts
+│       ├── audit-logger.ts
+│       ├── persona-engine.ts
+│       ├── four-g-framework.ts
+│       ├── approval-gate.ts
+│       ├── instance-registry.ts
+│       ├── instance-compare.ts
+│       ├── upgrade-readiness.ts
+│       ├── conflict-predictor.ts
+│       ├── ootb-baseline-comparator.ts
+│       ├── recommendation-engine.ts  # AI recommendations
+│       ├── dashboard-reporter.ts     # Reports & dashboards
+│       ├── multi-instance-manager.ts # Multi-instance support
+│       └── promotion-workflow.ts     # Promotion workflow
 ├── tests/
-│   ├── mocks/                # Mock ServiceNow client
-│   └── tools/                # Unit tests for tools
-├── dist/                     # Compiled JavaScript
+│   ├── mocks/                      # Mock ServiceNow client
+│   └── tools/                      # 14 test files
+├── dist/                           # Compiled JavaScript
 └── package.json
 ```
 
