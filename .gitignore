@@ -1,10 +1,12 @@
 # Dependencies
 node_modules/
 
-# Environment files
+# Environment files (all locations)
 .env
 .env.local
 .env.*.local
+**/.env
+**/.env.local
 
 # Output directories
 output/
@@ -45,3 +47,10 @@ coverage/
 # TypeScript
 *.tsbuildinfo
 
+# Requirements - ignore all requirement folders except _templates
+requirements/REQ-*/
+requirements/INC-*/
+requirements/CHG-*/
+requirements/PRB-*/
+requirements/TASK-*/
+!requirements/_templates/

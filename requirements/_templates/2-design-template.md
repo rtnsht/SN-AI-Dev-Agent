@@ -14,53 +14,120 @@
 
 ---
 
-## 1. Solution Overview
+## 1. Instance Discovery (Required First Step)
 
-### 1.1 Summary
+> ⚠️ **BEFORE designing, analyze what already exists in the instance!**
+>
+> Run: `node mcp-servicenow/analyze/instance-analyzer.js --table=<table> --keywords="<from spec>"`
+
+### 1.1 Discovery Summary
+
+| Metric | Value |
+|--------|-------|
+| **Table Analyzed** | |
+| **Keywords Used** | |
+| **Total Artifacts Found** | |
+| **Discovery Date** | |
+
+### 1.2 Relevant Existing Artifacts
+
+| Artifact Name | Type | Action | Reason |
+|---------------|------|--------|--------|
+| | | ⬜ Reuse / ⬜ Extend / ⬜ Ignore | |
+| | | ⬜ Reuse / ⬜ Extend / ⬜ Ignore | |
+
+### 1.3 OOTB Capabilities Check
+
+| OOTB Feature | Matches Requirement? | Notes |
+|--------------|---------------------|-------|
+| | ⬜ Full / ⬜ Partial / ⬜ None | |
+
+### 1.4 Implementation Decision
+
+> **Based on discovery, we will:**
+> - ⬜ **Use OOTB** - No custom development needed
+> - ⬜ **Extend Existing** - Modify: [list artifacts]
+> - ⬜ **Build New** - Reason OOTB doesn't work: [explanation]
+
+---
+
+## 2. Solution Overview
+
+### 2.1 Summary
 [High-level description of the technical solution]
 
-### 1.2 Goals
+### 2.2 Goals
 - Goal 1
 - Goal 2
 
-### 1.3 Non-Goals
+### 2.3 Non-Goals
 - Non-goal 1
 
 ---
 
-## 2. Architecture
+## 3. Architecture
 
-### 2.1 System Context Diagram
+### 3.1 System Context Diagram
 ```
 [ASCII or reference to diagram in evidence folder]
 ```
 
-### 2.2 Component Diagram
+### 3.2 Component Diagram
 ```
 [Show how components interact]
 ```
 
-### 2.3 Sequence Diagram
+### 3.3 Sequence Diagram
 ```
 [Show key flows]
 ```
 
 ---
 
-## 3. Artifacts to Create
+## 4. Artifacts to Create
 
-### 3.1 Summary Table
+### 4.1 Naming Convention
 
-| Artifact | Type | Table | Description |
-|----------|------|-------|-------------|
-| | Script Include | sys_script_include | |
-| | Business Rule | sys_script | |
-| | UI Policy | sys_ui_policy | |
-| | Custom Table | sys_db_object | |
+> ⚠️ **IMPORTANT**: Use clean noun+verb naming for all artifacts.
+>
+> ✅ **CORRECT**: `ValidateHighImpactJustification`, `HandleHighImpactChange`, `incident.high_impact.notify`
+> ❌ **WRONG**: `REQ003_ValidateHighImpact`, `REQ003_HighImpactHandler`, `req003.high_impact_incident`
+>
+> **Rationale**: Requirement IDs are for tracking, not for code. Clean names are:
+> - Self-documenting (describe what they do)
+> - Portable (can be reused across projects)
+> - Maintainable (no coupling to requirement numbering)
 
-### 3.2 Artifact Details
+### 4.2 Summary Table
 
-#### 3.2.1 [Artifact Name]
+| Artifact | Type | REST Table | Automatable | Description |
+|----------|------|------------|-------------|-------------|
+| | Script Include | sys_script_include | ✅ | |
+| | Business Rule | sys_script | ✅ | |
+| | UI Policy | sys_ui_policy | ✅ | |
+| | UI Policy Action | sys_ui_policy_action | ✅ | |
+| | Custom Field | sys_dictionary | ✅ | |
+| | Event | sysevent_register | ✅ | |
+| | Notification | sysevent_email_action | ✅ | |
+| | Custom Table | sys_db_object | ✅ | |
+
+> **⚠️ DEPLOYMENT GATE**: Every artifact MUST have `Automatable = ✅`.
+> If any artifact cannot be automated, document the blocker and escalate.
+> Reference: `_templates/servicenow-artifact-tables.md`
+
+### 4.3 Deployment Mapping Checklist
+
+Before implementation, verify each artifact can be created via REST API:
+
+| # | Artifact Name | REST Table | Verified | Notes |
+|---|---------------|------------|----------|-------|
+| 1 | | | [ ] | |
+| 2 | | | [ ] | |
+| 3 | | | [ ] | |
+
+### 4.4 Artifact Details
+
+#### 4.4.1 [Artifact Name]
 - **Type:** Script Include
 - **Table:** sys_script_include
 - **Purpose:** 
@@ -70,15 +137,15 @@
 
 ---
 
-## 4. Data Model
+## 5. Data Model
 
-### 4.1 New Tables
+### 5.1 New Tables
 
 | Table | Label | Extends | Purpose |
 |-------|-------|---------|---------|
 | u_table_name | | task | |
 
-### 4.2 Table Schema
+### 5.2 Table Schema
 
 #### u_table_name
 
@@ -86,7 +153,7 @@
 |--------|------|--------|-----------|-----------|-------------|
 | u_field | String | 100 | Yes | | |
 
-### 4.3 Existing Table Changes
+### 5.3 Existing Table Changes
 
 | Table | Change Type | Details |
 |-------|-------------|---------|
@@ -94,15 +161,15 @@
 
 ---
 
-## 5. Integration Points
+## 6. Integration Points
 
-### 5.1 Internal Integrations
+### 6.1 Internal Integrations
 
 | System | Direction | Method | Purpose |
 |--------|-----------|--------|---------|
 | CMDB | Inbound | GlideRecord | Lookup CI |
 
-### 5.2 External Integrations
+### 6.2 External Integrations
 
 | System | Direction | Protocol | Authentication |
 |--------|-----------|----------|----------------|
@@ -110,16 +177,16 @@
 
 ---
 
-## 6. Security Considerations
+## 7. Security Considerations
 
-### 6.1 Access Control
+### 7.1 Access Control
 
 | Role | Access Level | Restrictions |
 |------|--------------|--------------|
 | itil | Read/Write | Own records |
 | admin | Full | None |
 
-### 6.2 ACLs Required
+### 7.2 ACLs Required
 
 | Table | Operation | Role | Script |
 |-------|-----------|------|--------|
@@ -127,12 +194,12 @@
 
 ---
 
-## 7. Performance Considerations
+## 8. Performance Considerations
 
 - Consideration 1
 - Consideration 2
 
-### 7.1 Indexing Strategy
+### 8.1 Indexing Strategy
 
 | Table | Index Fields | Reason |
 |-------|--------------|--------|
@@ -140,7 +207,7 @@
 
 ---
 
-## 8. Error Handling
+## 9. Error Handling
 
 | Error Scenario | Handling Strategy | User Message |
 |----------------|-------------------|--------------|
@@ -148,14 +215,14 @@
 
 ---
 
-## 9. Rollback Plan
+## 10. Rollback Plan
 
 1. Step 1
 2. Step 2
 
 ---
 
-## 10. Open Questions
+## 11. Open Questions
 
 | ID | Question | Owner | Status | Resolution |
 |----|----------|-------|--------|------------|
