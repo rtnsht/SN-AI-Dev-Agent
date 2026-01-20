@@ -1,16 +1,34 @@
 {
   "version": "1.0",
-  "lastUpdated": "",
+  "lastUpdated": "2026-01-20",
   "project": {
     "name": "ServiceNow AI Development",
     "description": "AI-powered ServiceNow development with spec-driven methodology",
     "repository": "SN AI Dev",
     "defaultInstance": "dev300943"
   },
-  "requirements": {},
+  "requirements": {
+    "REQ-001": {
+      "title": "Normal Change Maintenance Window Enforcement",
+      "description": "Form guidance, mandatory planning data enforcement, and stakeholder notifications for Normal Changes during maintenance windows",
+      "status": "deployed",
+      "phase": "complete",
+      "created": "2026-01-20",
+      "lastUpdated": "2026-01-20",
+      "deployedAt": "2026-01-20T15:59:17.792Z",
+      "updateSetId": "d77099f5932a72502f57f0ba2bba105c",
+      "artifacts": {
+        "spec": "specs/REQ-001/1-spec.md",
+        "design": "specs/REQ-001/2-design.md",
+        "implementation": "specs/REQ-001/3-implementation/",
+        "testing": "specs/REQ-001/4-testing/",
+        "deployment": "specs/REQ-001/5-deployment.md"
+      }
+    }
+  },
   "statistics": {
-    "total": 0,
-    "deployed": 0,
+    "total": 1,
+    "deployed": 1,
     "inProgress": 0,
     "notStarted": 0
   }

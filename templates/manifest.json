@@ -1,0 +1,18 @@
+{
+  "version": "1.0",
+  "lastUpdated": "",
+  "project": {
+    "name": "{{PROJECT_NAME}}",
+    "description": "{{PROJECT_DESCRIPTION}}",
+    "repository": "{{REPOSITORY_NAME}}",
+    "defaultInstance": "{{INSTANCE_NAME}}"
+  },
+  "requirements": {},
+  "statistics": {
+    "total": 0,
+    "deployed": 0,
+    "inProgress": 0,
+    "notStarted": 0
+  }
+}
+

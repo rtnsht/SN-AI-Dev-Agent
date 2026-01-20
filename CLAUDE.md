@@ -113,6 +113,8 @@ SN-AI-Dev-Agent/
 │       └── 5-deployment.md
 │
 ├── templates/                   # 📝 ALL TEMPLATES
+│   ├── manifest.json            # Fresh project manifest template
+│   ├── manifest.schema.md       # Manifest field documentation
 │   ├── spec.md                  # Spec document template
 │   ├── design.md                # Design document template
 │   ├── test-plan.md             # Test plan template
@@ -212,6 +214,9 @@ STEP 8: Complete
 ## 9. Key Commands
 
 ```bash
+# Initialize a fresh project (resets manifest.json)
+node scripts/init-project.js
+
 # Validate a requirement
 node scripts/validate.cjs REQ-XXX
 

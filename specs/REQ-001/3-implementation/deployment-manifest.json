@@ -1,0 +1,218 @@
+{
+  "requirement": "REQ-001",
+  "name": "Normal Change Maintenance Window Enforcement",
+  "description": "Form guidance, mandatory planning data enforcement, and stakeholder notifications for Normal Changes during maintenance windows",
+  "version": "1.0",
+  "created": "2026-01-20",
+  "updateSetName": "REQ-001 Maintenance Window Enforcement",
+  "artifacts": [
+    {
+      "name": "MaintenanceWindowUtil",
+      "key": "script_include",
+      "type": "script_include",
+      "table": "sys_script_include",
+      "scriptFile": "MaintenanceWindowUtil.js",
+      "data": {
+        "name": "MaintenanceWindowUtil",
+        "api_name": "global.MaintenanceWindowUtil",
+        "client_callable": "true",
+        "active": "true",
+        "access": "public",
+        "description": "Utility for detecting maintenance window overlaps and validating planning fields for Normal Changes"
+      }
+    },
+    {
+      "name": "ValidateMaintenanceWindowChange",
+      "key": "br_validate",
+      "type": "business_rule",
+      "table": "sys_script",
+      "scriptFile": "ValidateMaintenanceWindowChange.js",
+      "data": {
+        "name": "ValidateMaintenanceWindowChange",
+        "collection": "change_request",
+        "when": "before",
+        "action_insert": "true",
+        "action_update": "true",
+        "active": "true",
+        "filter_condition": "type=normal",
+        "order": "100",
+        "description": "Validates mandatory planning fields for Normal Changes during maintenance windows"
+      }
+    },
+    {
+      "name": "NotifyMaintenanceWindowStakeholders",
+      "key": "br_notify",
+      "type": "business_rule",
+      "table": "sys_script",
+      "scriptFile": "NotifyMaintenanceWindowStakeholders.js",
+      "data": {
+        "name": "NotifyMaintenanceWindowStakeholders",
+        "collection": "change_request",
+        "when": "after",
+        "action_insert": "true",
+        "action_update": "true",
+        "active": "true",
+        "filter_condition": "type=normal",
+        "order": "200",
+        "description": "Fires notification events at lifecycle points for maintenance window changes"
+      }
+    },
+    {
+      "name": "MaintenanceWindowFormGuidance",
+      "key": "client_script",
+      "type": "client_script",
+      "table": "sys_script_client",
+      "scriptFile": "MaintenanceWindowFormGuidance.js",
+      "data": {
+        "name": "MaintenanceWindowFormGuidance",
+        "table": "change_request",
+        "type": "onChange",
+        "field": "cmdb_ci,start_date,end_date",
+        "active": "true",
+        "ui_type": "0",
+        "description": "Displays form guidance when change is scheduled during maintenance window"
+      }
+    },
+    {
+      "name": "mw.change.created",
+      "key": "event_created",
+      "type": "event",
+      "table": "sysevent_register",
+      "data": {
+        "event_name": "mw.change.created",
+        "table": "change_request",
+        "description": "Fired when a Normal Change is created during a maintenance window",
+        "fired_by": "Business Rule: NotifyMaintenanceWindowStakeholders"
+      },
+      "options": {
+        "queryField": "event_name"
+      }
+    },
+    {
+      "name": "mw.change.approved",
+      "key": "event_approved",
+      "type": "event",
+      "table": "sysevent_register",
+      "data": {
+        "event_name": "mw.change.approved",
+        "table": "change_request",
+        "description": "Fired when a maintenance window change is approved",
+        "fired_by": "Business Rule: NotifyMaintenanceWindowStakeholders"
+      },
+      "options": {
+        "queryField": "event_name"
+      }
+    },
+    {
+      "name": "mw.change.started",
+      "key": "event_started",
+      "type": "event",
+      "table": "sysevent_register",
+      "data": {
+        "event_name": "mw.change.started",
+        "table": "change_request",
+        "description": "Fired when a maintenance window change enters Implement state",
+        "fired_by": "Business Rule: NotifyMaintenanceWindowStakeholders"
+      },
+      "options": {
+        "queryField": "event_name"
+      }
+    },
+    {
+      "name": "mw.change.closed",
+      "key": "event_closed",
+      "type": "event",
+      "table": "sysevent_register",
+      "data": {
+        "event_name": "mw.change.closed",
+        "table": "change_request",
+        "description": "Fired when a maintenance window change is closed",
+        "fired_by": "Business Rule: NotifyMaintenanceWindowStakeholders"
+      },
+      "options": {
+        "queryField": "event_name"
+      }
+    },
+    {
+      "name": "MW Change Created",
+      "key": "notif_created",
+      "type": "notification",
+      "table": "sysevent_email_action",
+      "data": {
+        "name": "MW Change Created",
+        "event_name": "mw.change.created",
+        "subject": "Maintenance Window Change Created: ${number}",
+        "collection": "change_request",
+        "recipient_users": "${event.parm1}",
+        "active": "true",
+        "description": "Notifies service owner when a change is created during their maintenance window"
+      }
+    },
+    {
+      "name": "MW Change Approved",
+      "key": "notif_approved",
+      "type": "notification",
+      "table": "sysevent_email_action",
+      "data": {
+        "name": "MW Change Approved",
+        "event_name": "mw.change.approved",
+        "subject": "Maintenance Window Change Approved: ${number}",
+        "collection": "change_request",
+        "recipient_users": "${event.parm1}",
+        "active": "true",
+        "description": "Notifies service owner when a maintenance window change is approved"
+      }
+    },
+    {
+      "name": "MW Change Started",
+      "key": "notif_started",
+      "type": "notification",
+      "table": "sysevent_email_action",
+      "data": {
+        "name": "MW Change Started",
+        "event_name": "mw.change.started",
+        "subject": "Maintenance Window Change Implementation Started: ${number}",
+        "collection": "change_request",
+        "recipient_users": "${event.parm1}",
+        "active": "true",
+        "description": "Notifies service owner when implementation begins"
+      }
+    },
+    {
+      "name": "MW Change Closed",
+      "key": "notif_closed",
+      "type": "notification",
+      "table": "sysevent_email_action",
+      "data": {
+        "name": "MW Change Closed",
+        "event_name": "mw.change.closed",
+        "subject": "Maintenance Window Change Completed: ${number}",
+        "collection": "change_request",
+        "recipient_users": "${event.parm1}",
+        "active": "true",
+        "description": "Notifies service owner when the change is closed"
+      }
+    }
+  ],
+  "dependencies": [
+    {
+      "type": "data",
+      "description": "Business services must have maintenance_schedule field populated",
+      "table": "cmdb_ci_service"
+    },
+    {
+      "type": "data",
+      "description": "Maintenance schedules must be defined in cmn_schedule",
+      "table": "cmn_schedule"
+    }
+  ],
+  "rollback": {
+    "steps": [
+      "Deactivate Business Rule: ValidateMaintenanceWindowChange",
+      "Deactivate Business Rule: NotifyMaintenanceWindowStakeholders",
+      "Deactivate Client Script: MaintenanceWindowFormGuidance",
+      "Deactivate Notifications: MW Change Created/Approved/Started/Closed"
+    ]
+  }
+}
+
