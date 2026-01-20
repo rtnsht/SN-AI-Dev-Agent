@@ -1,0 +1,139 @@
+{
+  "$schema": "./deployment-manifest-schema.json",
+  "name": "Feature Name",
+  "description": "Brief description of the feature",
+  "updateSetName": "Feature Name Update Set",
+  "artifacts": [
+    {
+      "type": "field",
+      "name": "u_custom_field",
+      "key": "customField",
+      "data": {
+        "name": "table_name",
+        "element": "u_custom_field",
+        "column_label": "Custom Field Label",
+        "internal_type": "string",
+        "max_length": 1000,
+        "active": true
+      },
+      "options": {
+        "queryField": "element",
+        "displayName": "u_custom_field"
+      }
+    },
+    {
+      "type": "script_include",
+      "name": "MyScriptInclude",
+      "key": "scriptInclude",
+      "scriptFile": "script-includes/MyScriptInclude.js",
+      "data": {
+        "name": "MyScriptInclude",
+        "api_name": "global.MyScriptInclude",
+        "client_callable": false,
+        "active": true,
+        "access": "public",
+        "description": "Description of the script include"
+      }
+    },
+    {
+      "type": "business_rule",
+      "name": "MyBusinessRule",
+      "key": "businessRule",
+      "scriptFile": "business-rules/MyBusinessRule.js",
+      "data": {
+        "name": "MyBusinessRule",
+        "collection": "incident",
+        "when": "before",
+        "action_insert": true,
+        "action_update": true,
+        "active": true,
+        "order": 100,
+        "description": "Description of the business rule"
+      }
+    },
+    {
+      "type": "client_script",
+      "name": "MyClientScript",
+      "key": "clientScript",
+      "scriptFile": "client-scripts/MyClientScript.js",
+      "data": {
+        "name": "MyClientScript",
+        "table": "incident",
+        "type": "onChange",
+        "field_name": "field_name",
+        "active": true,
+        "ui_type": "0",
+        "description": "Description of the client script"
+      }
+    },
+    {
+      "type": "ui_policy",
+      "name": "MyUIPolicy",
+      "key": "uiPolicy",
+      "data": {
+        "short_description": "MyUIPolicy",
+        "table": "incident",
+        "conditions": "field=value",
+        "reverse_if_false": true,
+        "on_load": true,
+        "active": true,
+        "order": 100,
+        "global": true
+      },
+      "options": {
+        "queryField": "short_description"
+      }
+    },
+    {
+      "type": "ui_policy_action",
+      "name": "MyUIPolicyAction",
+      "key": "uiPolicyAction",
+      "references": {
+        "ui_policy": "uiPolicy"
+      },
+      "data": {
+        "field": "field_name",
+        "visible": "true",
+        "mandatory": "true",
+        "disabled": "false"
+      },
+      "options": {
+        "queryField": "ui_policy",
+        "displayName": "Action: field visible/mandatory"
+      }
+    },
+    {
+      "type": "event",
+      "name": "table.event.name",
+      "key": "event",
+      "data": {
+        "event_name": "table.event.name",
+        "table": "incident",
+        "suffix": "event_suffix",
+        "description": "Description of the event",
+        "queue": "event.queue"
+      },
+      "options": {
+        "queryField": "event_name"
+      }
+    },
+    {
+      "type": "notification",
+      "name": "MyNotification",
+      "key": "notification",
+      "data": {
+        "name": "MyNotification",
+        "event_name": "table.event.name",
+        "collection": "incident",
+        "subject": "Subject line with ${number}",
+        "message_html": "<p>Email body</p>",
+        "send_self": false,
+        "active": true,
+        "recipient_fields": "assignment_group",
+        "content_type": "text/html",
+        "description": "Description of the notification"
+      }
+    }
+  ]
+}
+

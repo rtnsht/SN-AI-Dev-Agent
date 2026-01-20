@@ -14,9 +14,11 @@
 const fs = require('fs');
 const path = require('path');
 
-const REQUIREMENTS_DIR = __dirname;
-const CONFIG_FILE = path.join(REQUIREMENTS_DIR, 'config.properties');
-const MANIFEST_FILE = path.join(REQUIREMENTS_DIR, 'manifest.json');
+// Project root is parent of scripts/
+const PROJECT_ROOT = path.join(__dirname, '..');
+const SPECS_DIR = path.join(PROJECT_ROOT, 'specs');
+const CONFIG_FILE = path.join(SPECS_DIR, 'config.properties');
+const MANIFEST_FILE = path.join(SPECS_DIR, 'manifest.json');
 
 // ANSI colors for output
 const colors = {
@@ -167,7 +169,7 @@ function checkSignOff(filePath) {
 
 // Validate a single requirement
 function validateRequirement(reqId, config, report) {
-    const reqPath = path.join(REQUIREMENTS_DIR, reqId);
+    const reqPath = path.join(SPECS_DIR, reqId);
 
     if (!fs.existsSync(reqPath)) {
         report.addViolation(reqId, 'Structure', `Requirement folder does not exist: ${reqPath}`);
@@ -255,8 +257,8 @@ function validateRequirement(reqId, config, report) {
 
 // Get all requirement folders
 function getRequirementIds() {
-    return fs.readdirSync(REQUIREMENTS_DIR)
-        .filter(f => f.startsWith('REQ-') && fs.statSync(path.join(REQUIREMENTS_DIR, f)).isDirectory());
+    return fs.readdirSync(SPECS_DIR)
+        .filter(f => f.startsWith('REQ-') && fs.statSync(path.join(SPECS_DIR, f)).isDirectory());
 }
 
 // Main execution
@@ -292,7 +294,7 @@ function main() {
     }
 
     // Save report
-    const reportPath = path.join(REQUIREMENTS_DIR, 'validation-report.json');
+    const reportPath = path.join(SPECS_DIR, 'validation-report.json');
     fs.writeFileSync(reportPath, JSON.stringify(report.toJSON(), null, 2));
     console.log(`Report saved to: ${reportPath}\n`);
 

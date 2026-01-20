@@ -19,6 +19,8 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const PROJECT_ROOT = path.join(__dirname, '..');
+const SPECS_DIR = path.join(PROJECT_ROOT, 'specs');
 
 const colors = {
     red: '\x1b[31m',
@@ -179,7 +181,7 @@ function main() {
 
     console.log(`${colors.cyan}\n🔍 Design → Deployment Validation: ${reqId}\n${colors.reset}`);
 
-    const reqPath = path.join(__dirname, reqId);
+    const reqPath = path.join(SPECS_DIR, reqId);
     const designPath = path.join(reqPath, '2-design.md');
 
     // Parse design artifacts

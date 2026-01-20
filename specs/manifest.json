@@ -1,0 +1,18 @@
+{
+  "version": "1.0",
+  "lastUpdated": "",
+  "project": {
+    "name": "ServiceNow AI Development",
+    "description": "AI-powered ServiceNow development with spec-driven methodology",
+    "repository": "SN AI Dev",
+    "defaultInstance": "dev300943"
+  },
+  "requirements": {},
+  "statistics": {
+    "total": 0,
+    "deployed": 0,
+    "inProgress": 0,
+    "notStarted": 0
+  }
+}
+

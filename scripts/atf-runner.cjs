@@ -13,7 +13,7 @@
  *   node atf-runner.js results REQ-001   # Get latest results
  */
 
-require('dotenv').config({ path: require('path').join(__dirname, '../../mcp-servicenow/.env') });
+require('dotenv').config({ path: require('path').join(__dirname, '../mcp-servicenow/.env') });
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
@@ -34,7 +34,7 @@ const api = axios.create({
  * Create an ATF Test Suite for a requirement
  */
 async function createTestSuite(reqId) {
-    const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '../manifest.json'), 'utf8'));
+    const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '../specs/manifest.json'), 'utf8'));
     const req = manifest.requirements[reqId];
     
     if (!req) {
