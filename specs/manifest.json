@@ -24,12 +24,26 @@
         "testing": "specs/REQ-001/4-testing/",
         "deployment": "specs/REQ-001/5-deployment.md"
       }
+    },
+    "REQ-002": {
+      "title": "New Hire Equipment Bundle Orchestration",
+      "description": "Automated orchestration of fulfillment tasks for new hire equipment bundle catalog item with completion tracking and notifications",
+      "status": "in-progress",
+      "phase": "testing",
+      "created": "2026-01-20",
+      "lastUpdated": "2026-01-20",
+      "artifacts": {
+        "spec": "specs/REQ-002/1-spec.md",
+        "design": "specs/REQ-002/2-design.md",
+        "implementation": "specs/REQ-002/3-implementation/",
+        "testing": "specs/REQ-002/4-testing/"
+      }
     }
   },
   "statistics": {
-    "total": 1,
+    "total": 2,
     "deployed": 1,
-    "inProgress": 0,
+    "inProgress": 1,
     "notStarted": 0
   }
 }

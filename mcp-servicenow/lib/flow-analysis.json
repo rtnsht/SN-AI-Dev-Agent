@@ -1,0 +1,730 @@
+{
+  "flow": {
+    "outputs": "",
+    "show_draft_actions": "false",
+    "acls": "",
+    "sc_callable": "false",
+    "callable_by_client_api": "false",
+    "natlang": "",
+    "sys_updated_on": "2020-01-31 04:12:14",
+    "type": "flow",
+    "run_with_roles": "",
+    "copied_from_name": "",
+    "latest_snapshot": "973c1ee187e92300e0ef0cf888cb0b4a",
+    "show_triggered_flows": "false",
+    "internal_name": "service_catalog_item_request",
+    "sys_updated_by": "admin",
+    "sys_created_on": "2018-11-03 10:47:37",
+    "compiler_build": "local",
+    "sys_domain": {
+      "link": "https://dev300943.service-now.com/api/now/table/sys_user_group/global",
+      "value": "global"
+    },
+    "sys_name": "Service Catalog item request",
+    "display_name_after_preview": "",
+    "master_snapshot": "973c1ee187e92300e0ef0cf888cb0b4a",
+    "sys_created_by": "admin",
+    "pre_compiled": "false",
+    "version_record": "",
+    "generation_source": "",
+    "substatus": "",
+    "active": "true",
+    "sys_overrides": "",
+    "sys_domain_path": "/",
+    "version": "",
+    "authored_on_release_version": "",
+    "updation_source": "",
+    "sys_update_name": "sys_hub_flow_30f3d26187e92300e0ef0cf888cb0b91",
+    "name": "Service Catalog item request",
+    "copied_from": "",
+    "status": "published",
+    "sys_policy": "",
+    "label_cache": "[{\"name\":\"3faeaac8-0672-4771-a034-3775af849760.rejected\",\"label\":\"1➛Rejected\",\"reference_display\":\"Rejected\",\"type\":\"string\",\"base_type\":\"string\"},{\"name\":\"e234704c-a2ef-4870-990a-454d7b7d7c5d.approval_state\",\"label\":\"3➛Rejected\",\"reference_display\":\"Rejected\",\"type\":\"string\",\"base_type\":\"string\"},{\"name\":\"Service Catalog_1.request_item.approval\",\"label\":\"Trigger➛Requested Item Record➛Approval\",\"reference\":\"\",\"reference_display\":\"Approval\",\"type\":\"choice\",\"base_type\":\"choice\",\"parent_table_name\":\"sc_req_item\",\"column_name\":\"approval\"},{\"name\":\"b61e14f4-55cb-4ec1-b01c-263bcfbe568a.table_name\",\"label\":\"11➛Requested Item Table\",\"reference\":\"sc_req_item\",\"reference_display\":\"Requested Item\",\"type\":\"table_name\",\"base_type\":\"table_name\"},{\"name\":\"b61e14f4-55cb-4ec1-b01c-263bcfbe568a.record\",\"label\":\"11➛Requested Item Record\",\"reference\":\"sc_req_item\",\"reference_display\":\"Requested Item\",\"type\":\"reference\",\"base_type\":\"reference\"},{\"name\":\"f1e81137-404a-4399-83bb-d285ce956ec0.table_name\",\"label\":\"2.1➛Requested Item Table\",\"reference\":\"sc_req_item\",\"reference_display\":\"Requested Item\",\"type\":\"table_name\",\"base_type\":\"table_name\"},{\"name\":\"f1e81137-404a-4399-83bb-d285ce956ec0.record\",\"label\":\"2.1➛Requested Item Record\",\"reference\":\"sc_req_item\",\"reference_display\":\"Requested Item\",\"type\":\"reference\",\"base_type\":\"reference\"},{\"name\":\"00650513-fb14-4686-8132-a96694fdca1f.table_name\",\"label\":\"5➛Requested Item Table\",\"reference\":\"sc_req_item\",\"reference_display\":\"Requested Item\",\"type\":\"table_name\",\"base_type\":\"table_name\"},{\"name\":\"00650513-fb14-4686-8132-a96694fdca1f.record\",\"label\":\"5➛Requested Item Record\",\"reference\":\"sc_req_item\",\"reference_display\":\"Requested Item\",\"type\":\"reference\",\"base_type\":\"reference\"},{\"name\":\"cf9244ad-bbbb-4c62-bce1-39fa5b7d543f.table_name\",\"label\":\"4.1➛Requested Item Table\",\"reference\":\"sc_req_item\",\"reference_display\":\"Requested Item\",\"type\":\"table_name\",\"base_type\":\"table_name\"},{\"name\":\"cf9244ad-bbbb-4c62-bce1-39fa5b7d543f.record\",\"label\":\"4.1➛Requested Item Record\",\"reference\":\"sc_req_item\",\"reference_display\":\"Requested Item\",\"type\":\"reference\",\"base_type\":\"reference\"},{\"name\":\"f4840c5b-980b-420b-9b02-02a99ede1185.table_name\",\"label\":\"1➛Requested Item Table\",\"reference\":\"sc_req_item\",\"reference_display\":\"Requested Item\",\"type\":\"table_name\",\"base_type\":\"table_name\"},{\"name\":\"f4840c5b-980b-420b-9b02-02a99ede1185.record\",\"label\":\"1➛Requested Item Record\",\"reference\":\"sc_req_item\",\"reference_display\":\"Requested Item\",\"type\":\"reference\",\"base_type\":\"reference\"},{\"name\":\"3fae8899-1eab-4c78-b7ef-cff0a502931a.Catalog Task\",\"label\":\"6.2➛Catalog Task\",\"reference\":\"sc_task\",\"reference_display\":\"Catalog Task\",\"type\":\"document_id\",\"base_type\":\"document_id\"},{\"name\":\"Service Catalog_1.request_item.backordered\",\"label\":\"Trigger➛Requested Item Record➛Backordered\",\"reference\":\"\",\"reference_display\":\"Backordered\",\"type\":\"boolean\",\"base_type\":\"boolean\",\"parent_table_name\":\"sc_req_item\",\"column_name\":\"backordered\"},{\"name\":\"e07ba4a1-2c76-4dfb-ab9a-82185f7dd678.Catalog Task\",\"label\":\"8➛Catalog Task\",\"reference\":\"sc_task\",\"reference_display\":\"Catalog Task\",\"type\":\"document_id\",\"base_type\":\"document_id\"},{\"name\":\"01e45724-d5be-4196-bd53-a9f1d583d31c.Catalog Task\",\"label\":\"5➛Catalog Task\",\"reference\":\"sc_task\",\"reference_display\":\"Catalog Task\",\"type\":\"document_id\",\"base_type\":\"document_id\"},{\"name\":\"{{static.f298d2d2c611227b0106c6be7f154bc8}}\",\"label\":\"Bow Ruggeri\",\"reference\":\"sys_user\",\"reference_display\":\"User\",\"type\":\"reference\",\"base_type\":\"reference\"},{\"name\":\"4e67e8ef-6096-4229-8b3d-a639c9c04f56.approval_state\",\"label\":\"3➛Approval State\",\"reference_display\":\"Approval State\",\"type\":\"choice\",\"base_type\":\"choice\"},{\"name\":\"Service Catalog_1.request_item.request.requested_for.department.dept_head\",\"label\":\"Trigger➛Requested Item Record➛Request➛Requested for➛Department➛Department head\",\"reference\":\"sys_user\",\"reference_display\":\"User\",\"type\":\"reference\",\"base_type\":\"reference\",\"parent_table_name\":\"cmn_department\",\"column_name\":\"dept_head\"},{\"name\":\"Service Catalog_1.request_item\",\"label\":\"Trigger➛Requested Item Record\",\"reference\":\"sc_req_item\",\"reference_display\":\"Requested Item\",\"type\":\"reference\",\"base_type\":\"reference\"},{\"name\":\"14b3534a-a680-4563-88f0-7577d069d61e.approval_state\",\"label\":\"1➛Approval State\",\"reference_display\":\"Approval State\",\"type\":\"choice\",\"base_type\":\"choice\"},{\"name\":\"a57906e1-45ba-4c36-a73c-bcc74899ae68.Catalog Task\",\"label\":\"6.4➛Catalog Task\",\"reference\":\"sc_task\",\"reference_display\":\"Catalog Task\",\"type\":\"document_id\",\"base_type\":\"document_id\"},{\"name\":\"8481bc05-e548-4129-b3e2-a9c8ff2b54cd.record\",\"label\":\"6➛Requested Item Record\",\"reference\":\"sc_req_item\",\"reference_display\":\"Requested Item\",\"type\":\"reference\",\"base_type\":\"reference\"},{\"name\":\"8481bc05-e548-4129-b3e2-a9c8ff2b54cd.table_name\",\"label\":\"6➛Requested Item Table\",\"reference\":\"sc_req_item\",\"reference_display\":\"Requested Item\",\"type\":\"table_name\",\"base_type\":\"table_name\"},{\"name\":\"31c81fa5-be90-4056-991a-ccb82bed9f23.record\",\"label\":\"4.1➛Record\",\"reference_display\":\"Record\",\"type\":\"document_id\",\"base_type\":\"document_id\"},{\"name\":\"31c81fa5-be90-4056-991a-ccb82bed9f23.table_name\",\"label\":\"4.1➛Table\",\"reference_display\":\"Table\",\"type\":\"table_name\",\"base_type\":\"table_name\"},{\"name\":\"bfe364ba-0932-4544-862f-e789b03fbae9.record\",\"label\":\"2.1➛Requested Item Record\",\"reference\":\"sc_req_item\",\"reference_display\":\"Requested Item\",\"type\":\"reference\",\"base_type\":\"reference\"},{\"name\":\"bfe364ba-0932-4544-862f-e789b03fbae9.table_name\",\"label\":\"2.1➛Requested Item Table\",\"reference\":\"sc_req_item\",\"reference_display\":\"Requested Item\",\"type\":\"table_name\",\"base_type\":\"table_name\"},{\"name\":\"15e2a816-5182-446c-9ae5-2a1480e701e9.record\",\"label\":\"5.6➛Requested Item Record\",\"reference\":\"sc_req_item\",\"reference_display\":\"Requested Item\",\"type\":\"reference\",\"base_type\":\"reference\"},{\"name\":\"15e2a816-5182-446c-9ae5-2a1480e701e9.table_name\",\"label\":\"5.6➛Requested Item Table\",\"reference\":\"sc_req_item\",\"reference_display\":\"Requested Item\",\"type\":\"table_name\",\"base_type\":\"table_name\"},{\"name\":\"Service Catalog_1.request_item.number\",\"label\":\"Trigger➛Requested Item Record➛Number\",\"reference\":\"\",\"reference_display\":\"Number\",\"type\":\"string\",\"base_type\":\"string\",\"parent_table_name\":\"sc_req_item\",\"column_name\":\"number\"},{\"name\":\"Service Catalog_1.request_item.cat_item\",\"label\":\"Trigger➛Requested Item Record➛Item\",\"reference\":\"sc_cat_item\",\"reference_display\":\"Catalog Item\",\"type\":\"reference\",\"base_type\":\"reference\",\"parent_table_name\":\"sc_req_item\",\"column_name\":\"cat_item\"},{\"name\":\"Service Catalog_1.request_item.cat_item.name\",\"label\":\"Trigger➛Requested Item Record➛Item➛Name\",\"reference\":\"\",\"reference_display\":\"Name\",\"type\":\"translated_text\",\"base_type\":\"translated_text\",\"parent_table_name\":\"sc_cat_item\",\"column_name\":\"name\"}]",
+    "access": "public",
+    "description": "",
+    "run_as": "system",
+    "sys_class_name": "sys_hub_flow",
+    "sys_id": "30f3d26187e92300e0ef0cf888cb0b91",
+    "sys_scope": {
+      "link": "https://dev300943.service-now.com/api/now/table/sys_scope/global",
+      "value": "global"
+    },
+    "annotation": "",
+    "sys_mod_count": "83",
+    "sys_tags": "",
+    "master_snapshot_digest": "",
+    "sys_package": {
+      "link": "https://dev300943.service-now.com/api/now/table/sys_package/ae6643250c2832108bb2ce4d4ed10e8e",
+      "value": "ae6643250c2832108bb2ce4d4ed10e8e"
+    },
+    "flow_priority": "",
+    "attributes": "",
+    "remote_trigger_id": "844c5ee187e92300e0ef0cf888cb0b1f",
+    "category": ""
+  },
+  "trigger": [
+    {
+      "generation_source": "",
+      "trigger_type": "service_catalog",
+      "sys_mod_count": "78",
+      "remote_sys_id": "",
+      "sys_updated_on": "2019-03-20 11:27:54",
+      "sys_tags": "",
+      "display_text": "",
+      "sys_id": "10181ea187e92300e0ef0cf888cb0b17",
+      "trigger_definition": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_trigger_definition/c43a1011c36813002841b63b12d3ae15",
+        "value": "c43a1011c36813002841b63b12d3ae15"
+      },
+      "updation_source": "",
+      "sys_updated_by": "admin",
+      "trigger_outputs": "",
+      "sys_created_on": "2018-11-03 11:05:36",
+      "name": "Service Catalog",
+      "comment": "",
+      "sys_scope": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_scope/global",
+        "value": "global"
+      },
+      "trigger_inputs": "",
+      "flow": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_flow_base/30f3d26187e92300e0ef0cf888cb0b91",
+        "value": "30f3d26187e92300e0ef0cf888cb0b91"
+      },
+      "sys_created_by": "admin"
+    }
+  ],
+  "actions": [
+    {
+      "generation_source": "",
+      "action_type": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_action_type_base/5bc1bcc6531003003bf1d9109ec587d4",
+        "value": "5bc1bcc6531003003bf1d9109ec587d4"
+      },
+      "ui_id": "2c3d0d31-6c93-488d-a50b-18a9f3e4c0bd",
+      "sys_mod_count": "18",
+      "sys_updated_on": "2020-01-31 04:12:14",
+      "compiled_snapshot": "5bc1bcc6531003003bf1d9109ec587d4",
+      "sys_tags": "",
+      "action_type_parent": "",
+      "display_text": "",
+      "sys_class_name": "sys_hub_action_instance",
+      "sys_id": "37e8736587983300bdcf480688cb0b18",
+      "updation_source": "",
+      "sys_updated_by": "admin",
+      "sys_created_on": "2019-03-20 11:01:30",
+      "action_inputs": "",
+      "parent_ui_id": "",
+      "attributes": "",
+      "comment": "",
+      "sys_scope": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_scope/global",
+        "value": "global"
+      },
+      "flow": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_flow_base/30f3d26187e92300e0ef0cf888cb0b91",
+        "value": "30f3d26187e92300e0ef0cf888cb0b91"
+      },
+      "sys_created_by": "admin",
+      "order": "16"
+    },
+    {
+      "generation_source": "",
+      "action_type": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_action_type_base/af51fd0e73141300612c273ffff6a785",
+        "value": "af51fd0e73141300612c273ffff6a785"
+      },
+      "ui_id": "01e45724-d5be-4196-bd53-a9f1d583d31c",
+      "sys_mod_count": "164",
+      "sys_updated_on": "2020-01-31 04:12:14",
+      "compiled_snapshot": "af51fd0e73141300612c273ffff6a785",
+      "sys_tags": "",
+      "action_type_parent": "",
+      "display_text": "",
+      "sys_class_name": "sys_hub_action_instance",
+      "sys_id": "38181ea187e92300e0ef0cf888cb0b80",
+      "updation_source": "",
+      "sys_updated_by": "admin",
+      "sys_created_on": "2018-11-03 11:05:38",
+      "action_inputs": "",
+      "parent_ui_id": "",
+      "attributes": "",
+      "comment": "",
+      "sys_scope": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_scope/global",
+        "value": "global"
+      },
+      "flow": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_flow_base/30f3d26187e92300e0ef0cf888cb0b91",
+        "value": "30f3d26187e92300e0ef0cf888cb0b91"
+      },
+      "sys_created_by": "admin",
+      "order": "5"
+    },
+    {
+      "generation_source": "",
+      "action_type": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_action_type_base/af51fd0e73141300612c273ffff6a785",
+        "value": "af51fd0e73141300612c273ffff6a785"
+      },
+      "ui_id": "3fae8899-1eab-4c78-b7ef-cff0a502931a",
+      "sys_mod_count": "164",
+      "sys_updated_on": "2020-01-31 04:12:14",
+      "compiled_snapshot": "af51fd0e73141300612c273ffff6a785",
+      "sys_tags": "",
+      "action_type_parent": "",
+      "display_text": "",
+      "sys_class_name": "sys_hub_action_instance",
+      "sys_id": "74181ea187e92300e0ef0cf888cb0b8a",
+      "updation_source": "",
+      "sys_updated_by": "admin",
+      "sys_created_on": "2018-11-03 11:05:38",
+      "action_inputs": "",
+      "parent_ui_id": "44e71e4b-cfc8-426c-98a8-14e8a0b6a61b",
+      "attributes": "",
+      "comment": "",
+      "sys_scope": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_scope/global",
+        "value": "global"
+      },
+      "flow": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_flow_base/30f3d26187e92300e0ef0cf888cb0b91",
+        "value": "30f3d26187e92300e0ef0cf888cb0b91"
+      },
+      "sys_created_by": "admin",
+      "order": "6.2"
+    },
+    {
+      "generation_source": "",
+      "action_type": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_action_type_base/af51fd0e73141300612c273ffff6a785",
+        "value": "af51fd0e73141300612c273ffff6a785"
+      },
+      "ui_id": "a57906e1-45ba-4c36-a73c-bcc74899ae68",
+      "sys_mod_count": "143",
+      "sys_updated_on": "2020-01-31 04:12:14",
+      "compiled_snapshot": "af51fd0e73141300612c273ffff6a785",
+      "sys_tags": "",
+      "action_type_parent": "",
+      "display_text": "",
+      "sys_class_name": "sys_hub_action_instance",
+      "sys_id": "8efb9a0687632300bdcf480688cb0b85",
+      "updation_source": "",
+      "sys_updated_by": "admin",
+      "sys_created_on": "2019-02-12 10:45:11",
+      "action_inputs": "",
+      "parent_ui_id": "44e71e4b-cfc8-426c-98a8-14e8a0b6a61b",
+      "attributes": "",
+      "comment": "",
+      "sys_scope": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_scope/global",
+        "value": "global"
+      },
+      "flow": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_flow_base/30f3d26187e92300e0ef0cf888cb0b91",
+        "value": "30f3d26187e92300e0ef0cf888cb0b91"
+      },
+      "sys_created_by": "admin",
+      "order": "6.4"
+    },
+    {
+      "generation_source": "",
+      "action_type": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_action_type_base/af51fd0e73141300612c273ffff6a785",
+        "value": "af51fd0e73141300612c273ffff6a785"
+      },
+      "ui_id": "e07ba4a1-2c76-4dfb-ab9a-82185f7dd678",
+      "sys_mod_count": "164",
+      "sys_updated_on": "2020-01-31 04:12:14",
+      "compiled_snapshot": "af51fd0e73141300612c273ffff6a785",
+      "sys_tags": "",
+      "action_type_parent": "",
+      "display_text": "",
+      "sys_class_name": "sys_hub_action_instance",
+      "sys_id": "7c181ea187e92300e0ef0cf888cb0b99",
+      "updation_source": "",
+      "sys_updated_by": "admin",
+      "sys_created_on": "2018-11-03 11:05:38",
+      "action_inputs": "",
+      "parent_ui_id": "",
+      "attributes": "",
+      "comment": "",
+      "sys_scope": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_scope/global",
+        "value": "global"
+      },
+      "flow": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_flow_base/30f3d26187e92300e0ef0cf888cb0b91",
+        "value": "30f3d26187e92300e0ef0cf888cb0b91"
+      },
+      "sys_created_by": "admin",
+      "order": "8"
+    }
+  ],
+  "stages": [
+    {
+      "ancestral_if_else_logic": "",
+      "component_indexes": "3",
+      "stage_id": "14fa525b-49ee-4ff1-af67-1f8c87e3738b",
+      "sys_mod_count": "6",
+      "always_show": "true",
+      "label": "Dept. Head Approval",
+      "sys_updated_on": "2019-03-20 11:18:22",
+      "sys_tags": "",
+      "type": "standard",
+      "states": "{\"pending\":\"Pending - has not started\",\"inprogress\":\"In progress\",\"skipped\":\"Skipped\",\"complete\":\"Completed\",\"error\":\"Error\"}",
+      "duration": "1970-01-03 00:00:00",
+      "sys_id": "70f7daa187e92300e0ef0cf888cb0b6a",
+      "sys_updated_by": "admin",
+      "ancestor_stage_id": "",
+      "sys_created_on": "2018-11-03 11:05:05",
+      "ancestor_component_id": "",
+      "ancestor_array_position": "",
+      "sys_scope": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_scope/global",
+        "value": "global"
+      },
+      "value": "Dept. Head Approval",
+      "flow": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_flow_base/30f3d26187e92300e0ef0cf888cb0b91",
+        "value": "30f3d26187e92300e0ef0cf888cb0b91"
+      },
+      "sys_created_by": "admin",
+      "order": "1"
+    },
+    {
+      "ancestral_if_else_logic": "",
+      "component_indexes": "15",
+      "stage_id": "ec02a722-f7d6-4578-a310-f8761cf3a97a",
+      "sys_mod_count": "13",
+      "always_show": "true",
+      "label": "Completed",
+      "sys_updated_on": "2019-03-20 11:18:22",
+      "sys_tags": "",
+      "type": "standard",
+      "states": "{\"pending\":\"Pending - has not started\",\"inprogress\":\"In progress\",\"skipped\":\"Skipped\",\"complete\":\"Completed\",\"error\":\"Error\"}",
+      "duration": "1970-01-01 00:00:00",
+      "sys_id": "70f7daa187e92300e0ef0cf888cb0b6d",
+      "sys_updated_by": "admin",
+      "ancestor_stage_id": "",
+      "sys_created_on": "2018-11-03 11:05:05",
+      "ancestor_component_id": "",
+      "ancestor_array_position": "",
+      "sys_scope": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_scope/global",
+        "value": "global"
+      },
+      "value": "complete",
+      "flow": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_flow_base/30f3d26187e92300e0ef0cf888cb0b91",
+        "value": "30f3d26187e92300e0ef0cf888cb0b91"
+      },
+      "sys_created_by": "admin",
+      "order": "7"
+    },
+    {
+      "ancestral_if_else_logic": "",
+      "component_indexes": "",
+      "stage_id": "9dabbaa6-9cda-479b-aa75-78665caedd3a",
+      "sys_mod_count": "1",
+      "always_show": "false",
+      "label": "Set current stage state to:  [Error]",
+      "sys_updated_on": "2019-02-12 09:11:09",
+      "sys_tags": "",
+      "type": "error",
+      "states": "{\"pending\":\"Pending - has not started\",\"inprogress\":\"In progress\",\"skipped\":\"Skipped\",\"complete\":\"Completed\",\"error\":\"Error\"}",
+      "duration": "1970-01-01 00:00:00",
+      "sys_id": "70f7daa187e92300e0ef0cf888cb0b70",
+      "sys_updated_by": "admin",
+      "ancestor_stage_id": "14fa525b-49ee-4ff1-af67-1f8c87e3738b",
+      "sys_created_on": "2018-11-03 11:05:05",
+      "ancestor_component_id": "",
+      "ancestor_array_position": "",
+      "sys_scope": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_scope/global",
+        "value": "global"
+      },
+      "value": "Set current stage state to:  [Error]",
+      "flow": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_flow_base/30f3d26187e92300e0ef0cf888cb0b91",
+        "value": "30f3d26187e92300e0ef0cf888cb0b91"
+      },
+      "sys_created_by": "admin",
+      "order": "0"
+    },
+    {
+      "ancestral_if_else_logic": "",
+      "component_indexes": "6",
+      "stage_id": "08cf71c1-5699-4291-8224-c3b265b98bb4",
+      "sys_mod_count": "9",
+      "always_show": "true",
+      "label": "Order Fulfillment",
+      "sys_updated_on": "2019-03-20 11:18:22",
+      "sys_tags": "",
+      "type": "standard",
+      "states": "{\"pending\":\"Pending - has not started\",\"inprogress\":\"In progress\",\"skipped\":\"Skipped\",\"complete\":\"Completed\",\"error\":\"Error\"}",
+      "duration": "1970-01-05 00:00:00",
+      "sys_id": "78f7daa187e92300e0ef0cf888cb0b6b",
+      "sys_updated_by": "admin",
+      "ancestor_stage_id": "",
+      "sys_created_on": "2018-11-03 11:05:05",
+      "ancestor_component_id": "",
+      "ancestor_array_position": "",
+      "sys_scope": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_scope/global",
+        "value": "global"
+      },
+      "value": "Order Fulfillment",
+      "flow": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_flow_base/30f3d26187e92300e0ef0cf888cb0b91",
+        "value": "30f3d26187e92300e0ef0cf888cb0b91"
+      },
+      "sys_created_by": "admin",
+      "order": "3"
+    },
+    {
+      "ancestral_if_else_logic": "",
+      "component_indexes": "",
+      "stage_id": "17b55c03-9bd7-4b48-853e-0f2e0e8294c4",
+      "sys_mod_count": "4",
+      "always_show": "true",
+      "label": "CIO Approval",
+      "sys_updated_on": "2019-03-20 11:18:22",
+      "sys_tags": "",
+      "type": "standard",
+      "states": "{\"pending\":\"Pending - has not started\",\"inprogress\":\"In progress\",\"skipped\":\"Skipped\",\"complete\":\"Completed\",\"error\":\"Error\"}",
+      "duration": "1970-01-03 00:00:00",
+      "sys_id": "78f7daa187e92300e0ef0cf888cb0b6e",
+      "sys_updated_by": "admin",
+      "ancestor_stage_id": "",
+      "sys_created_on": "2018-11-03 11:05:05",
+      "ancestor_component_id": "",
+      "ancestor_array_position": "",
+      "sys_scope": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_scope/global",
+        "value": "global"
+      },
+      "value": "CIO Approval",
+      "flow": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_flow_base/30f3d26187e92300e0ef0cf888cb0b91",
+        "value": "30f3d26187e92300e0ef0cf888cb0b91"
+      },
+      "sys_created_by": "admin",
+      "order": "2"
+    },
+    {
+      "ancestral_if_else_logic": "",
+      "component_indexes": "",
+      "stage_id": "1cfe83fd-afdf-444a-b783-21fcfd0d223d",
+      "sys_mod_count": "7",
+      "always_show": "true",
+      "label": "Backordered",
+      "sys_updated_on": "2019-03-20 11:18:22",
+      "sys_tags": "",
+      "type": "standard",
+      "states": "{\"pending\":\"Pending - has not started\",\"inprogress\":\"In progress\",\"skipped\":\"Skipped\",\"complete\":\"Completed\",\"error\":\"Error\"}",
+      "duration": "1970-01-15 00:00:00",
+      "sys_id": "78f7daa187e92300e0ef0cf888cb0b71",
+      "sys_updated_by": "admin",
+      "ancestor_stage_id": "",
+      "sys_created_on": "2018-11-03 11:05:05",
+      "ancestor_component_id": "",
+      "ancestor_array_position": "",
+      "sys_scope": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_scope/global",
+        "value": "global"
+      },
+      "value": "Backordered",
+      "flow": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_flow_base/30f3d26187e92300e0ef0cf888cb0b91",
+        "value": "30f3d26187e92300e0ef0cf888cb0b91"
+      },
+      "sys_created_by": "admin",
+      "order": "4"
+    },
+    {
+      "ancestral_if_else_logic": "",
+      "component_indexes": "0",
+      "stage_id": "a322d559-f069-4bfc-931e-663edc653a77",
+      "sys_mod_count": "1",
+      "always_show": "true",
+      "label": "Manager Approval",
+      "sys_updated_on": "2019-03-20 11:18:22",
+      "sys_tags": "",
+      "type": "standard",
+      "states": "{\"pending\":\"Pending - has not started\",\"inprogress\":\"In progress\",\"skipped\":\"Skipped\",\"complete\":\"Completed\",\"error\":\"Error\"}",
+      "duration": "1970-01-03 00:00:00",
+      "sys_id": "907642ce87232300bdcf480688cb0b92",
+      "sys_updated_by": "admin",
+      "ancestor_stage_id": "",
+      "sys_created_on": "2019-02-12 09:11:09",
+      "ancestor_component_id": "",
+      "ancestor_array_position": "",
+      "sys_scope": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_scope/global",
+        "value": "global"
+      },
+      "value": "manager_approval",
+      "flow": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_flow_base/30f3d26187e92300e0ef0cf888cb0b91",
+        "value": "30f3d26187e92300e0ef0cf888cb0b91"
+      },
+      "sys_created_by": "admin",
+      "order": "0"
+    },
+    {
+      "ancestral_if_else_logic": "",
+      "component_indexes": "11,14",
+      "stage_id": "1f01bed8-287c-41e4-8b46-8b9062477dff",
+      "sys_mod_count": "13",
+      "always_show": "true",
+      "label": "Deployment",
+      "sys_updated_on": "2019-03-20 11:18:22",
+      "sys_tags": "",
+      "type": "standard",
+      "states": "{\"pending\":\"Pending - has not started\",\"inprogress\":\"In progress\",\"skipped\":\"Skipped\",\"complete\":\"Completed\",\"error\":\"Error\"}",
+      "duration": "1970-01-02 00:00:00",
+      "sys_id": "a4f71aa187e92300e0ef0cf888cb0bed",
+      "sys_updated_by": "admin",
+      "ancestor_stage_id": "",
+      "sys_created_on": "2018-11-03 11:05:05",
+      "ancestor_component_id": "",
+      "ancestor_array_position": "",
+      "sys_scope": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_scope/global",
+        "value": "global"
+      },
+      "value": "Deployment",
+      "flow": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_flow_base/30f3d26187e92300e0ef0cf888cb0b91",
+        "value": "30f3d26187e92300e0ef0cf888cb0b91"
+      },
+      "sys_created_by": "admin",
+      "order": "5"
+    },
+    {
+      "ancestral_if_else_logic": "",
+      "component_indexes": "2,5",
+      "stage_id": "1c5b131b-d4e9-4282-a590-3f17654232fb",
+      "sys_mod_count": "1",
+      "always_show": "true",
+      "label": "Request Cancelled",
+      "sys_updated_on": "2019-03-20 11:23:26",
+      "sys_tags": "",
+      "type": "standard",
+      "states": "{\"pending\":\"Pending - has not started\",\"inprogress\":\"In progress\",\"skipped\":\"Skipped\",\"complete\":\"Completed\",\"error\":\"Error\"}",
+      "duration": "1970-01-01 00:00:00",
+      "sys_id": "fecc7ba587983300bdcf480688cb0b98",
+      "sys_updated_by": "admin",
+      "ancestor_stage_id": "",
+      "sys_created_on": "2019-03-20 11:18:22",
+      "ancestor_component_id": "",
+      "ancestor_array_position": "",
+      "sys_scope": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_scope/global",
+        "value": "global"
+      },
+      "value": "Request Cancelled",
+      "flow": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_flow_base/30f3d26187e92300e0ef0cf888cb0b91",
+        "value": "30f3d26187e92300e0ef0cf888cb0b91"
+      },
+      "sys_created_by": "admin",
+      "order": "6"
+    }
+  ],
+  "inputs": [
+    {
+      "calculation": "(function calculatedFieldValue(current) {\n\n\t// Add your code here\n\treturn '';  // return the calculated value\n\n})(current);",
+      "dynamic_ref_qual": "",
+      "choice_field": "",
+      "function_field": "false",
+      "sys_updated_on": "2019-03-20 11:27:54",
+      "spell_check": "false",
+      "reference_cascade_rule": "",
+      "reference": "",
+      "sys_updated_by": "admin",
+      "read_only": "true",
+      "sys_created_on": "2018-11-03 11:05:36",
+      "array_denormalized": "false",
+      "element_reference": "false",
+      "sys_name": "",
+      "model": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_flow_base/30f3d26187e92300e0ef0cf888cb0b91",
+        "value": "30f3d26187e92300e0ef0cf888cb0b91"
+      },
+      "reference_key": "",
+      "reference_qual_condition": "",
+      "xml_view": "false",
+      "dependent": "",
+      "internal_type": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_glide_object?name=table_name",
+        "value": "table_name"
+      },
+      "sys_created_by": "admin",
+      "element": "table_name",
+      "max_length": "40",
+      "order": "100",
+      "use_dependent_field": "false",
+      "delete_roles": "",
+      "virtual_type": "",
+      "active": "true",
+      "choice_table": "",
+      "model_table": "sys_hub_flow",
+      "foreign_database": "",
+      "sys_update_name": "",
+      "hint": "",
+      "unique": "false",
+      "name": "var__m_sys_hub_flow_input_30f3d26187e92300e0ef0cf888cb0b91",
+      "dependent_on_field": "",
+      "dynamic_creation": "false",
+      "primary": "false",
+      "sys_policy": "",
+      "next_element": "",
+      "virtual": "false",
+      "widget": "",
+      "use_dynamic_default": "false",
+      "sizeclass": "",
+      "mandatory": "false",
+      "sys_class_name": "sys_hub_flow_input",
+      "dynamic_default_value": "",
+      "sys_id": "10181ea187e92300e0ef0cf888cb0b0b",
+      "write_roles": "",
+      "array": "false",
+      "audit": "false",
+      "read_roles": "",
+      "sys_scope": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_scope/global",
+        "value": "global"
+      },
+      "create_roles": "",
+      "dynamic_creation_script": "",
+      "defaultsort": "",
+      "column_label": "",
+      "comments": "",
+      "use_reference_qualifier": "simple",
+      "display": "false",
+      "reference_floats": "false",
+      "sys_mod_count": "34",
+      "default_value": "sc_req_item",
+      "label": "Table Name",
+      "model_id": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_flow/30f3d26187e92300e0ef0cf888cb0b91",
+        "value": "30f3d26187e92300e0ef0cf888cb0b91"
+      },
+      "staged": "false",
+      "sys_tags": "",
+      "reference_type": "",
+      "help": "",
+      "sys_package": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_package/ae6643250c2832108bb2ce4d4ed10e8e",
+        "value": "ae6643250c2832108bb2ce4d4ed10e8e"
+      },
+      "formula": "",
+      "attributes": "element_mapping_provider=com.glide.flow_design.action.data.FlowDesignVariableMapper",
+      "choice": "",
+      "reference_qual": "",
+      "table_reference": "false",
+      "text_index": "false",
+      "function_definition": ""
+    },
+    {
+      "calculation": "(function calculatedFieldValue(current) {\n\n\t// Add your code here\n\treturn '';  // return the calculated value\n\n})(current);",
+      "dynamic_ref_qual": "",
+      "choice_field": "",
+      "function_field": "false",
+      "sys_updated_on": "2018-11-03 11:05:36",
+      "spell_check": "false",
+      "reference_cascade_rule": "",
+      "reference": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_db_object?name=sc_req_item",
+        "value": "sc_req_item"
+      },
+      "sys_updated_by": "admin",
+      "read_only": "false",
+      "sys_created_on": "2018-11-03 11:05:36",
+      "array_denormalized": "false",
+      "element_reference": "false",
+      "sys_name": "",
+      "model": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_flow_base/30f3d26187e92300e0ef0cf888cb0b91",
+        "value": "30f3d26187e92300e0ef0cf888cb0b91"
+      },
+      "reference_key": "",
+      "reference_qual_condition": "",
+      "xml_view": "false",
+      "dependent": "",
+      "internal_type": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_glide_object?name=reference",
+        "value": "reference"
+      },
+      "sys_created_by": "admin",
+      "element": "request_item",
+      "max_length": "32",
+      "order": "100",
+      "use_dependent_field": "false",
+      "delete_roles": "",
+      "virtual_type": "",
+      "active": "true",
+      "choice_table": "",
+      "model_table": "sys_hub_flow",
+      "foreign_database": "",
+      "sys_update_name": "",
+      "hint": "",
+      "unique": "false",
+      "name": "var__m_sys_hub_flow_input_30f3d26187e92300e0ef0cf888cb0b91",
+      "dependent_on_field": "",
+      "dynamic_creation": "false",
+      "primary": "false",
+      "sys_policy": "",
+      "next_element": "",
+      "virtual": "false",
+      "widget": "",
+      "use_dynamic_default": "false",
+      "sizeclass": "",
+      "mandatory": "true",
+      "sys_class_name": "sys_hub_flow_input",
+      "dynamic_default_value": "",
+      "sys_id": "9c181ea187e92300e0ef0cf888cb0b03",
+      "write_roles": "",
+      "array": "false",
+      "audit": "false",
+      "read_roles": "",
+      "sys_scope": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_scope/global",
+        "value": "global"
+      },
+      "create_roles": "",
+      "dynamic_creation_script": "",
+      "defaultsort": "",
+      "column_label": "",
+      "comments": "",
+      "use_reference_qualifier": "simple",
+      "display": "false",
+      "reference_floats": "false",
+      "sys_mod_count": "0",
+      "default_value": "",
+      "label": "Request Item",
+      "model_id": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_hub_flow/30f3d26187e92300e0ef0cf888cb0b91",
+        "value": "30f3d26187e92300e0ef0cf888cb0b91"
+      },
+      "staged": "false",
+      "sys_tags": "",
+      "reference_type": "",
+      "help": "",
+      "sys_package": {
+        "link": "https://dev300943.service-now.com/api/now/table/sys_package/global",
+        "value": "global"
+      },
+      "formula": "",
+      "attributes": "element_mapping_provider=com.glide.flow_design.action.data.FlowDesignVariableMapper",
+      "choice": "",
+      "reference_qual": "",
+      "table_reference": "false",
+      "text_index": "false",
+      "function_definition": ""
+    }
+  ],
+  "outputs": []
+}

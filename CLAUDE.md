@@ -224,6 +224,9 @@ node scripts/validate.cjs REQ-XXX
 cd mcp-servicenow
 node deploy/deploy.js REQ-XXX
 
+# Import Flow Designer Update Set (see Section 13)
+node mcp-servicenow/lib/import-updateset.js <xml-file> --direct
+
 # Run tests
 cd mcp-servicenow
 node tests/test-connection.js
@@ -284,4 +287,116 @@ At the start of every session involving requirements:
 - [ ] Check specs/manifest.json for context
 - [ ] Identify which requirement(s) are in progress
 - [ ] Confirm current phase with user before continuing
+
+---
+
+## 13. Flow Designer Deployment
+
+> ⚠️ **ALWAYS use this approach for Flow Designer flows**
+
+Flow Designer flows cannot be created via standard REST API table operations. Instead, use the **Update Set XML Import** approach.
+
+### 13.1 Creating Flow Designer Artifacts
+
+1. **Create XML Update Set file** in `3-implementation/` folder:
+   - Name: `<FlowName>-UpdateSet.xml`
+   - Include all flow-related records:
+     - `sys_hub_flow` - Flow definition
+     - `sys_hub_trigger_instance` - Flow trigger
+     - `sys_hub_action_instance` - Flow action steps
+     - `sys_hub_action_input` - Action input values/scripts
+
+2. **Use the template structure**:
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<unload unload_date="YYYY-MM-DD HH:MM:SS">
+    <!-- Flow Definition -->
+    <sys_hub_flow action="INSERT_OR_UPDATE">
+        <name>FlowName</name>
+        <label>Flow Label</label>
+        <sys_id>unique_flow_id</sys_id>
+        <!-- other flow properties -->
+    </sys_hub_flow>
+
+    <!-- Trigger -->
+    <sys_hub_trigger_instance action="INSERT_OR_UPDATE">
+        <flow display_value="FlowName">unique_flow_id</flow>
+        <!-- trigger configuration -->
+    </sys_hub_trigger_instance>
+
+    <!-- Action Steps -->
+    <sys_hub_action_instance action="INSERT_OR_UPDATE">
+        <flow display_value="FlowName">unique_flow_id</flow>
+        <name>Step Name</name>
+        <!-- step configuration -->
+    </sys_hub_action_instance>
+
+    <!-- Action Inputs (scripts, values) -->
+    <sys_hub_action_input action="INSERT_OR_UPDATE">
+        <action_instance>action_sys_id</action_instance>
+        <name>script</name>
+        <value><![CDATA[// script code here]]></value>
+    </sys_hub_action_input>
+</unload>
+```
+
+### 13.2 Deploying Flow Designer Flows
+
+**Use the import tool with `--direct` flag:**
+
+```bash
+node mcp-servicenow/lib/import-updateset.js <path-to-xml> --direct
+```
+
+**Example:**
+```bash
+node mcp-servicenow/lib/import-updateset.js specs/REQ-002/3-implementation/NewHireBundleFlow-UpdateSet.xml --direct
+```
+
+### 13.3 What the Tool Does
+
+1. Parses the XML update set file
+2. Extracts Flow Designer records (sys_hub_flow, sys_hub_trigger_instance, etc.)
+3. Creates or updates records directly via ServiceNow REST API
+4. Reports success/failure for each record
+
+### 13.4 Post-Deployment Steps
+
+After running the import tool:
+
+1. **Verify in Flow Designer**: Navigate to `Process Automation > Flow Designer`
+2. **Open the flow**: Check that all steps are correctly configured
+3. **Activate the flow**: If not already active, click "Activate"
+4. **Test**: Submit a test request to trigger the flow
+
+### 13.5 Deployment Manifest Configuration
+
+In `deployment-manifest.json`, include:
+
+```json
+{
+  "updateSets": [
+    {
+      "name": "Flow Name",
+      "file": "FlowName-UpdateSet.xml",
+      "description": "Flow Designer flow description",
+      "importCommand": "node mcp-servicenow/lib/import-updateset.js <path> --direct"
+    }
+  ],
+  "deploymentSteps": [
+    {
+      "step": 1,
+      "type": "automated",
+      "description": "Deploy base artifacts",
+      "command": "node mcp-servicenow/deploy/deploy.js REQ-XXX"
+    },
+    {
+      "step": 2,
+      "type": "automated",
+      "description": "Import Flow Designer flow",
+      "command": "node mcp-servicenow/lib/import-updateset.js <xml-path> --direct"
+    }
+  ]
+}
+```
 

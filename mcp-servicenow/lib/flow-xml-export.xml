@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xml>
+<sys_hub_flow>
+<access>public</access>
+<acls/>
+<active>true</active>
+<annotation/>
+<attributes>browserActivatedIn=chrome,integrationActivatedIn=standalone,labelCacheCleanUpExecuted=true,timeFromCreateToActivate=13606000,viewActivatedIn=naturalLanguage</attributes>
+<authored_on_release_version>26000</authored_on_release_version>
+<callable_by_client_api>false</callable_by_client_api>
+<category/>
+<compiler_build>glide-Tue_Oct_22_11_43_27_IST_2024.zip</compiler_build>
+<copied_from/>
+<copied_from_name/>
+<description>This flow is triggered when a new Service Catalog Request is created. It automatically approves the request if the total price of items in the request is less than 1000. This automation streamlines the approval process for low-cost requests, reducing manual intervention and speeding up fulfillment.</description>
+<display_name_after_preview/>
+<flow_priority>MEDIUM</flow_priority>
+<generation_source/>
+<internal_name>service_catalog_request</internal_name>
+<label_cache>[{"name":"9b5e4651-fcdf-4cee-9d6e-dbee36b8a96d.record","label":"1 - Update Record➛Request Record","reference":"sc_request","reference_display":"Request","type":"reference","base_type":"reference","usedInstances":{},"attributes":{"element_mapping_provider":"com.glide.flow_design.action.data.FlowDesignVariableMapper"}},{"name":"Created_1.current.price","label":"Trigger - Record Created➛Request Record➛Price","reference":"","reference_display":"Price","type":"currency","base_type":"currency","parent_table_name":"sc_request","column_name":"price","usedInstances":{"962ab2cf-4a27-44c0-b0ea-aec6a51fd455":["condition"],"938bb856-3cd6-40ee-bf76-ed35599eba12":["price"]}},{"name":"Created_1.current","label":"Trigger - Record Created➛Request Record","reference":"sc_request","reference_display":"Request","type":"reference","base_type":"reference","usedInstances":{"9b5e4651-fcdf-4cee-9d6e-dbee36b8a96d":["record"],"939eaa6a-7fc6-46b2-9f36-972f554c8180":["record"],"89ec69ec-cfdb-4dff-ad01-0fbce646595b":["record"],"938bb856-3cd6-40ee-bf76-ed35599eba12":["record"],"f1335025-48ef-4590-a298-4ec8e78f0c02":["record"],"0819620b-2cec-4039-8e6d-816fe0a3523b":["record"],"91a8cd00-953e-4589-ad72-dcb20b33c79b":["record"],"632be00a-d87b-4d0e-8c5e-4bf3623bb6e6":["record"]},"attributes":{}},{"name":"938bb856-3cd6-40ee-bf76-ed35599eba12.approval","label":"2 - Request Management Approval➛Approval","reference_display":"Approval","type":"choice","base_type":"choice","choices":[{"label":"Auto Approved","value":"auto approved","order":1.0},{"label":"Requested","value":"requested","order":2.0},{"label":"Approved","value":"approved","order":3.0},{"label":"Rejected","value":"rejected","order":4.0}],"usedInstances":{"5e9311c5-8d47-45fc-8b71-1612725cd7c7":["condition"],"0704f947-be52-499c-af97-b8f3c30be40e":["condition"],"1364d100-73bf-4ee5-945f-3b5c8c1bf0ef":["condition"],"e2e87976-534d-41dd-8ecc-fd102740c731":["condition"]},"attributes":{"uiType":"choice","uiTypeLabel":"Choice","element_mapping_provider":"com.glide.flow_design.action.data.FlowDesignVariableMapper","uiUniqueId":"fdb1988b-d8f2-456e-8957-99cade86d922"}}]</label_cache>
+<latest_snapshot>9ec32d9f9fd11210db9f618dfa0a1cea</latest_snapshot>
+<master_snapshot>9ec32d9f9fd11210db9f618dfa0a1cea</master_snapshot>
+<master_snapshot_digest/>
+<name>Service Catalog Request</name>
+<natlang/>
+<outputs/>
+<pre_compiled>false</pre_compiled>
+<remote_trigger_id>26c36d9f9fd11210db9f618dfa0a1c25</remote_trigger_id>
+<run_as>system</run_as>
+<run_with_roles/>
+<sc_callable>false</sc_callable>
+<show_draft_actions>false</show_draft_actions>
+<show_triggered_flows>false</show_triggered_flows>
+<status>published</status>
+<substatus/>
+<sys_class_name>sys_hub_flow</sys_class_name>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2024-10-22 12:38:07</sys_created_on>
+<sys_domain>global</sys_domain>
+<sys_domain_path>/</sys_domain_path>
+<sys_id>1e1799df9f911210db9f618dfa0a1c70</sys_id>
+<sys_mod_count>0</sys_mod_count>
+<sys_name>Service Catalog Request</sys_name>
+<sys_overrides/>
+<sys_package>ae6643250c2832108bb2ce4d4ed10e8e</sys_package>
+<sys_policy/>
+<sys_scope>global</sys_scope>
+<sys_update_name>sys_hub_flow_1e1799df9f911210db9f618dfa0a1c70</sys_update_name>
+<sys_updated_by>system</sys_updated_by>
+<sys_updated_on>2025-10-12 20:30:14</sys_updated_on>
+<type>flow</type>
+<updation_source/>
+<version>2</version>
+<version_record/>
+</sys_hub_flow>
+</xml>
