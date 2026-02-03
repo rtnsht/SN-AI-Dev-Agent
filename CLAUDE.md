@@ -292,111 +292,55 @@ At the start of every session involving requirements:
 
 ## 13. Flow Designer Deployment
 
-> ⚠️ **ALWAYS use this approach for Flow Designer flows**
+> ⚠️ **IMPORTANT: Flow Designer has complex internal requirements**
 
-Flow Designer flows cannot be created via standard REST API table operations. Instead, use the **Update Set XML Import** approach.
+Flow Designer flows require **snapshots** that are created by the Flow Designer engine. Direct REST API table inserts create records but the flow won't be functional until activated via the UI.
 
-### 13.1 Creating Flow Designer Artifacts
+### 13.1 Understanding Flow Designer Structure
 
-1. **Create XML Update Set file** in `3-implementation/` folder:
-   - Name: `<FlowName>-UpdateSet.xml`
-   - Include all flow-related records:
-     - `sys_hub_flow` - Flow definition
-     - `sys_hub_trigger_instance` - Flow trigger
-     - `sys_hub_action_instance` - Flow action steps
-     - `sys_hub_action_input` - Action input values/scripts
+| Table | Purpose | Key Fields |
+|-------|---------|------------|
+| `sys_hub_flow` | Flow definition | name, internal_name, status, latest_snapshot, master_snapshot |
+| `sys_hub_trigger_instance` | Flow trigger | flow, trigger_definition, trigger_type |
+| `sys_hub_action_instance` | Action steps | flow, action_type, compiled_snapshot, order, ui_id |
+| `sys_hub_flow_stage` | Flow stages | flow, label, stage_id, order |
+| `sys_hub_flow_input` | Flow variables | Complex variable definitions |
 
-2. **Use the template structure**:
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<unload unload_date="YYYY-MM-DD HH:MM:SS">
-    <!-- Flow Definition -->
-    <sys_hub_flow action="INSERT_OR_UPDATE">
-        <name>FlowName</name>
-        <label>Flow Label</label>
-        <sys_id>unique_flow_id</sys_id>
-        <!-- other flow properties -->
-    </sys_hub_flow>
+**Critical:** Flows require `latest_snapshot` and `master_snapshot` references created when you **Activate/Publish** a flow.
 
-    <!-- Trigger -->
-    <sys_hub_trigger_instance action="INSERT_OR_UPDATE">
-        <flow display_value="FlowName">unique_flow_id</flow>
-        <!-- trigger configuration -->
-    </sys_hub_trigger_instance>
+### 13.2 Recommended Approach: REST API + Manual Activation
 
-    <!-- Action Steps -->
-    <sys_hub_action_instance action="INSERT_OR_UPDATE">
-        <flow display_value="FlowName">unique_flow_id</flow>
-        <name>Step Name</name>
-        <!-- step configuration -->
-    </sys_hub_action_instance>
-
-    <!-- Action Inputs (scripts, values) -->
-    <sys_hub_action_input action="INSERT_OR_UPDATE">
-        <action_instance>action_sys_id</action_instance>
-        <name>script</name>
-        <value><![CDATA[// script code here]]></value>
-    </sys_hub_action_input>
-</unload>
-```
-
-### 13.2 Deploying Flow Designer Flows
-
-**Use the import tool with `--direct` flag:**
-
+**Step 1:** Create flow structure via REST API (creates draft flow):
 ```bash
-node mcp-servicenow/lib/import-updateset.js <path-to-xml> --direct
+cd mcp-servicenow
+node lib/create-flow-rest.js
 ```
 
-**Example:**
-```bash
-node mcp-servicenow/lib/import-updateset.js specs/REQ-002/3-implementation/NewHireBundleFlow-UpdateSet.xml --direct
-```
+**Step 2:** Open Flow Designer UI and:
+1. Configure trigger conditions
+2. Add/configure action steps
+3. Click **Activate** to publish (creates snapshots)
 
-### 13.3 What the Tool Does
+### 13.3 Key Action Type IDs (for reference)
 
-1. Parses the XML update set file
-2. Extracts Flow Designer records (sys_hub_flow, sys_hub_trigger_instance, etc.)
-3. Creates or updates records directly via ServiceNow REST API
-4. Reports success/failure for each record
+| Action | Snapshot ID | Definition ID |
+|--------|-------------|---------------|
+| Create Catalog Task | `af51fd0e73141300612c273ffff6a785` | `f597c41073081300612c273ffff6a767` |
+| Log | `5bc1bcc6531003003bf1d9109ec587d4` | - |
+| Service Catalog Trigger | - | `c43a1011c36813002841b63b12d3ae15` |
 
-### 13.4 Post-Deployment Steps
+### 13.4 Alternative: Manual Flow Creation
 
-After running the import tool:
+For complex flows, create manually in Flow Designer UI:
+1. Navigate to `Process Automation > Flow Designer`
+2. Create new flow with trigger and actions
+3. Activate the flow
+4. Capture in Update Set for version control
 
-1. **Verify in Flow Designer**: Navigate to `Process Automation > Flow Designer`
-2. **Open the flow**: Check that all steps are correctly configured
-3. **Activate the flow**: If not already active, click "Activate"
-4. **Test**: Submit a test request to trigger the flow
+### 13.5 Lessons Learned
 
-### 13.5 Deployment Manifest Configuration
-
-In `deployment-manifest.json`, include:
-
-```json
-{
-  "updateSets": [
-    {
-      "name": "Flow Name",
-      "file": "FlowName-UpdateSet.xml",
-      "description": "Flow Designer flow description",
-      "importCommand": "node mcp-servicenow/lib/import-updateset.js <path> --direct"
-    }
-  ],
-  "deploymentSteps": [
-    {
-      "step": 1,
-      "type": "automated",
-      "description": "Deploy base artifacts",
-      "command": "node mcp-servicenow/deploy/deploy.js REQ-XXX"
-    },
-    {
-      "step": 2,
-      "type": "automated",
-      "description": "Import Flow Designer flow",
-      "command": "node mcp-servicenow/lib/import-updateset.js <xml-path> --direct"
-    }
-  ]
-}
-```
+- **Snapshots are mandatory** - Flow engine requires compiled snapshots
+- **Action instances use snapshot IDs** - Not definition IDs
+- **UI activation required** - Creates internal metadata and snapshots
+- **Draft flows are accessible** - Can be opened and edited in UI
 
