@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, type RefObject } from "react";
+import Image from "next/image";
 import type { ChatMessage, SDLCPhase } from "@/lib/types";
 import MessageBubble from "./MessageBubble";
 
@@ -32,9 +33,11 @@ interface Props {
   onApprove: (phase: SDLCPhase) => void;
   connected: boolean;
   inputRef: RefObject<HTMLTextAreaElement | null>;
+  /** When false, tool executions show only a compact summary (controlled by env) */
+  showToolDetails?: boolean;
 }
 
-export default function ChatWindow({ messages, isLoading, onSend, onCancel, onApprove, connected, inputRef }: Props) {
+export default function ChatWindow({ messages, isLoading, onSend, onCancel, onApprove, connected, inputRef, showToolDetails = true }: Props) {
   const [input, setInput] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState(false);
@@ -131,11 +134,11 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
           {showEmptyState && (
             <div className="flex-1 flex items-center justify-center h-full">
               <div className="text-center max-w-lg mx-auto">
-                <div className="w-16 h-16 mx-auto mb-5 bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-500/30 rounded-2xl flex items-center justify-center">
-                  <span className="text-3xl">⚡</span>
+                <div className="w-48 h-48 mx-auto mb-5 flex items-center justify-center">
+                  <Image src="/yantra-logo.png" alt="Yantra - AI Dev Agent - SN" width={192} height={192} className="rounded-full" unoptimized />
                 </div>
                 <h2 className="text-xl font-semibold text-gray-200 mb-2">
-                  ServiceNow AI Dev Agent
+                  Yantra - AI Dev Agent - SN
                 </h2>
                 <p className="text-sm text-gray-500 mb-6">
                   {connected
@@ -162,7 +165,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
           )}
 
           {messages.map((msg, i) => (
-            <MessageBubble key={i} message={msg} onApprove={onApprove} />
+            <MessageBubble key={i} message={msg} onApprove={onApprove} showToolDetails={showToolDetails} />
           ))}
 
           {isLoading && (

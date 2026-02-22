@@ -217,14 +217,16 @@ export const MORE_TOOLS: ToolDefinition[] = [
   },
   {
     name: 'sn_create_update_set',
-    description: 'Create a new update set. Use the "application" field to target a specific scope (pass the sys_id of a sys_scope record). Omit it or leave empty for Global scope.',
+    description: 'Create a new update set. Checks for duplicate names first — if a duplicate exists, returns existing matches and options (force, autoTimestamp, or rename). Use the "application" field to target a specific scope.',
     inputSchema: {
       type: 'object',
       properties: {
         name: { type: 'string', description: 'Name for the update set' },
         description: { type: 'string', description: 'Description of the update set' },
         application: { type: 'string', description: 'Scope sys_id (sys_scope.sys_id) to create the update set in a specific application scope. Omit for Global scope.' },
-        parent: { type: 'string', description: 'Parent update set sys_id (for batch update sets)' }
+        parent: { type: 'string', description: 'Parent update set sys_id (for batch update sets)' },
+        force: { type: 'boolean', default: false, description: 'If true, skip duplicate name check and create anyway' },
+        autoTimestamp: { type: 'boolean', default: false, description: 'If true and a duplicate exists, auto-append a timestamp to the name' }
       },
       required: ['name']
     }
@@ -257,6 +259,19 @@ export const MORE_TOOLS: ToolDefinition[] = [
         limit: { type: 'number', default: 100 }
       },
       required: ['sys_id']
+    }
+  },
+  {
+    name: 'sn_move_to_update_set',
+    description: 'Move a record\'s sys_update_xml entry to a specific update set. Use this to fix artifacts that landed in the wrong update set (e.g., Default instead of the target). This is the manual fallback for automatic update set capture.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        update_set_id: { type: 'string', description: 'The sys_id of the target update set' },
+        table: { type: 'string', description: 'The table name of the artifact (e.g., "sys_script", "sys_script_include", "sys_script_client")' },
+        sys_id: { type: 'string', description: 'The sys_id of the record to move to the update set' }
+      },
+      required: ['update_set_id', 'table', 'sys_id']
     }
   }
 ];

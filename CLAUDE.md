@@ -8,7 +8,7 @@ This file contains mandatory rules, processes, and context for AI agents working
 
 ## 1. Project Overview
 
-**Project**: SN AI Dev Agent  
+**Project**: Yantra - AI Dev Agent - SN
 **Purpose**: AI-powered ServiceNow development with spec-driven methodology  
 **Instance**: dev300943.service-now.com  
 
@@ -343,4 +343,63 @@ For complex flows, create manually in Flow Designer UI:
 - **Action instances use snapshot IDs** - Not definition IDs
 - **UI activation required** - Creates internal metadata and snapshots
 - **Draft flows are accessible** - Can be opened and edited in UI
+
+---
+
+## 14. Update Set Artifact Capture
+
+> ⚠️ **IMPORTANT: REST API does NOT honor "current update set" session context like the UI does**
+
+Artifacts created via REST API land in the "Default" update set instead of the intended target. This framework implements a **two-layer defense strategy** to ensure reliable capture.
+
+### 14.1 Two-Layer Defense Strategy
+
+**Layer 1 — Session-based capture** (`sn-client.ts`):
+- Cookie-jar session persistence via `axios-cookiejar-support` + `tough-cookie`
+- `callSetCurrentUpdateSetApi()` calls the UpdateSetHelper Scripted REST API
+- Server-side runs `GlideUpdateSet().set()` to bind the session to the target update set
+
+**Layer 2 — Post-creation move** (fallback in `sn-client.ts`):
+- `moveArtifactToUpdateSet()` queries `sys_update_xml` after every create/update
+- Moves records to the target update set if they landed in the wrong one
+- Auto-move hooks in: `createRecord`, `updateRecord`, `createBusinessRule`, `createScriptInclude`, `createClientScript`
+
+### 14.2 Duplicate Update Set Detection
+
+`sn_create_update_set` checks for existing update sets with the same name **before** creating:
+
+| Scenario | Behavior |
+|----------|----------|
+| No duplicate | Creates normally |
+| Duplicate found (default) | Returns `duplicateDetected: true` with existing sets and 3 options |
+| Duplicate + `autoTimestamp: true` | Auto-appends ISO timestamp to name |
+| Duplicate + `force: true` | Skips check, creates duplicate |
+
+**NEVER silently create duplicate update sets** — always surface the conflict to the user first.
+
+### 14.3 New Tools
+
+| Tool | Purpose |
+|------|---------|
+| `sn_move_to_update_set` | Manual fallback — move a specific artifact to a target update set |
+
+### 14.4 Required Setup
+
+1. Deploy the UpdateSetHelper Scripted REST API:
+   ```bash
+   cd mcp-servicenow
+   node src/deployer/setup-updateset-api.js
+   ```
+2. Configure in `.env`:
+   ```
+   SN_UPDATE_SET_API_PATH=/api/<namespace>/update_set_helper/set_current
+   ```
+
+### 14.5 Implementation Workflow (for AI agents)
+
+1. Call `sn_create_update_set` — handle `duplicateDetected` response if returned
+2. Call `sn_set_current_update_set` with the update set sys_id
+3. Create artifacts — each response includes `updateSetCapture` field confirming capture
+4. Verify with `sn_get_update_set_contents`
+5. Use `sn_move_to_update_set` as fallback for any missing artifacts
 

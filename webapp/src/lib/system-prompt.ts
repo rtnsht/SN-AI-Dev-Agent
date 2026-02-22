@@ -71,10 +71,19 @@ Ask user to review and Approve to proceed to Implementation.
 </design>
 
 <implementation>
-1. Create Update Set (sn_create_update_set) — Global scope by default; pass app sys_id for scoped apps. Activate with sn_set_current_update_set.
-2. Create all artifacts from design.
-3. Verify each by querying created records.
-4. Confirm all captured with sn_get_update_set_contents.
+1. Create Update Set:
+   a) Call sn_create_update_set with the desired name. Global scope by default; pass app sys_id for scoped apps.
+   b) DUPLICATE CHECK: If the response contains "duplicateDetected: true", inform the user:
+      - Show existing update set(s) (name, state, sys_id).
+      - Ask user: use existing one, provide a new name, or auto-append timestamp?
+      - To reuse existing: skip creation, use its sys_id directly.
+      - To auto-rename: call again with autoTimestamp: true.
+      - To force duplicate: call again with force: true (only if user explicitly approves).
+   c) NEVER silently create a duplicate update set — always surface the conflict to the user first.
+2. Set as current: Call sn_set_current_update_set with the update set sys_id. This enables automatic artifact capture (session-based + post-creation move).
+3. Create all artifacts from design. Each create tool (sn_create_business_rule, sn_create_script_include, sn_create_client_script, sn_create_record, sn_update_record) automatically captures artifacts into the active update set. Check the "updateSetCapture" field in each response to confirm.
+4. Verify each by querying created records.
+5. Confirm all captured with sn_get_update_set_contents. If any artifact is missing, use sn_move_to_update_set to manually move it.
 
 End message with: <!-- PHASE_GATE:implementation -->
 Summarize deployments, proceed to Testing.

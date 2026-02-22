@@ -26,12 +26,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Resolve Claude API key: user-supplied takes priority, then server env var
-    const userSuppliedKey = !!credentials.claudeApiKey;
-    const claudeApiKey = credentials.claudeApiKey || process.env.CLAUDE_API_KEY || "";
+    // Resolve Claude API key: user-supplied takes priority (if allowed), then server env var
+    const allowUserKeys = process.env.ALLOW_USER_API_KEYS !== "false";
+    const userSuppliedKey = allowUserKeys && !!credentials.claudeApiKey;
+    const claudeApiKey = (allowUserKeys ? credentials.claudeApiKey : "") || process.env.CLAUDE_API_KEY || "";
     if (!claudeApiKey) {
       return NextResponse.json(
-        { error: "No Claude API key available. Either provide one in settings or ask the admin to configure a server-side key." },
+        { error: allowUserKeys
+            ? "No Claude API key available. Either provide one in settings or ask the admin to configure a server-side key."
+            : "No Claude API key configured on the server. Please contact the admin." },
         { status: 400 }
       );
     }
@@ -49,8 +52,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             error: "rate_limit_exceeded",
-            message: `You've used all ${usage.max} free requests for this ${usage.windowHours}-hour window. Enter your own Claude API key to continue chatting with no limits.`,
+            message: allowUserKeys
+              ? `You've used all ${usage.max} free requests for this ${usage.windowHours}-hour window. Enter your own Claude API key to continue chatting with no limits.`
+              : `You've used all ${usage.max} requests for this ${usage.windowHours}-hour window. Please try again later.`,
             usage,
+            allowUserApiKeys: allowUserKeys,
           },
           { status: 429 }
         );
@@ -85,13 +91,16 @@ export async function POST(request: NextRequest) {
 
     // Detect Anthropic rate limit (after retries exhausted in sn-engine)
     if (message === "anthropic_rate_limit") {
+      const allowUserKeys = process.env.ALLOW_USER_API_KEYS !== "false";
       return NextResponse.json(
         {
           error: "anthropic_rate_limit",
-          message:
-            "Claude API rate limit exceeded after retries. Provide your own API key to continue.",
-          needsApiKey: true,
+          message: allowUserKeys
+            ? "Claude API rate limit exceeded after retries. Provide your own API key to continue."
+            : "Claude API rate limit exceeded after retries. Please try again later.",
+          needsApiKey: allowUserKeys,
           retryable: true,
+          allowUserApiKeys: allowUserKeys,
         },
         { status: 429 }
       );

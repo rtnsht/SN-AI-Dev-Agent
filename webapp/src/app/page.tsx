@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import Image from "next/image";
 import SettingsPanel from "@/components/SettingsPanel";
 import ChatWindow from "@/components/ChatWindow";
 import PhaseTracker from "@/components/PhaseTracker";
+import InfoModal from "@/components/InfoModal";
 import type { ChatMessage, ConnectionResult, UsageInfo, SDLCPhase, ModelChoice } from "@/lib/types";
-import { parsePhaseGate, MODEL_OPTIONS } from "@/lib/types";
+import { parsePhaseGate, MODEL_OPTIONS, SDLC_PHASES } from "@/lib/types";
 
 export default function Home() {
   const [credentials, setCredentials] = useState({
@@ -33,6 +35,12 @@ export default function Home() {
   const [activeReqId, setActiveReqId] = useState<string | null>(null);
   const [currentPhase, setCurrentPhase] = useState<SDLCPhase | null>(null);
   const [completedPhases, setCompletedPhases] = useState<SDLCPhase[]>([]);
+  // Tool execution detail visibility (from env via /api/config)
+  const [showToolDetails, setShowToolDetails] = useState(true);
+  // Whether users are allowed to provide their own Claude API key
+  const [allowUserApiKeys, setAllowUserApiKeys] = useState(true);
+  // Info modal
+  const [showInfo, setShowInfo] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -43,6 +51,11 @@ export default function Home() {
       .then((data) => {
         setServerApiKeyConfigured(!!data.serverApiKeyConfigured);
         if (data.usage) setUsage(data.usage);
+
+        // Tool detail visibility
+        if (typeof data.showToolDetails === "boolean") setShowToolDetails(data.showToolDetails);
+        // User API key control
+        if (typeof data.allowUserApiKeys === "boolean") setAllowUserApiKeys(data.allowUserApiKeys);
 
         // Pre-populate ServiceNow credentials if server-provided
         if (data.serverSnCredsConfigured && data.serverSnCredentials) {
@@ -178,6 +191,9 @@ export default function Home() {
           }
 
           // Track current phase based on gate
+          const phaseInfo = phaseGate ? SDLC_PHASES.find((p) => p.key === phaseGate) : null;
+          const isAutoApprove = phaseInfo ? !phaseInfo.requiresApproval : false;
+
           if (phaseGate) {
             const nextPhaseMap: Record<string, SDLCPhase> = {
               spec: "design",
@@ -185,8 +201,16 @@ export default function Home() {
               implementation: "testing",
               testing: "deployment",
             };
-            // Current phase is the one in the gate (waiting for approval)
-            setCurrentPhase(phaseGate);
+
+            if (isAutoApprove) {
+              // Auto-proceed: mark phase completed immediately and advance
+              setCompletedPhases((prev) => (prev.includes(phaseGate) ? prev : [...prev, phaseGate]));
+              const next = nextPhaseMap[phaseGate];
+              if (next) setCurrentPhase(next);
+            } else {
+              // Manual approval required: set as current and wait for user click
+              setCurrentPhase(phaseGate);
+            }
           }
 
           // Build assistant message with phase gate info
@@ -195,42 +219,70 @@ export default function Home() {
             content: data.reply,
             toolExecutions: data.toolExecutions,
             phaseGate: phaseGate || undefined,
+            // Auto-approve gates that don't require user sign-off
+            approved: isAutoApprove && phaseGate ? true : undefined,
+            autoApproved: isAutoApprove && phaseGate ? true : undefined,
           };
 
           const newMsgs: ChatMessage[] = [assistantMsg];
+
+          // Inject auto-approved system message for auto-proceed phases
+          if (isAutoApprove && phaseGate) {
+            newMsgs.push({
+              role: "system",
+              type: "info",
+              content: `⚡ **${phaseGate.charAt(0).toUpperCase() + phaseGate.slice(1)}** phase auto-approved (no sign-off required). Proceeding...`,
+            });
+          }
+
           if (data.usage && data.usage.remaining > 0 && data.usage.remaining <= 2 && serverApiKeyConfigured && !credentials.claudeApiKey) {
             newMsgs.push({
               role: "system",
               type: "warning",
-              content: `⏳ **${data.usage.remaining} free request${data.usage.remaining === 1 ? "" : "s"} remaining** out of ${data.usage.max} per ${data.usage.windowHours} hours. Enter your own Claude API key in Settings to continue chatting with no limits.`,
+              content: allowUserApiKeys
+                ? `⏳ **${data.usage.remaining} free request${data.usage.remaining === 1 ? "" : "s"} remaining** out of ${data.usage.max} per ${data.usage.windowHours} hours. Enter your own Claude API key in Settings to continue chatting with no limits.`
+                : `⏳ **${data.usage.remaining} request${data.usage.remaining === 1 ? "" : "s"} remaining** out of ${data.usage.max} per ${data.usage.windowHours} hours.`,
             });
           }
           setMessages((prev) => [...prev, ...newMsgs]);
+
+          // Auto-send "approved" for phases that don't require user sign-off
+          if (isAutoApprove && phaseGate) {
+            setTimeout(() => handleSend("approved"), 100);
+          }
         } else if (res.status === 429) {
           if (data.error === "anthropic_rate_limit") {
-            // Anthropic token limit — user needs to provide their own API key
-            setPendingRetry({ text, images });
-            setRateLimitHit(true);
-            setShowSettings(true);
+            // Anthropic token limit
+            if (allowUserApiKeys) {
+              setPendingRetry({ text, images });
+              setRateLimitHit(true);
+              setShowSettings(true);
+            }
             setMessages((prev) => [
               ...prev,
               {
                 role: "system",
                 type: "error",
-                content: `🔑 **API rate limit hit** — The server's Claude API key hit its token limit. Enter your own API key in Settings to continue. Your conversation is preserved and will auto-retry.`,
+                content: allowUserApiKeys
+                  ? `🔑 **API rate limit hit** — The server's Claude API key hit its token limit. Enter your own API key in Settings to continue. Your conversation is preserved and will auto-retry.`
+                  : `🔑 **API rate limit hit** — The server's Claude API key hit its token limit. Please try again later.`,
               },
             ]);
           } else {
             // App-level rate limit (request count)
             setUsage(data.usage);
-            setRateLimitHit(true);
-            setShowSettings(true);
+            if (allowUserApiKeys) {
+              setRateLimitHit(true);
+              setShowSettings(true);
+            }
             setMessages((prev) => [
               ...prev,
               {
                 role: "system",
                 type: "error",
-                content: `🚫 **Rate limit reached** — You've used all ${data.usage?.max ?? 10} free requests for this ${data.usage?.windowHours ?? 4}-hour window.\n\nTo continue chatting, **enter your own Claude API key** in the Settings panel on the left. Your key is sent per-request over HTTPS and never stored.`,
+                content: allowUserApiKeys
+                  ? `🚫 **Rate limit reached** — You've used all ${data.usage?.max ?? 10} free requests for this ${data.usage?.windowHours ?? 4}-hour window.\n\nTo continue chatting, **enter your own Claude API key** in the Settings panel on the left. Your key is sent per-request over HTTPS and never stored.`
+                  : `🚫 **Rate limit reached** — You've used all ${data.usage?.max ?? 10} requests for this ${data.usage?.windowHours ?? 4}-hour window. Please try again later.`,
               },
             ]);
           }
@@ -318,7 +370,7 @@ export default function Home() {
 
     // Header
     const now = new Date();
-    lines.push("# SN AI Dev Agent — Conversation Export");
+    lines.push("# Yantra - AI Dev Agent - SN — Conversation Export");
     lines.push("");
     lines.push(`**Date:** ${now.toLocaleString()}`);
     if (connected && connInfo?.userInfo) {
@@ -384,7 +436,7 @@ export default function Home() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `sn-ai-conversation-${now.toISOString().slice(0, 19).replace(/[T:]/g, "-")}.md`;
+    a.download = `yantra-ai-conversation-${now.toISOString().slice(0, 19).replace(/[T:]/g, "-")}.md`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -422,6 +474,7 @@ export default function Home() {
           selectedModel={selectedModel}
           setSelectedModel={setSelectedModel}
           modelLocked={modelLocked}
+          allowUserApiKeys={allowUserApiKeys}
         />
       </aside>
 
@@ -440,7 +493,15 @@ export default function Home() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </button>
-            <h1 className="text-lg font-semibold">SN AI Dev Agent</h1>
+            <Image src="/yantra-logo.png" alt="Yantra - AI Dev Agent - SN" width={36} height={36} className="rounded-full" unoptimized />
+            <h1 className="text-lg font-semibold">Yantra - AI Dev Agent - SN</h1>
+            <button
+              onClick={() => setShowInfo(true)}
+              className="p-1.5 hover:bg-gray-800 rounded-lg transition-colors text-gray-400 hover:text-blue-400"
+              title="About this app — features & capabilities"
+            >
+              <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </button>
             {connected && connInfo && (
               <span className="flex items-center gap-1.5 text-xs text-green-400 bg-green-400/10 px-2.5 py-1 rounded-full">
                 <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
@@ -481,8 +542,12 @@ export default function Home() {
           onApprove={handleApprove}
           connected={connected}
           inputRef={inputRef}
+          showToolDetails={showToolDetails}
         />
       </main>
+
+      {/* Info modal */}
+      <InfoModal open={showInfo} onClose={() => setShowInfo(false)} />
     </div>
   );
 }

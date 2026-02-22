@@ -24,6 +24,13 @@ export default function PhaseTracker({ currentPhase, completedPhases, reqId }: P
         const isPast = isCompleted;
         const isFuture = !isCompleted && !isCurrent;
 
+        // Build tooltip: status + gate type
+        const statusText = isCompleted ? " ✓ Complete" : isCurrent ? " — In progress" : "";
+        const gateText = phase.requiresApproval
+          ? "🔒 Requires user approval"
+          : "⚡ Auto-proceeds (no sign-off required)";
+        const hoverTitle = `${phase.label}${statusText}\n${gateText}`;
+
         return (
           <div key={phase.key} className="flex items-center">
             {i > 0 && (
@@ -37,7 +44,7 @@ export default function PhaseTracker({ currentPhase, completedPhases, reqId }: P
                     ? "bg-green-500/10 text-green-400"
                     : "text-gray-600"
               }`}
-              title={`${phase.label}${isCompleted ? " ✓" : isCurrent ? " (in progress)" : ""}`}
+              title={hoverTitle}
             >
               {isCompleted && (
                 <svg className="w-2.5 h-2.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -47,6 +54,10 @@ export default function PhaseTracker({ currentPhase, completedPhases, reqId }: P
               {isCurrent && <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />}
               {isFuture && <span className="w-1.5 h-1.5 bg-gray-700 rounded-full" />}
               <span>{phase.label}</span>
+              {/* Small lock/bolt icon indicating gate type */}
+              {!isCompleted && !isCurrent && (
+                <span className="text-[8px] opacity-60">{phase.requiresApproval ? "🔒" : "⚡"}</span>
+              )}
             </div>
           </div>
         );

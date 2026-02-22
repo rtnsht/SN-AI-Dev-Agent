@@ -108,15 +108,26 @@ export async function createBusinessRule(client: ServiceNowClient, input: z.infe
     action_query: input.query,
     active: input.active
   };
-  
+
   const record = await client.createRecord('sys_script', data);
-  
+
+  // Auto-move sys_update_xml to active update set
+  let updateSetCapture: { moved: number; errors: string[] } | undefined;
+  if (client.activeUpdateSetId) {
+    updateSetCapture = await client.moveArtifactToUpdateSet('sys_script', record.sys_id);
+  }
+
   return {
     success: true,
     message: `Business Rule "${input.name}" created successfully`,
     sys_id: record.sys_id,
     name: input.name,
-    table: input.table
+    table: input.table,
+    updateSetCapture: updateSetCapture ? {
+      activeUpdateSet: client.activeUpdateSetId,
+      moved: updateSetCapture.moved,
+      errors: updateSetCapture.errors.length > 0 ? updateSetCapture.errors : undefined
+    } : undefined
   };
 }
 
@@ -153,15 +164,26 @@ export async function createScriptInclude(client: ServiceNowClient, input: z.inf
     active: input.active,
     access: 'public'
   };
-  
+
   const record = await client.createRecord('sys_script_include', data);
-  
+
+  // Auto-move sys_update_xml to active update set
+  let updateSetCapture: { moved: number; errors: string[] } | undefined;
+  if (client.activeUpdateSetId) {
+    updateSetCapture = await client.moveArtifactToUpdateSet('sys_script_include', record.sys_id);
+  }
+
   return {
     success: true,
     message: `Script Include "${input.name}" created successfully`,
     sys_id: record.sys_id,
     name: input.name,
-    apiName: data.api_name
+    apiName: data.api_name,
+    updateSetCapture: updateSetCapture ? {
+      activeUpdateSet: client.activeUpdateSetId,
+      moved: updateSetCapture.moved,
+      errors: updateSetCapture.errors.length > 0 ? updateSetCapture.errors : undefined
+    } : undefined
   };
 }
 
@@ -193,16 +215,27 @@ export async function createClientScript(client: ServiceNowClient, input: z.infe
     active: input.active,
     ui_type: 'Desktop'
   };
-  
+
   const record = await client.createRecord('sys_script_client', data);
-  
+
+  // Auto-move sys_update_xml to active update set
+  let updateSetCapture: { moved: number; errors: string[] } | undefined;
+  if (client.activeUpdateSetId) {
+    updateSetCapture = await client.moveArtifactToUpdateSet('sys_script_client', record.sys_id);
+  }
+
   return {
     success: true,
     message: `Client Script "${input.name}" created successfully`,
     sys_id: record.sys_id,
     name: input.name,
     table: input.table,
-    type: input.type
+    type: input.type,
+    updateSetCapture: updateSetCapture ? {
+      activeUpdateSet: client.activeUpdateSetId,
+      moved: updateSetCapture.moved,
+      errors: updateSetCapture.errors.length > 0 ? updateSetCapture.errors : undefined
+    } : undefined
   };
 }
 

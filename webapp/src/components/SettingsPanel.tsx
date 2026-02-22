@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import type { Credentials, ConnectionResult, UsageInfo, ModelChoice } from "@/lib/types";
 import { MODEL_OPTIONS } from "@/lib/types";
 
@@ -18,11 +19,13 @@ interface Props {
   selectedModel: ModelChoice;
   setSelectedModel: (m: ModelChoice) => void;
   modelLocked: boolean;
+  /** When false, the user API key input is hidden entirely (server-only mode) */
+  allowUserApiKeys?: boolean;
 }
 
 const INPUT_CLS = "w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors";
 
-export default function SettingsPanel({ credentials, setCredentials, connected, connInfo, isConnecting, onConnect, serverApiKeyConfigured, serverSnCredsConfigured, usage, rateLimitHit, onApiKeyProvided, selectedModel, setSelectedModel, modelLocked }: Props) {
+export default function SettingsPanel({ credentials, setCredentials, connected, connInfo, isConnecting, onConnect, serverApiKeyConfigured, serverSnCredsConfigured, usage, rateLimitHit, onApiKeyProvided, selectedModel, setSelectedModel, modelLocked, allowUserApiKeys = true }: Props) {
   const update = (field: keyof Credentials, value: string) =>
     setCredentials({ ...credentials, [field]: value });
 
@@ -31,7 +34,7 @@ export default function SettingsPanel({ credentials, setCredentials, connected, 
   return (
     <div className="p-4 h-full flex flex-col">
       <div className="flex items-center gap-2 mb-5">
-        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-sm">⚡</div>
+        <Image src="/yantra-logo.png" alt="Yantra" width={36} height={36} className="rounded-full" unoptimized />
         <div>
           <h2 className="text-sm font-semibold text-gray-200">Connection</h2>
           <p className="text-[10px] text-gray-500 uppercase tracking-wider">ServiceNow Instance</p>
@@ -75,13 +78,14 @@ export default function SettingsPanel({ credentials, setCredentials, connected, 
 
         <div className="pt-3 border-t border-gray-800">
           <label className="block text-xs font-medium text-gray-400 mb-1">Claude API Key</label>
-          {serverApiKeyConfigured && !rateLimitHit && !credentials.claudeApiKey ? (
+          {!allowUserApiKeys && serverApiKeyConfigured ? (
+            /* Server-only mode: user keys disallowed — show locked badge */
             <>
               <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/30 rounded-lg">
                 <span className="w-2 h-2 bg-green-400 rounded-full flex-shrink-0" />
-                <span className="text-xs text-green-300">Provided by server</span>
+                <span className="text-xs text-green-300">Managed by server</span>
+                <svg className="w-3 h-3 text-gray-500 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
               </div>
-              {/* Usage counter */}
               {usage && (
                 <div className="mt-2 space-y-1.5">
                   <div className="flex items-center justify-between text-[10px]">
@@ -106,7 +110,39 @@ export default function SettingsPanel({ credentials, setCredentials, connected, 
                 </div>
               )}
             </>
-          ) : (
+          ) : serverApiKeyConfigured && !rateLimitHit && !credentials.claudeApiKey ? (
+            /* Server key active, user hasn't overridden — green badge + usage */
+            <>
+              <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/30 rounded-lg">
+                <span className="w-2 h-2 bg-green-400 rounded-full flex-shrink-0" />
+                <span className="text-xs text-green-300">Provided by server</span>
+              </div>
+              {usage && (
+                <div className="mt-2 space-y-1.5">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-gray-400">{usage.used}/{usage.max} requests used</span>
+                    <span className={`font-medium ${usage.remaining <= 2 ? "text-amber-400" : "text-gray-500"}`}>
+                      {usage.remaining} left
+                    </span>
+                  </div>
+                  <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        usage.remaining === 0 ? "bg-red-500" : usage.remaining <= 2 ? "bg-amber-500" : "bg-blue-500"
+                      }`}
+                      style={{ width: `${(usage.used / usage.max) * 100}%` }}
+                    />
+                  </div>
+                  {usage.resetsAt && (
+                    <p className="text-[10px] text-gray-600">
+                      Resets {new Date(usage.resetsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
+          ) : allowUserApiKeys ? (
+            /* User keys allowed — show input field */
             <>
               {rateLimitHit && (
                 <div className="mb-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
@@ -130,6 +166,12 @@ export default function SettingsPanel({ credentials, setCredentials, connected, 
                 🔒 Your API key is sent per-request over HTTPS and never stored.
               </p>
             </>
+          ) : (
+            /* User keys disallowed and no server key — show warning */
+            <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-lg">
+              <span className="w-2 h-2 bg-red-400 rounded-full flex-shrink-0" />
+              <span className="text-xs text-red-300">No API key configured. Contact admin.</span>
+            </div>
           )}
         </div>
 

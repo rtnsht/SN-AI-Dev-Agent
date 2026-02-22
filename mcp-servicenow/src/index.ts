@@ -159,11 +159,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'sn_create_update_set':
         result = await updateSets.createUpdateSet(snClient, updateSets.createUpdateSetSchema.parse(args));
         break;
+      case 'sn_set_current_update_set':
+        result = await updateSets.setCurrentUpdateSet(snClient, updateSets.setCurrentUpdateSetSchema.parse(args));
+        break;
       case 'sn_complete_update_set':
         result = await updateSets.completeUpdateSet(snClient, updateSets.completeUpdateSetSchema.parse(args));
         break;
       case 'sn_get_update_set_contents':
         result = await updateSets.getUpdateSetContents(snClient, updateSets.getUpdateSetContentsSchema.parse(args));
+        break;
+      case 'sn_move_to_update_set':
+        result = await updateSets.moveToUpdateSet(snClient, updateSets.moveToUpdateSetSchema.parse(args));
         break;
 
       // UI Policy tools

@@ -9,6 +9,8 @@ import { stripPhaseGateMarker, SDLC_PHASES } from "@/lib/types";
 interface Props {
   message: ChatMessage;
   onApprove?: (phase: SDLCPhase) => void;
+  /** When false, tool executions show only a compact summary line (no expandable cards) */
+  showToolDetails?: boolean;
 }
 
 /** Copy-to-clipboard button with brief "Copied!" feedback */
@@ -153,7 +155,9 @@ const MD_COMPONENTS: Record<string, any> = {
 };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-export default function MessageBubble({ message, onApprove }: Props) {
+export default function MessageBubble({ message, onApprove, showToolDetails = true }: Props) {
+  const [approving, setApproving] = useState(false);
+
   if (message.role === "system") return <SystemMessage message={message} />;
 
   const isUser = message.role === "user";
@@ -207,41 +211,90 @@ export default function MessageBubble({ message, onApprove }: Props) {
         {/* Tool executions */}
         {message.toolExecutions && message.toolExecutions.length > 0 && (
           <div className="mt-3 pt-2 border-t border-gray-700/40">
-            <p className="text-[11px] text-gray-500 mb-1">
-              🔧 {message.toolExecutions.length} tool{message.toolExecutions.length > 1 ? "s" : ""} executed
-            </p>
-            {message.toolExecutions.map((exec, i) => (
-              <ToolExecutionCard key={i} exec={exec} />
-            ))}
+            {showToolDetails ? (
+              <>
+                <p className="text-[11px] text-gray-500 mb-1">
+                  🔧 {message.toolExecutions.length} tool{message.toolExecutions.length > 1 ? "s" : ""} executed
+                </p>
+                {message.toolExecutions.map((exec, i) => (
+                  <ToolExecutionCard key={i} exec={exec} />
+                ))}
+              </>
+            ) : (
+              /* Compact summary — no expandable cards */
+              <p className="text-[11px] text-gray-500">
+                🔧 {message.toolExecutions.length} tool{message.toolExecutions.length > 1 ? "s" : ""} executed
+                <span className="ml-1.5 text-gray-600">
+                  ({message.toolExecutions.filter((e) => {
+                    const isErr = typeof e.output === "object" && e.output !== null && "error" in (e.output as Record<string, unknown>);
+                    return !isErr;
+                  }).length} succeeded
+                  {message.toolExecutions.some((e) => {
+                    const isErr = typeof e.output === "object" && e.output !== null && "error" in (e.output as Record<string, unknown>);
+                    return isErr;
+                  }) && `, ${message.toolExecutions.filter((e) => {
+                    const isErr = typeof e.output === "object" && e.output !== null && "error" in (e.output as Record<string, unknown>);
+                    return isErr;
+                  }).length} failed`})
+                </span>
+              </p>
+            )}
           </div>
         )}
 
-        {/* Phase gate approval button */}
-        {message.phaseGate && !message.approved && onApprove && (
+        {/* Phase gate approval button — only for phases requiring user sign-off */}
+        {message.phaseGate && !message.approved && !message.autoApproved && onApprove && (
           <div className="mt-3 pt-3 border-t border-gray-700/40">
             <div className="flex items-center gap-3">
               <button
-                onClick={() => onApprove(message.phaseGate!)}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-medium rounded-lg transition-colors"
+                onClick={() => { setApproving(true); onApprove(message.phaseGate!); }}
+                disabled={approving}
+                className={`flex items-center gap-2 px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors ${
+                  approving
+                    ? "bg-gray-600 cursor-not-allowed opacity-60"
+                    : "bg-green-600 hover:bg-green-500"
+                }`}
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                Approve {phaseLabel}
+                {approving ? (
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+                {approving ? "Approving..." : `Approve ${phaseLabel}`}
               </button>
-              <span className="text-[11px] text-gray-500">Click to approve and proceed to the next phase</span>
+              {!approving && (
+                <span className="text-[11px] text-gray-500">🔒 Click to approve and proceed to the next phase</span>
+              )}
             </div>
           </div>
         )}
 
-        {/* Approved badge */}
-        {message.phaseGate && message.approved && (
+        {/* User-approved badge (green) */}
+        {message.phaseGate && message.approved && !message.autoApproved && (
           <div className="mt-3 pt-3 border-t border-gray-700/40">
             <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 border border-green-500/30 rounded-lg w-fit">
               <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
               <span className="text-xs text-green-300 font-medium">✅ {phaseLabel} Approved</span>
+            </div>
+          </div>
+        )}
+
+        {/* Auto-approved badge (blue) — phases that don't require user sign-off */}
+        {message.phaseGate && message.autoApproved && (
+          <div className="mt-3 pt-3 border-t border-gray-700/40">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-lg w-fit">
+              <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              <span className="text-xs text-blue-300 font-medium">⚡ {phaseLabel} Auto-approved</span>
+              <span className="text-[10px] text-gray-500">(no sign-off required)</span>
             </div>
           </div>
         )}

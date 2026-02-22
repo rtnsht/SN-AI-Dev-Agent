@@ -1,22 +1,35 @@
 /**
  * ServiceNow REST API Client
  * Handles all HTTP communication with ServiceNow instances
+ *
+ * Features:
+ * - Cookie-jar session persistence (so GlideUpdateSet().set() persists across calls)
+ * - Active update set tracking with post-creation artifact move
  */
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
+import { wrapper } from 'axios-cookiejar-support';
+import { CookieJar } from 'tough-cookie';
 import { SNConfig, SNRecord, SNQueryParams, SNApiResponse, SNErrorResponse } from '../types/index.js';
 
 export class ServiceNowClient {
   private client: AxiosInstance;
   private config: SNConfig;
 
+  /** The sys_id of the currently active update set (set via sn_set_current_update_set) */
+  private _activeUpdateSetId: string | null = null;
+
   constructor(config: SNConfig) {
     this.config = config;
-    
+
     // Remove trailing slash from URL
     const baseURL = config.instanceUrl.replace(/\/$/, '');
-    
-    this.client = axios.create({
+
+    // Create cookie jar for session persistence
+    // This ensures GlideUpdateSet().set() effects persist across REST calls
+    const jar = new CookieJar();
+
+    this.client = wrapper(axios.create({
       baseURL,
       headers: {
         'Content-Type': 'application/json',
@@ -26,8 +39,132 @@ export class ServiceNowClient {
         username: config.username,
         password: config.password
       },
-      timeout: 30000
-    });
+      timeout: 30000,
+      jar,
+      withCredentials: true
+    }));
+  }
+
+  // ─── Active Update Set Tracking ──────────────────────────────
+
+  /** Get the currently active update set ID */
+  get activeUpdateSetId(): string | null {
+    return this._activeUpdateSetId;
+  }
+
+  /** Set the active update set ID (called by sn_set_current_update_set) */
+  setActiveUpdateSet(sysId: string | null): void {
+    this._activeUpdateSetId = sysId;
+  }
+
+  /**
+   * Call the UpdateSetHelper Scripted REST API to set the current update set
+   * for this session (uses GlideUpdateSet().set() on the server side).
+   * Requires SN_UPDATE_SET_API_PATH environment variable to be configured.
+   */
+  async callSetCurrentUpdateSetApi(updateSetId: string): Promise<{ success: boolean; error?: string }> {
+    const apiPath = process.env.SN_UPDATE_SET_API_PATH;
+    if (!apiPath) {
+      return {
+        success: false,
+        error: 'SN_UPDATE_SET_API_PATH not configured in .env. Run: node src/deployer/setup-updateset-api.js'
+      };
+    }
+
+    try {
+      const response = await this.client.post<SNApiResponse<{ success: boolean; message: string }>>(
+        apiPath,
+        { sys_id: updateSetId },
+        {
+          auth: { username: this.config.username, password: this.config.password },
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+        }
+      );
+      this._activeUpdateSetId = updateSetId;
+      return { success: true };
+    } catch (error) {
+      const axiosError = error as AxiosError<SNErrorResponse>;
+      const msg = axiosError.response?.data?.error?.message || axiosError.message;
+      return { success: false, error: msg };
+    }
+  }
+
+  /**
+   * Move a record's sys_update_xml entry to the active update set.
+   * This is the reliable fallback for when session-based update set capture fails.
+   *
+   * @param table - The table the record was created/updated in (e.g. 'sys_script')
+   * @param recordSysId - The sys_id of the created/updated record
+   * @returns Object with moved count and any errors
+   */
+  async moveArtifactToUpdateSet(table: string, recordSysId: string): Promise<{ moved: number; errors: string[] }> {
+    if (!this._activeUpdateSetId) {
+      return { moved: 0, errors: [] }; // No active update set, nothing to do
+    }
+
+    const errors: string[] = [];
+    let moved = 0;
+
+    try {
+      // Small delay to allow sys_update_xml record to be created
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Query sys_update_xml for this record
+      // The name field follows pattern: <table>_<sys_id>
+      const updateName = `${table}_${recordSysId}`;
+      const records = await this.getRecords('sys_update_xml', {
+        sysparm_query: `name=${updateName}^ORDERBYDESCsys_created_on`,
+        sysparm_fields: 'sys_id,name,update_set,action',
+        sysparm_limit: 5
+      });
+
+      for (const record of records) {
+        if (record.update_set !== this._activeUpdateSetId) {
+          try {
+            await this.updateRecord('sys_update_xml', record.sys_id, {
+              update_set: this._activeUpdateSetId
+            });
+            moved++;
+          } catch (e) {
+            const err = e as Error;
+            errors.push(`Failed to move ${record.name}: ${err.message}`);
+          }
+        } else {
+          // Already in correct update set (session-based capture worked)
+          moved++;
+        }
+      }
+
+      // Fallback: if no records found with exact name, try broader search
+      if (records.length === 0) {
+        const fallbackRecords = await this.getRecords('sys_update_xml', {
+          sysparm_query: `nameLIKE${recordSysId}^ORDERBYDESCsys_created_on`,
+          sysparm_fields: 'sys_id,name,update_set,action',
+          sysparm_limit: 5
+        });
+
+        for (const record of fallbackRecords) {
+          if (record.update_set !== this._activeUpdateSetId) {
+            try {
+              await this.updateRecord('sys_update_xml', record.sys_id, {
+                update_set: this._activeUpdateSetId
+              });
+              moved++;
+            } catch (e) {
+              const err = e as Error;
+              errors.push(`Failed to move ${record.name}: ${err.message}`);
+            }
+          } else {
+            moved++;
+          }
+        }
+      }
+    } catch (e) {
+      const err = e as Error;
+      errors.push(`Failed to query sys_update_xml: ${err.message}`);
+    }
+
+    return { moved, errors };
   }
 
   /**

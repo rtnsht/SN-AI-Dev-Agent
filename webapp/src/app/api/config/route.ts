@@ -30,6 +30,10 @@ export async function GET(request: NextRequest) {
       ? { max: MAX_REQUESTS, windowHours: WINDOW_MS / 3600000 }
       : null,
     usage,
+    // Tool execution detail visibility (default: true)
+    showToolDetails: process.env.NEXT_PUBLIC_SHOW_TOOL_DETAILS !== "false",
+    // Whether users are allowed to provide their own Claude API key (default: true)
+    allowUserApiKeys: process.env.ALLOW_USER_API_KEYS !== "false",
   });
 }
 

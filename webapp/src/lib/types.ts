@@ -1,11 +1,20 @@
 export type SDLCPhase = "spec" | "design" | "implementation" | "testing" | "deployment";
 
-export const SDLC_PHASES: { key: SDLCPhase; label: string }[] = [
-  { key: "spec", label: "Spec" },
-  { key: "design", label: "Design" },
-  { key: "implementation", label: "Implementation" },
-  { key: "testing", label: "Testing" },
-  { key: "deployment", label: "Deployment" },
+export interface SDLCPhaseInfo {
+  key: SDLCPhase;
+  label: string;
+  /** Whether this phase gate requires explicit user approval to proceed */
+  requiresApproval: boolean;
+  /** Tooltip text shown on hover in the PhaseTracker */
+  tooltip: string;
+}
+
+export const SDLC_PHASES: SDLCPhaseInfo[] = [
+  { key: "spec", label: "Spec", requiresApproval: true, tooltip: "Requires user approval before proceeding to Design" },
+  { key: "design", label: "Design", requiresApproval: true, tooltip: "Requires user approval before proceeding to Implementation" },
+  { key: "implementation", label: "Implementation", requiresApproval: false, tooltip: "Auto-proceeds to Testing after completion" },
+  { key: "testing", label: "Testing", requiresApproval: false, tooltip: "Auto-proceeds to Deployment after completion" },
+  { key: "deployment", label: "Deployment", requiresApproval: false, tooltip: "Final phase — no further gate" },
 ];
 
 /** Model choices available to the user */
@@ -27,6 +36,8 @@ export interface ChatMessage {
   phaseGate?: SDLCPhase;
   /** Has this phase gate been approved by the user? */
   approved?: boolean;
+  /** Was this phase gate auto-approved (no user sign-off required)? */
+  autoApproved?: boolean;
 }
 
 /** Parse phase gate markers from assistant message content */

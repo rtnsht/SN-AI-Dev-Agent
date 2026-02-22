@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SN AI Dev Agent",
+  title: "Yantra - AI Dev Agent - SN",
   description: "AI-powered ServiceNow development assistant — connect your instance and start building",
 };
 

@@ -1,4 +1,4 @@
-# Project Tracker — SN AI Dev Agent Web App
+# Project Tracker — Yantra - AI Dev Agent - SN Web App
 
 > **Last Updated:** 2026-02-22
 > **Branch:** `v1-as-webapp`
@@ -17,12 +17,14 @@
 | 3 | **Shared Tool Layer** | `tool-definitions.ts` (single source of truth for all 80 tool schemas) + `tool-registry.ts` (dispatch table) — shared between CLI and webapp |
 | 4 | **Model Selection** | User chooses between Claude Sonnet 4.6 and Claude Opus 4.6; selection locks after first message; resets on New Chat |
 | 5 | **defaultScope: global** | All ServiceNow clients created with `defaultScope: 'global'` matching CLI behavior |
+| 5a | **Update Set Artifact Capture** | Two-layer defense: (1) cookie-jar session persistence + UpdateSetHelper API (`GlideUpdateSet().set()`), (2) post-creation `sys_update_xml` move fallback. Auto-move hooks on `createRecord`, `updateRecord`, `createBusinessRule`, `createScriptInclude`, `createClientScript`. New `sn_move_to_update_set` manual fallback tool. |
+| 5b | **Duplicate Update Set Detection** | `sn_create_update_set` queries for existing names before creation; returns `duplicateDetected: true` with options (force, autoTimestamp, rename). Never silently creates duplicates. |
 
 ### Spec-Driven SDLC Methodology
 
 | # | Feature | Details |
 |---|---------|---------|
-| 6 | **SDLC System Prompt** | XML-structured prompt teaching Claude the Spec → Design → Implementation → Testing → Deployment workflow, templates, naming conventions, and phase gate rules (`system-prompt.ts`, 117 lines — optimized 50% from 234 lines using XML tags, concise bullets, removed redundancy) |
+| 6 | **SDLC System Prompt** | XML-structured prompt teaching Claude the Spec → Design → Implementation → Testing → Deployment workflow, templates, naming conventions, phase gate rules, update set duplicate detection, artifact capture verification, and `sn_move_to_update_set` fallback (`system-prompt.ts`, 126 lines) |
 | 7 | **Phase Gate Detection** | `<!-- PHASE_GATE:xxx -->` markers in Claude's responses trigger approval UI |
 | 8 | **Phase Gate Approval UI** | Green "Approve" button on phase gate messages; user must explicitly approve before Claude proceeds |
 | 9 | **PhaseTracker Component** | Visual stepper in header bar showing current SDLC phase (Spec → Design → Impl → Test → Deploy) |
@@ -46,6 +48,11 @@
 | 18b | **Shift+Enter to Send** | Plain Enter = new line, Shift+Enter = send message; better UX for multi-line code/requirements |
 | 18c | **Keyboard Hint Bar** | Indigo-themed hint bar below textarea showing Shift+Enter/Enter/image shortcuts; bold text, aligned with textarea width |
 | 18d | **Image Support** | Paste, drag-drop, or click to attach images (up to 5, max 5MB each); base64 data URIs sent as Anthropic multi-modal content blocks; thumbnail previews with remove buttons |
+| 18e | **Auto-Proceed Phase Gates** | Implementation→Testing and Testing→Deployment gates auto-proceed without user approval (per `config.properties`); visual badges distinguish auto-approved (blue) from manual-approval (green) gates; hover tooltips explain gate type |
+| 18f | **Tool Execution Visibility Control** | `NEXT_PUBLIC_SHOW_TOOL_DETAILS` env var (default: `true`); when `false`, tool executions show compact summary line ("🔧 14 tools executed") instead of expandable detail cards |
+| 18g | **User API Key Control** | `ALLOW_USER_API_KEYS` env var (default: `true`); when `false`, hides API key input, shows "Managed by server" locked badge, rejects user-supplied keys in API routes, adjusts all error messages |
+| 18h | **Info Modal** | ℹ️ icon in header opens feature overview modal with 11 validated user-facing capabilities; no technical/architectural details exposed |
+| 18i | **App Branding — Yantra** | Renamed to "Yantra - AI Dev Agent - SN"; custom logo (`yantra-logo.png`) and favicon (`icon.png`) with transparent backgrounds (white removed via `sharp`); logo in header (36px), sidebar (36px), info modal (36px), empty state (192px); `unoptimized` prop on all `<Image>` tags; Next.js dev indicators disabled |
 
 ### Security & Access Control
 
@@ -95,6 +102,15 @@
 - [x] **Server-side SN credentials** — Env vars with fallback, "Provided by server" badges in UI
 - [x] **Architecture docs updated** — `docs/architecture.md` v1.1 with 8 mermaid diagrams reflecting all features
 - [x] **Blog post** — `blog/building-ai-dev-agent-key-learnings.md` — 8 key patterns and design decisions
+- [x] **Update set artifact capture** — Two-layer defense (session-based + post-creation move) to reliably capture REST API-created artifacts in target update sets; cookie-jar session persistence; auto-move hooks on all create/update tools
+- [x] **Duplicate update set detection** — `sn_create_update_set` checks for existing names; returns `duplicateDetected` with options (force, autoTimestamp, rename); never silently creates duplicates
+- [x] **`sn_move_to_update_set` tool** — Manual fallback to move artifacts between update sets; registered in tool-definitions, tool-registry, and index.ts
+- [x] **System prompt updated for update set workflow** — Teaches agent duplicate detection handling, `updateSetCapture` response verification, and `sn_move_to_update_set` fallback
+- [x] **Auto-proceed phase gates** — Implementation→Testing and Testing→Deployment gates auto-complete per `config.properties`; blue auto-approved badges; hover tooltips
+- [x] **Tool execution visibility control** — `NEXT_PUBLIC_SHOW_TOOL_DETAILS` env var to toggle between detail cards and compact summary
+- [x] **User API key control** — `ALLOW_USER_API_KEYS` env var with locked badge UI, API route enforcement, adaptive error messages
+- [x] **Info modal** — ℹ️ icon with 11 user-facing feature descriptions; no technical internals exposed
+- [x] **App branding — Yantra** — Renamed to "Yantra - AI Dev Agent - SN"; custom logo/favicon with transparent backgrounds; consistent branding across header, sidebar, info modal, empty state, export, page title
 
 ---
 
