@@ -217,14 +217,25 @@ export const MORE_TOOLS: ToolDefinition[] = [
   },
   {
     name: 'sn_create_update_set',
-    description: 'Create a new update set',
+    description: 'Create a new update set. Use the "application" field to target a specific scope (pass the sys_id of a sys_scope record). Omit it or leave empty for Global scope.',
     inputSchema: {
       type: 'object',
       properties: {
-        name: { type: 'string' },
-        description: { type: 'string' }
+        name: { type: 'string', description: 'Name for the update set' },
+        description: { type: 'string', description: 'Description of the update set' },
+        application: { type: 'string', description: 'Scope sys_id (sys_scope.sys_id) to create the update set in a specific application scope. Omit for Global scope.' },
+        parent: { type: 'string', description: 'Parent update set sys_id (for batch update sets)' }
       },
       required: ['name']
+    }
+  },
+  {
+    name: 'sn_set_current_update_set',
+    description: 'Set an update set as the current update set for capturing changes. The update set must exist and be in "in progress" state.',
+    inputSchema: {
+      type: 'object',
+      properties: { sys_id: { type: 'string', description: 'The sys_id of the update set to set as current' } },
+      required: ['sys_id']
     }
   },
   {
@@ -1977,7 +1988,115 @@ Enables additional rules: try/catch requirement, comment requirements, jQuery bl
   }
 ];
 
-export const ALL_TOOLS = [...TOOLS, ...MORE_TOOLS, ...ADDITIONAL_TOOLS, ...BROWNFIELD_TOOLS];
+// Flow Designer Tools
+export const FLOW_DESIGNER_TOOLS: ToolDefinition[] = [
+  {
+    name: 'sn_list_flows',
+    description: 'List Flow Designer flows on the instance. Returns flow name, status (draft/published), internal_name, and table.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['draft', 'published', 'all'], description: 'Filter by flow status' },
+        limit: { type: 'number', description: 'Max results to return (default 20)' }
+      },
+      required: []
+    }
+  },
+  {
+    name: 'sn_get_flow',
+    description: 'Get details of a specific Flow Designer flow by sys_id, including snapshot references.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sys_id: { type: 'string', description: 'The sys_id of the flow' }
+      },
+      required: ['sys_id']
+    }
+  },
+  {
+    name: 'sn_create_flow',
+    description: 'Create a new Flow Designer flow (as draft). The flow must be activated in the Flow Designer UI to generate required snapshots. Use this to scaffold a flow, then instruct the user to open Flow Designer to configure and activate it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Display name of the flow' },
+        internal_name: { type: 'string', description: 'Internal/programmatic name (auto-generated from name if omitted)' },
+        description: { type: 'string', description: 'Description of the flow' },
+        application: { type: 'string', description: 'Scope sys_id. Omit for Global scope.' },
+        table: { type: 'string', description: 'Table the flow operates on (e.g. sc_req_item)' }
+      },
+      required: ['name']
+    }
+  },
+  {
+    name: 'sn_create_flow_trigger',
+    description: 'Create a trigger instance on a flow. Requires the trigger_definition sys_id (e.g. Service Catalog trigger). Configure conditions in Flow Designer UI after creation.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        flow: { type: 'string', description: 'sys_id of the parent flow' },
+        trigger_definition: { type: 'string', description: 'sys_id of the trigger type definition' },
+        trigger_type: { type: 'string', description: 'Trigger type string (e.g. "SERVICE_CATALOG")' },
+        conditions: { type: 'string', description: 'Encoded trigger conditions' }
+      },
+      required: ['flow', 'trigger_definition']
+    }
+  },
+  {
+    name: 'sn_list_flow_action_instances',
+    description: 'List action instances (steps) within a flow.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        flow: { type: 'string', description: 'sys_id of the parent flow' },
+        limit: { type: 'number', description: 'Max results (default 50)' }
+      },
+      required: ['flow']
+    }
+  },
+  {
+    name: 'sn_create_flow_action_instance',
+    description: 'Create an action instance (step) in a flow. Use the action_type snapshot sys_id (not definition ID). Common snapshot IDs: Create Catalog Task = af51fd0e73141300612c273ffff6a785, Log = 5bc1bcc6531003003bf1d9109ec587d4.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        flow: { type: 'string', description: 'sys_id of the parent flow' },
+        action_type: { type: 'string', description: 'Snapshot sys_id of the action type' },
+        order: { type: 'number', description: 'Position in the flow' },
+        stage: { type: 'string', description: 'sys_id of the flow stage this action belongs to' },
+        name: { type: 'string', description: 'Display name for this action step' }
+      },
+      required: ['flow', 'action_type']
+    }
+  },
+  {
+    name: 'sn_list_flow_stages',
+    description: 'List stages within a flow.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        flow: { type: 'string', description: 'sys_id of the parent flow' },
+        limit: { type: 'number', description: 'Max results (default 20)' }
+      },
+      required: ['flow']
+    }
+  },
+  {
+    name: 'sn_create_flow_stage',
+    description: 'Create a stage in a flow. Stages group action instances.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        flow: { type: 'string', description: 'sys_id of the parent flow' },
+        label: { type: 'string', description: 'Display label for the stage' },
+        order: { type: 'number', description: 'Position of this stage in the flow' }
+      },
+      required: ['flow', 'label']
+    }
+  }
+];
+
+export const ALL_TOOLS = [...TOOLS, ...MORE_TOOLS, ...ADDITIONAL_TOOLS, ...BROWNFIELD_TOOLS, ...FLOW_DESIGNER_TOOLS];
 
 /**
  * Convert tool definitions to Anthropic Messages API format.

@@ -36,6 +36,7 @@ import * as recommendationEngine from './tools/recommendation-engine.js';
 import * as dashboardReporter from './tools/dashboard-reporter.js';
 import * as multiInstanceManager from './tools/multi-instance-manager.js';
 import * as promotionWorkflow from './tools/promotion-workflow.js';
+import * as flowDesigner from './tools/flow-designer.js';
 
 /**
  * Tool handler mapping: tool name -> async function(snClient, args) => result
@@ -70,6 +71,7 @@ const TOOL_HANDLERS: Record<string, (snClient: ServiceNowClient, args: unknown) 
   sn_list_update_sets: async (c, a) => updateSets.listUpdateSets(c, updateSets.listUpdateSetsSchema.parse(a)),
   sn_get_update_set: async (c, a) => updateSets.getUpdateSet(c, updateSets.getUpdateSetSchema.parse(a)),
   sn_create_update_set: async (c, a) => updateSets.createUpdateSet(c, updateSets.createUpdateSetSchema.parse(a)),
+  sn_set_current_update_set: async (c, a) => updateSets.setCurrentUpdateSet(c, updateSets.setCurrentUpdateSetSchema.parse(a)),
   sn_complete_update_set: async (c, a) => updateSets.completeUpdateSet(c, updateSets.completeUpdateSetSchema.parse(a)),
   sn_get_update_set_contents: async (c, a) => updateSets.getUpdateSetContents(c, updateSets.getUpdateSetContentsSchema.parse(a)),
 
@@ -163,6 +165,16 @@ const TOOL_HANDLERS: Record<string, (snClient: ServiceNowClient, args: unknown) 
   sn_rollback_promotion: async (c, a) => promotionWorkflow.rollbackPromotion(c, promotionWorkflow.rollbackPromotionSchema.parse(a)),
   sn_list_promotion_history: async (c, a) => promotionWorkflow.listPromotionHistory(c, promotionWorkflow.listPromotionHistorySchema.parse(a)),
   sn_list_promotion_packages: async (c) => promotionWorkflow.listPromotionPackages(c, {}),
+
+  // Flow Designer
+  sn_list_flows: async (c, a) => flowDesigner.listFlows(c, flowDesigner.listFlowsSchema.parse(a)),
+  sn_get_flow: async (c, a) => flowDesigner.getFlow(c, flowDesigner.getFlowSchema.parse(a)),
+  sn_create_flow: async (c, a) => flowDesigner.createFlow(c, flowDesigner.createFlowSchema.parse(a)),
+  sn_create_flow_trigger: async (c, a) => flowDesigner.createTrigger(c, flowDesigner.createTriggerSchema.parse(a)),
+  sn_list_flow_action_instances: async (c, a) => flowDesigner.listActionInstances(c, flowDesigner.listActionInstancesSchema.parse(a)),
+  sn_create_flow_action_instance: async (c, a) => flowDesigner.createActionInstance(c, flowDesigner.createActionInstanceSchema.parse(a)),
+  sn_list_flow_stages: async (c, a) => flowDesigner.listFlowStages(c, flowDesigner.listFlowStagesSchema.parse(a)),
+  sn_create_flow_stage: async (c, a) => flowDesigner.createFlowStage(c, flowDesigner.createFlowStageSchema.parse(a)),
 };
 
 /**

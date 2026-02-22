@@ -68,7 +68,7 @@ function SystemMessage({ message }: Props) {
   const style = typeStyles[message.type || "info"] || typeStyles.info;
 
   return (
-    <div className={`max-w-3xl mx-auto px-4 py-2.5 rounded-lg border text-xs leading-relaxed ${style}`}>
+    <div className={`px-4 py-2.5 rounded-lg border text-xs leading-relaxed ${style}`}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS_SYSTEM}>
         {message.content}
       </ReactMarkdown>
@@ -121,7 +121,7 @@ export default function MessageBubble({ message, onApprove }: Props) {
     : null;
 
   return (
-    <div className={`flex items-start gap-3 max-w-3xl ${isUser ? "ml-auto flex-row-reverse" : "mx-auto"}`}>
+    <div className={`flex items-start gap-3 ${isUser ? "ml-auto flex-row-reverse" : ""}`}>
       {/* Avatar */}
       <div
         className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
@@ -139,8 +139,17 @@ export default function MessageBubble({ message, onApprove }: Props) {
             : "bg-gray-800/80 rounded-tl-sm text-gray-100 border border-gray-700/40 flex-1"
         }`}
       >
+        {/* User-attached images */}
+        {isUser && message.images && message.images.length > 0 && (
+          <div className={`flex gap-2 flex-wrap ${displayContent ? "mb-2" : ""}`}>
+            {message.images.map((img, i) => (
+              <img key={i} src={img} alt={`Attachment ${i + 1}`} className="max-w-xs max-h-48 rounded-lg object-contain" />
+            ))}
+          </div>
+        )}
+
         {isUser ? (
-          <div className="text-sm whitespace-pre-wrap break-words">{displayContent}</div>
+          displayContent ? <div className="text-sm whitespace-pre-wrap break-words">{displayContent}</div> : null
         ) : (
           <div className="text-sm prose-sm break-words">
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>

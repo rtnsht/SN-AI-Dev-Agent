@@ -13,8 +13,13 @@ export async function POST(request: NextRequest) {
       model?: string;
     };
 
+    // Fall back to server-side env vars for ServiceNow credentials
+    if (!credentials.instanceUrl) credentials.instanceUrl = process.env.SN_INSTANCE_URL || "";
+    if (!credentials.username) credentials.username = process.env.SN_USERNAME || "";
+    if (!credentials.password) credentials.password = process.env.SN_PASSWORD || "";
+
     // Validate required fields
-    if (!credentials?.instanceUrl || !credentials?.username || !credentials?.password) {
+    if (!credentials.instanceUrl || !credentials.username || !credentials.password) {
       return NextResponse.json(
         { error: "Missing credentials. Provide instanceUrl, username, and password." },
         { status: 400 }
@@ -59,9 +64,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Pass through images from each message (base64 data URIs)
+    const chatMessages: ChatMessage[] = messages.map((m: { role: string; content: string; images?: string[] }) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+      ...(m.images?.length ? { images: m.images } : {}),
+    }));
+
     const selectedModel = model || "claude-sonnet-4-6";
-    console.log(`[chat] user=${credentials.username} instance=${credentials.instanceUrl} msgs=${messages.length} key=${userSuppliedKey ? "user" : "server"} ip=${ip} model=${selectedModel}`);
-    const result = await chat(credentials, messages, selectedModel);
+    const imageCount = chatMessages.reduce((acc, m) => acc + (m.images?.length || 0), 0);
+    console.log(`[chat] user=${credentials.username} instance=${credentials.instanceUrl} msgs=${chatMessages.length} images=${imageCount} key=${userSuppliedKey ? "user" : "server"} ip=${ip} model=${selectedModel}`);
+    const result = await chat(credentials, chatMessages, selectedModel);
     console.log(`[chat] done — ${result.toolExecutions?.length ?? 0} tool(s) executed`);
 
     // Include usage info in response so frontend can display counter
@@ -69,6 +82,20 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Chat API error:", error);
     const message = error instanceof Error ? error.message : "Internal server error";
+
+    // Detect Anthropic rate limit (after retries exhausted in sn-engine)
+    if (message === "anthropic_rate_limit") {
+      return NextResponse.json(
+        {
+          error: "anthropic_rate_limit",
+          message:
+            "Claude API rate limit exceeded after retries. Provide your own API key to continue.",
+          needsApiKey: true,
+          retryable: true,
+        },
+        { status: 429 }
+      );
+    }
 
     // Detect specific error types
     if (message.includes("authentication") || message.includes("401") || message.includes("invalid x-api-key")) {

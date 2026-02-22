@@ -11,6 +11,7 @@ interface Props {
   isConnecting: boolean;
   onConnect: () => void;
   serverApiKeyConfigured: boolean;
+  serverSnCredsConfigured: boolean;
   usage: UsageInfo | null;
   rateLimitHit: boolean;
   onApiKeyProvided: () => void;
@@ -21,11 +22,11 @@ interface Props {
 
 const INPUT_CLS = "w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors";
 
-export default function SettingsPanel({ credentials, setCredentials, connected, connInfo, isConnecting, onConnect, serverApiKeyConfigured, usage, rateLimitHit, onApiKeyProvided, selectedModel, setSelectedModel, modelLocked }: Props) {
+export default function SettingsPanel({ credentials, setCredentials, connected, connInfo, isConnecting, onConnect, serverApiKeyConfigured, serverSnCredsConfigured, usage, rateLimitHit, onApiKeyProvided, selectedModel, setSelectedModel, modelLocked }: Props) {
   const update = (field: keyof Credentials, value: string) =>
     setCredentials({ ...credentials, [field]: value });
 
-  const canConnect = !!(credentials.instanceUrl && credentials.username && credentials.password) && !isConnecting;
+  const canConnect = !!(credentials.instanceUrl && credentials.username && (credentials.password || serverSnCredsConfigured)) && !isConnecting;
 
   return (
     <div className="p-4 h-full flex flex-col">
@@ -40,15 +41,36 @@ export default function SettingsPanel({ credentials, setCredentials, connected, 
       <div className="space-y-3 flex-1 overflow-y-auto">
         <div>
           <label className="block text-xs font-medium text-gray-400 mb-1">Instance URL</label>
-          <input type="url" placeholder="https://dev12345.service-now.com" value={credentials.instanceUrl} onChange={(e) => update("instanceUrl", e.target.value)} className={INPUT_CLS} disabled={isConnecting} />
+          {serverSnCredsConfigured ? (
+            <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/30 rounded-lg">
+              <span className="w-2 h-2 bg-green-400 rounded-full flex-shrink-0" />
+              <span className="text-xs text-green-300 truncate">{credentials.instanceUrl}</span>
+            </div>
+          ) : (
+            <input type="url" placeholder="https://dev12345.service-now.com" value={credentials.instanceUrl} onChange={(e) => update("instanceUrl", e.target.value)} className={INPUT_CLS} disabled={isConnecting} />
+          )}
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-400 mb-1">Username</label>
-          <input type="text" placeholder="admin" value={credentials.username} onChange={(e) => update("username", e.target.value)} className={INPUT_CLS} disabled={isConnecting} />
+          {serverSnCredsConfigured ? (
+            <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/30 rounded-lg">
+              <span className="w-2 h-2 bg-green-400 rounded-full flex-shrink-0" />
+              <span className="text-xs text-green-300">{credentials.username}</span>
+            </div>
+          ) : (
+            <input type="text" placeholder="admin" value={credentials.username} onChange={(e) => update("username", e.target.value)} className={INPUT_CLS} disabled={isConnecting} />
+          )}
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-400 mb-1">Password</label>
-          <input type="password" placeholder="••••••••" value={credentials.password} onChange={(e) => update("password", e.target.value)} className={INPUT_CLS} disabled={isConnecting} />
+          {serverSnCredsConfigured ? (
+            <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/30 rounded-lg">
+              <span className="w-2 h-2 bg-green-400 rounded-full flex-shrink-0" />
+              <span className="text-xs text-green-300">Provided by server</span>
+            </div>
+          ) : (
+            <input type="password" placeholder="••••••••" value={credentials.password} onChange={(e) => update("password", e.target.value)} className={INPUT_CLS} disabled={isConnecting} />
+          )}
         </div>
 
         <div className="pt-3 border-t border-gray-800">

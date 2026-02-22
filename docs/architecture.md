@@ -1,6 +1,6 @@
 # SN AI Dev Agent — Technical Architecture
 
-> **Version:** 1.0 | **Date:** 2026-02-22 | **Branch:** `v1-as-webapp`
+> **Version:** 1.1 | **Date:** 2026-02-22 | **Branch:** `v1-as-webapp`
 
 ---
 
@@ -17,8 +17,8 @@ graph TB
         API_CHAT["POST /api/chat"]
         API_CONN["POST /api/test-connection"]
         API_CFG["GET /api/config"]
-        ENGINE["sn-engine.ts<br/>Orchestration Layer"]
-        PROMPT["system-prompt.ts<br/>SDLC Methodology Prompt"]
+        ENGINE["sn-engine.ts<br/>Orchestration Layer<br/>(Prompt Caching + Retry w/ Backoff)"]
+        PROMPT["system-prompt.ts<br/>XML-Structured SDLC Prompt"]
         RATE["rate-limiter.ts<br/>Sliding Window IP Limiter"]
     end
 
@@ -29,10 +29,10 @@ graph TB
         TOOLS["30+ Tool Modules<br/>connection, records, scripts,<br/>update-sets, catalog, ACLs,<br/>instance-analyzer, etc."]
     end
 
-    ANTHROPIC["🤖 Anthropic API<br/>Claude Sonnet 4"]
+    ANTHROPIC["🤖 Anthropic API<br/>Claude Sonnet 4 / Opus 4"]
     SN["🔧 ServiceNow Instance<br/>REST API (Table, Scripted)"]
 
-    UI -- "HTTPS POST (credentials + messages)" --> API_CHAT
+    UI -- "HTTPS POST (credentials + messages + images)" --> API_CHAT
     UI -- "HTTPS POST (SN credentials)" --> API_CONN
     UI -- "HTTPS GET" --> API_CFG
 
@@ -43,8 +43,8 @@ graph TB
 
     ENGINE --> PROMPT
     ENGINE -- "tool schemas" --> DEFS
-    ENGINE -- "messages + tools" --> ANTHROPIC
-    ANTHROPIC -- "tool_use blocks" --> ENGINE
+    ENGINE -- "messages + tools (cache_control: ephemeral)" --> ANTHROPIC
+    ANTHROPIC -- "tool_use blocks / 429 rate limit" --> ENGINE
     ENGINE -- "executeToolCall()" --> REG
     REG --> TOOLS
     TOOLS --> CLIENT
@@ -66,17 +66,19 @@ graph TB
 graph TB
     subgraph PAGE["page.tsx — Main Page (State Owner)"]
         direction TB
-        STATE["State:<br/>credentials, messages, connected,<br/>isLoading, usage, rateLimitHit,<br/>activeReqId, currentPhase, completedPhases"]
-        SEND["handleSend() — Chat loop"]
+        STATE["State:<br/>credentials, messages, connected,<br/>isLoading, usage, rateLimitHit,<br/>activeReqId, currentPhase, completedPhases,<br/>selectedModel, modelLocked, pendingRetry"]
+        SEND["handleSend() — Chat loop + auto-retry"]
         APPROVE["handleApprove() — Phase gate approval"]
         CONNECT["handleConnect() — SN connection"]
         NEWCHAT["handleNewChat() — Reset state"]
+        ABORT["abortRef — Cancel in-flight requests"]
     end
 
     subgraph SIDEBAR["SettingsPanel.tsx"]
         CREDS["Credential Inputs<br/>(Instance URL, Username, Password)"]
-        APIKEY["Claude API Key<br/>(or 'Provided by server' badge)"]
+        APIKEY["Claude API Key<br/>(or 'Provided by server' badge)<br/>Highlights amber on rate limit"]
         USAGE["Usage Progress Bar<br/>(X/10 requests used)"]
+        MODEL["Model Selector<br/>(Sonnet 4 / Opus 4, locks after 1st msg)"]
         CONN_BTN["Connect Button"]
         CONN_STATUS["Connection Status<br/>(User info, roles)"]
     end
@@ -92,7 +94,9 @@ graph TB
     subgraph CHAT["ChatWindow.tsx"]
         EXAMPLES["Example Prompt Cards<br/>(SDLC requirements + quick queries)"]
         MSGLIST["Message List (scrollable)"]
-        INPUT["Chat Input (textarea)"]
+        INPUT["Chat Input (textarea)<br/>Shift+Enter to send · Enter for new line"]
+        CANCEL["■ Stop Button (cancels in-flight request)"]
+        IMAGES["Image Paste/Upload/Drag-Drop"]
     end
 
     subgraph MSG["MessageBubble.tsx"]
@@ -132,21 +136,29 @@ sequenceDiagram
     participant REG as Tool Registry
     participant SN as ServiceNow
 
-    U->>API: POST {credentials, messages}
+    U->>API: POST {credentials, messages, model, images}
     API->>RL: consume(ip) — if using server key
     RL-->>API: {allowed, usage}
 
-    alt Rate limit exceeded
-        API-->>U: 429 {error, usage}
+    alt App-level rate limit exceeded
+        API-->>U: 429 {error: "rate_limit_exceeded", usage}
     end
 
-    API->>ENG: chat(credentials, messages)
+    API->>ENG: chat(credentials, messages, model)
     ENG->>ENG: Create ServiceNowClient per request
     ENG->>ENG: Load tool definitions (50+ schemas)
 
     loop Tool-Use Loop (max 15 rounds)
-        ENG->>CL: messages.create({system, tools, messages})
-        CL-->>ENG: Response
+        rect rgb(30, 41, 59)
+        Note over ENG,CL: Retry loop (max 3 attempts, exponential backoff)
+        ENG->>CL: messages.create({system, tools, messages, cache_control})
+        alt 429 Rate Limit
+            CL-->>ENG: 429 RateLimitError
+            Note over ENG: Retry after 5s → 10s → 20s
+            ENG->>CL: Retry same request
+        end
+        CL-->>ENG: Response (+ cache_read / cache_creation stats)
+        end
 
         alt stop_reason = "tool_use"
             loop For each tool_use block
@@ -159,6 +171,12 @@ sequenceDiagram
         else stop_reason = "end_turn"
             ENG-->>API: {reply, toolExecutions}
         end
+    end
+
+    alt Anthropic 429 after all retries exhausted
+        ENG-->>API: throws "anthropic_rate_limit"
+        API-->>U: 429 {error: "anthropic_rate_limit", needsApiKey: true}
+        Note over U: Store failed msg in pendingRetry<br/>Show inline error + open Settings<br/>User enters API key → auto-retry
     end
 
     API-->>U: 200 {reply, toolExecutions, usage}
@@ -245,13 +263,25 @@ flowchart TD
 
     RATE_CHECK --> UNDER{Under limit?}
     UNDER -->|Yes| PROCESS["Process chat request"]
-    UNDER -->|No| BLOCK["429: Show upgrade prompt<br/>Open settings, highlight API key field"]
+    UNDER -->|No| APP_BLOCK["429 (app): Show upgrade prompt<br/>Open settings, highlight API key field"]
     BYPASS --> PROCESS
+
+    PROCESS --> ANTHROPIC_CALL["sn-engine: call Claude API<br/>(with retry + backoff)"]
+    ANTHROPIC_CALL --> API_OK{Anthropic<br/>succeeds?}
+    API_OK -->|Yes| RESPONSE["✅ Show response"]
+    API_OK -->|No (429 after retries)| API_BLOCK["429 (anthropic_rate_limit):<br/>Store msg in pendingRetry<br/>Show inline 🔑 error<br/>Open settings, highlight API key"]
+
+    API_BLOCK --> USER_KEY["User enters own API key"]
+    USER_KEY --> AUTO_RETRY["Auto-retry failed message<br/>with new key + full history"]
+    AUTO_RETRY --> ANTHROPIC_CALL
 
     style START fill:#1e293b,stroke:#3b82f6,color:#e2e8f0
     style READY fill:#065f46,stroke:#10b981,color:#e2e8f0
-    style BLOCK fill:#7f1d1d,stroke:#ef4444,color:#e2e8f0
+    style APP_BLOCK fill:#7f1d1d,stroke:#ef4444,color:#e2e8f0
+    style API_BLOCK fill:#7f1d1d,stroke:#f59e0b,color:#e2e8f0
     style WARN fill:#78350f,stroke:#f59e0b,color:#e2e8f0
+    style RESPONSE fill:#065f46,stroke:#10b981,color:#e2e8f0
+    style AUTO_RETRY fill:#1e3a5f,stroke:#3b82f6,color:#e2e8f0
 ```
 
 ---
@@ -393,9 +423,15 @@ SN-AI-Dev-Agent/
 | **Stateless API** | Credentials sent per-request | No server-side sessions = simpler, no auth infrastructure needed |
 | **Per-request SN client** | New `ServiceNowClient` per chat | Supports multiple users simultaneously, no credential mixing |
 | **Tool-use loop** | Up to 15 rounds | Claude can chain multiple tool calls to complete complex tasks |
-| **System prompt injection** | Full SDLC methodology in system prompt | Web app can't read filesystem; prompt replaces CLAUDE.md |
+| **System prompt injection** | XML-tagged SDLC prompt (117 lines) | Web app can't read filesystem; XML tags = native Claude parsing, 50% token reduction |
 | **Phase gate markers** | HTML comments `<!-- PHASE_GATE:xxx -->` | Invisible in rendered markdown, parseable by frontend |
 | **Rate limiting** | In-memory sliding window | Simple, no Redis needed for MVP; resets on server restart |
 | **createRequire** | Runtime module loading | Bypasses Turbopack static analysis for mcp-servicenow ESM modules |
 | **Single tool registry** | Shared between MCP server & web app | Tool definitions and handlers defined once, consumed by both transports |
+| **Prompt caching** | `cache_control: { type: "ephemeral" }` | 90% token cost reduction on cache hits (rounds 2-15, valid 5 min) |
+| **Retry with backoff** | 3 retries: 5s → 10s → 20s | Handles transient Anthropic 429 errors; respects `retry-after` header |
+| **Model selection** | Sonnet 4 (fast) / Opus 4 (capable) | User choice, locked after first message to avoid mid-conversation confusion |
+| **Pending retry pattern** | `pendingRetry` state stores failed msg | On Anthropic 429 exhaustion: user provides API key → auto-retry with full history |
+| **AbortController** | Cancel in-flight requests | User can stop long-running requests; send button toggles to stop button |
+| **Shift+Enter to send** | Enter = new line, Shift+Enter = send | Better UX for multi-line prompts (ServiceNow code snippets) |
 

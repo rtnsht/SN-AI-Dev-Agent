@@ -4,11 +4,11 @@ import { testConnection } from "@/lib/sn-engine";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { instanceUrl, username, password } = body as {
-      instanceUrl: string;
-      username: string;
-      password: string;
-    };
+
+    // Fall back to server-side env vars if not provided in request
+    const instanceUrl = body.instanceUrl || process.env.SN_INSTANCE_URL || "";
+    const username = body.username || process.env.SN_USERNAME || "";
+    const password = body.password || process.env.SN_PASSWORD || "";
 
     if (!instanceUrl || !username || !password) {
       return NextResponse.json(

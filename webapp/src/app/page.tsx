@@ -21,8 +21,11 @@ export default function Home() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [showSettings, setShowSettings] = useState(true);
   const [serverApiKeyConfigured, setServerApiKeyConfigured] = useState(false);
+  const [serverSnCredsConfigured, setServerSnCredsConfigured] = useState(false);
   const [usage, setUsage] = useState<UsageInfo | null>(null);
   const [rateLimitHit, setRateLimitHit] = useState(false);
+  // Pending retry — stores the failed message so it can be auto-retried after user provides an API key
+  const [pendingRetry, setPendingRetry] = useState<{ text: string; images?: string[] } | null>(null);
   // Model selection — locked after first message sent
   const [selectedModel, setSelectedModel] = useState<ModelChoice>("sonnet-4");
   const [modelLocked, setModelLocked] = useState(false);
@@ -31,14 +34,26 @@ export default function Home() {
   const [currentPhase, setCurrentPhase] = useState<SDLCPhase | null>(null);
   const [completedPhases, setCompletedPhases] = useState<SDLCPhase[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
-  // Fetch server config on mount (is a server-side API key configured?)
+  // Fetch server config on mount (API key + SN credentials)
   useEffect(() => {
     fetch("/api/config")
       .then((r) => r.json())
       .then((data) => {
         setServerApiKeyConfigured(!!data.serverApiKeyConfigured);
         if (data.usage) setUsage(data.usage);
+
+        // Pre-populate ServiceNow credentials if server-provided
+        if (data.serverSnCredsConfigured && data.serverSnCredentials) {
+          setServerSnCredsConfigured(true);
+          setCredentials((prev) => ({
+            ...prev,
+            instanceUrl: data.serverSnCredentials.instanceUrl || prev.instanceUrl,
+            username: data.serverSnCredentials.username || prev.username,
+            // Password stays empty — API routes fall back to env var
+          }));
+        }
       })
       .catch(() => {}); // ignore — default to false
   }, []);
@@ -117,10 +132,13 @@ export default function Home() {
   }, [credentials]);
 
   const handleSend = useCallback(
-    async (text: string) => {
-      if (!text.trim() || isLoading) return;
+    async (text: string, images?: string[]) => {
+      if ((!text.trim() && (!images || images.length === 0)) || isLoading) return;
 
-      const userMsg: ChatMessage = { role: "user", content: text };
+      // Clear any pending retry — user is sending a new/retried message
+      if (pendingRetry) setPendingRetry(null);
+
+      const userMsg: ChatMessage = { role: "user", content: text, ...(images?.length ? { images } : {}) };
       const newMessages = [...messages, userMsg];
       setMessages(newMessages);
       setIsLoading(true);
@@ -131,12 +149,17 @@ export default function Home() {
         // Only send user/assistant messages to the API (not system messages)
         const apiMessages = newMessages
           .filter((m) => m.role === "user" || m.role === "assistant")
-          .map((m) => ({ role: m.role, content: m.content }));
+          .map((m) => ({ role: m.role, content: m.content, ...(m.images?.length ? { images: m.images } : {}) }));
+
+        // Create an AbortController so the user can cancel
+        const controller = new AbortController();
+        abortRef.current = controller;
 
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ credentials, messages: apiMessages, model: MODEL_OPTIONS.find((m) => m.key === selectedModel)?.modelId }),
+          signal: controller.signal,
         });
 
         const data = await res.json();
@@ -184,18 +207,33 @@ export default function Home() {
           }
           setMessages((prev) => [...prev, ...newMsgs]);
         } else if (res.status === 429) {
-          // Rate limit hit
-          setUsage(data.usage);
-          setRateLimitHit(true);
-          setShowSettings(true); // open sidebar so user can enter key
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "system",
-              type: "error",
-              content: `🚫 **Rate limit reached** — You've used all ${data.usage?.max ?? 10} free requests for this ${data.usage?.windowHours ?? 4}-hour window.\n\nTo continue chatting, **enter your own Claude API key** in the Settings panel on the left. Your key is sent per-request over HTTPS and never stored.`,
-            },
-          ]);
+          if (data.error === "anthropic_rate_limit") {
+            // Anthropic token limit — user needs to provide their own API key
+            setPendingRetry({ text, images });
+            setRateLimitHit(true);
+            setShowSettings(true);
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "system",
+                type: "error",
+                content: `🔑 **API rate limit hit** — The server's Claude API key hit its token limit. Enter your own API key in Settings to continue. Your conversation is preserved and will auto-retry.`,
+              },
+            ]);
+          } else {
+            // App-level rate limit (request count)
+            setUsage(data.usage);
+            setRateLimitHit(true);
+            setShowSettings(true);
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "system",
+                type: "error",
+                content: `🚫 **Rate limit reached** — You've used all ${data.usage?.max ?? 10} free requests for this ${data.usage?.windowHours ?? 4}-hour window.\n\nTo continue chatting, **enter your own Claude API key** in the Settings panel on the left. Your key is sent per-request over HTTPS and never stored.`,
+              },
+            ]);
+          }
         } else {
           setMessages((prev) => [
             ...prev,
@@ -203,16 +241,32 @@ export default function Home() {
           ]);
         }
       } catch (err) {
-        setMessages((prev) => [
-          ...prev,
-          { role: "system", type: "error", content: `Network error: ${err instanceof Error ? err.message : String(err)}` },
-        ]);
+        // Don't show error for user-initiated cancellation
+        if (err instanceof DOMException && err.name === "AbortError") {
+          setMessages((prev) => [
+            ...prev,
+            { role: "system", type: "info", content: "⏹ Request cancelled." },
+          ]);
+        } else {
+          setMessages((prev) => [
+            ...prev,
+            { role: "system", type: "error", content: `Network error: ${err instanceof Error ? err.message : String(err)}` },
+          ]);
+        }
       } finally {
+        abortRef.current = null;
         setIsLoading(false);
       }
     },
-    [messages, credentials, isLoading, serverApiKeyConfigured, activeReqId, selectedModel, modelLocked]
+    [messages, credentials, isLoading, serverApiKeyConfigured, activeReqId, selectedModel, modelLocked, pendingRetry]
   );
+
+  /** Cancel an in-flight request */
+  const handleCancel = useCallback(() => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
+  }, []);
 
   /** Handle phase gate approval — mark the message as approved and send "approved" to continue */
   const handleApprove = useCallback(
@@ -255,6 +309,7 @@ export default function Home() {
     setCurrentPhase(null);
     setCompletedPhases([]);
     setModelLocked(false);
+    setPendingRetry(null);
   }, []);
 
   return (
@@ -273,9 +328,18 @@ export default function Home() {
           isConnecting={isConnecting}
           onConnect={handleConnect}
           serverApiKeyConfigured={serverApiKeyConfigured}
+          serverSnCredsConfigured={serverSnCredsConfigured}
           usage={usage}
           rateLimitHit={rateLimitHit}
-          onApiKeyProvided={() => setRateLimitHit(false)}
+          onApiKeyProvided={() => {
+            setRateLimitHit(false);
+            if (pendingRetry) {
+              const retry = pendingRetry;
+              setPendingRetry(null);
+              // Auto-retry the failed message with the new API key
+              setTimeout(() => handleSend(retry.text, retry.images), 150);
+            }
+          }}
           selectedModel={selectedModel}
           setSelectedModel={setSelectedModel}
           modelLocked={modelLocked}
@@ -324,6 +388,7 @@ export default function Home() {
           messages={messages}
           isLoading={isLoading}
           onSend={handleSend}
+          onCancel={handleCancel}
           onApprove={handleApprove}
           connected={connected}
           inputRef={inputRef}

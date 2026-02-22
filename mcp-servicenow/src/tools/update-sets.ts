@@ -20,6 +20,7 @@ export const getUpdateSetSchema = z.object({
 export const createUpdateSetSchema = z.object({
   name: z.string().describe('Name for the update set'),
   description: z.string().optional().describe('Description of the update set'),
+  application: z.string().optional().describe('Scope sys_id (sys_scope.sys_id) to create the update set in a specific application scope. Omit for Global scope.'),
   parent: z.string().optional().describe('Parent update set sys_id (for batch)')
 });
 
@@ -102,19 +103,24 @@ export async function createUpdateSet(client: ServiceNowClient, input: z.infer<t
     description: input.description || '',
     state: 'in progress'
   };
-  
+
+  if (input.application) {
+    data.application = input.application;
+  }
+
   if (input.parent) {
     data.parent = input.parent;
   }
-  
+
   const record = await client.createRecord('sys_update_set', data);
-  
+
   return {
     success: true,
-    message: `Update Set "${input.name}" created successfully`,
+    message: `Update Set "${input.name}" created successfully${input.application ? ' in application scope ' + input.application : ' in Global scope'}`,
     sys_id: record.sys_id,
     name: input.name,
-    state: 'in progress'
+    state: 'in progress',
+    application: record.application || 'global'
   };
 }
 

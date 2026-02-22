@@ -19,6 +19,8 @@ export const MODEL_OPTIONS: { key: ModelChoice; label: string; modelId: string; 
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
+  /** Base64 data-URI images attached to this message (e.g. "data:image/png;base64,...") */
+  images?: string[];
   toolExecutions?: ToolExecution[];
   type?: "info" | "warning" | "success" | "error";
   /** If this message contains a phase gate, which phase is it for? */
