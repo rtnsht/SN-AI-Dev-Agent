@@ -152,8 +152,13 @@ export default function Home() {
       if (pendingRetry) setPendingRetry(null);
 
       const userMsg: ChatMessage = { role: "user", content: text, ...(images?.length ? { images } : {}) };
-      const newMessages = [...messages, userMsg];
-      setMessages(newMessages);
+      // Use functional updater to get the LATEST messages (avoids stale closure when
+      // called from handleApprove which batches a setMessages just before this).
+      let newMessages: ChatMessage[] = [];
+      setMessages((prev) => {
+        newMessages = [...prev, userMsg];
+        return newMessages;
+      });
       setIsLoading(true);
       // Lock model selection after first message
       if (!modelLocked) setModelLocked(true);
@@ -310,7 +315,7 @@ export default function Home() {
         setIsLoading(false);
       }
     },
-    [messages, credentials, isLoading, serverApiKeyConfigured, activeReqId, selectedModel, modelLocked, pendingRetry]
+    [credentials, isLoading, serverApiKeyConfigured, activeReqId, selectedModel, modelLocked, pendingRetry]
   );
 
   /** Cancel an in-flight request */

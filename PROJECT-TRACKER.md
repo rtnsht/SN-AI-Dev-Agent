@@ -26,7 +26,7 @@
 |---|---------|---------|
 | 6 | **SDLC System Prompt** | XML-structured prompt teaching Claude the Spec → Design → Implementation → Testing → Deployment workflow, templates, naming conventions, phase gate rules, update set duplicate detection, artifact capture verification, and `sn_move_to_update_set` fallback (`system-prompt.ts`, 126 lines) |
 | 7 | **Phase Gate Detection** | `<!-- PHASE_GATE:xxx -->` markers in Claude's responses trigger approval UI |
-| 8 | **Phase Gate Approval UI** | Green "Approve" button on phase gate messages; user must explicitly approve before Claude proceeds |
+| 8 | **Phase Gate Approval UI** | Green "Approve" button on phase gate messages; user must explicitly approve before Claude proceeds; button disables with spinner on click; uses functional state updater to prevent stale closure from overwriting approval flag |
 | 9 | **PhaseTracker Component** | Visual stepper in header bar showing current SDLC phase (Spec → Design → Impl → Test → Deploy) |
 | 10 | **Sign-Off Workflow** | ☐/☑ checkboxes in spec/design documents; only user can approve |
 
@@ -111,6 +111,7 @@
 - [x] **User API key control** — `ALLOW_USER_API_KEYS` env var with locked badge UI, API route enforcement, adaptive error messages
 - [x] **Info modal** — ℹ️ icon with 11 user-facing feature descriptions; no technical internals exposed
 - [x] **App branding — Yantra** — Renamed to "Yantra - AI Dev Agent - SN"; custom logo/favicon with transparent backgrounds; consistent branding across header, sidebar, info modal, empty state, export, page title
+- [x] **Approve button stale-closure fix** — `handleSend` used stale `messages` from closure, overwriting `approved: true` set by `handleApprove`; switched to functional state updater `setMessages((prev) => ...)` so approval flag is preserved; removed `messages` from `handleSend` dependency array
 
 ---
 
