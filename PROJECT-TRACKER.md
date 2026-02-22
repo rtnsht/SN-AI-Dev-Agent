@@ -1,7 +1,8 @@
 # Project Tracker - SN AI Dev Agent
 
-> **Last Updated:** 2026-02-03  
-> **Instance:** dev300943.service-now.com
+> **Last Updated:** 2026-02-22
+> **Instance:** dev181312.service-now.com (changed from dev300943)
+> **Branch:** `v1-as-webapp` (web app development)
 
 ---
 
@@ -9,8 +10,9 @@
 
 | Requirement | Title | Status | Phase | Notes |
 |-------------|-------|--------|-------|-------|
-| REQ-001 | Normal Change Maintenance Window Enforcement | ✅ Deployed | Complete | Fully deployed and tested |
-| REQ-002 | New Hire Equipment Bundle Orchestration | 🔄 In Progress | Testing | Flow created in draft mode |
+| REQ-001 | Normal Change Maintenance Window Enforcement | ⚠️ Needs Redeploy | Complete | Was on dev300943, needs redeploy to dev181312 |
+| REQ-002 | New Hire Equipment Bundle Orchestration | ⚠️ Needs Redeploy | Testing | Was on dev300943, flow in draft mode |
+| Web App | Expose SN AI Dev Agent as a web service | ✅ MVP Running | Implementation | Running at localhost:3000 on `v1-as-webapp` branch |
 
 ---
 
@@ -113,10 +115,36 @@
 - [ ] Test end-to-end workflow
 - [ ] Mark REQ-002 as complete
 
-### Future Enhancements
+### Future Enhancements — ServiceNow
 - [ ] Automate flow activation via ServiceNow APIs (if possible)
 - [ ] Create flow templates for common patterns
 - [ ] Add ATF tests for Flow Designer flows
+- [ ] Redeploy REQ-001 and REQ-002 to new instance (dev181312)
+
+### Future Enhancements — Web App (Production Readiness)
+
+> Logged: 2026-02-22 — These must be addressed before exposing the app to multiple users.
+
+- [ ] **FE-001: Server-side encrypted sessions & credential security**
+  - Exchange credentials for a short-lived session token on connect (HTTP-only cookie)
+  - Encrypt credentials at rest in server memory (or Redis/similar) with a server-side key
+  - Stop sending credentials in every request body — subsequent requests use session token only
+  - Credentials must never appear in browser DevTools Network tab after initial exchange
+  - Clear credentials from server memory on disconnect/timeout
+
+- [ ] **FE-002: Structured logging & admin session monitoring**
+  - Assign a unique session ID on connect, attach to all log entries for that session
+  - Replace `console.log` with structured JSON logging (e.g., Winston/Pino)
+  - Persist logs to file or external service (CloudWatch, Datadog, etc.)
+  - Log: session ID, username, instance, tools called, duration, timestamp, outcome
+  - Build an admin view (`/admin/logs` page or API) to search/filter session history by user, instance, date
+
+- [ ] **FE-003: Credential redaction & zero-persistence guarantee**
+  - Strip passwords and API keys from all log output (redact to `***`)
+  - Sanitize error stack traces so credentials are never leaked on exceptions
+  - Credentials must not be stored in localStorage, cookies (only HTTP-only session token), or server-side logs
+  - On the client, credentials live only in React state (browser memory) — cleared on tab close/refresh
+  - Document the credential lifecycle for security audits
 
 ---
 
@@ -130,3 +158,10 @@
 - Updated CLAUDE.md with learnings
 - Cleaned up temporary exploration scripts
 
+**2026-02-22:**
+- Instance changed from dev300943 to dev181312
+- Created `snapshot/2026-02-21` branch and `v1-as-webapp` branch
+- Built full web app (Option A) — Next.js + Anthropic tool-use loop + 60+ SN tools
+- Added role verification (admin/security_admin check on connect)
+- Improved UI: markdown rendering, system messages, example prompts, tool cards
+- Identified 3 production-readiness gaps (FE-001, FE-002, FE-003) — logged as future enhancements

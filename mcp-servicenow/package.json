@@ -4,6 +4,13 @@
   "description": "MCP Server for ServiceNow - Enables AI assistants to interact with ServiceNow instances",
   "type": "module",
   "main": "dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./tool-registry": "./dist/tool-registry.js",
+    "./tool-definitions": "./dist/tool-definitions.js",
+    "./client": "./dist/client/sn-client.js",
+    "./types": "./dist/types/index.js"
+  },
   "bin": {
     "mcp-servicenow": "./dist/index.js"
   },
