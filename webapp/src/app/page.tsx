@@ -312,6 +312,85 @@ export default function Home() {
     setPendingRetry(null);
   }, []);
 
+  /** Download entire conversation as a markdown file with embedded images */
+  const handleDownloadConversation = useCallback(() => {
+    const lines: string[] = [];
+
+    // Header
+    const now = new Date();
+    lines.push("# SN AI Dev Agent — Conversation Export");
+    lines.push("");
+    lines.push(`**Date:** ${now.toLocaleString()}`);
+    if (connected && connInfo?.userInfo) {
+      lines.push(`**User:** ${connInfo.userInfo.name} (${credentials.username})`);
+      lines.push(`**Instance:** ${credentials.instanceUrl}`);
+    }
+    const modelLabel = MODEL_OPTIONS.find((m) => m.key === selectedModel)?.label || selectedModel;
+    lines.push(`**Model:** ${modelLabel}`);
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+
+    for (const msg of messages) {
+      if (msg.role === "system") {
+        lines.push(`> **System:** ${msg.content}`);
+        lines.push("");
+      } else if (msg.role === "user") {
+        lines.push("## 🧑 User");
+        lines.push("");
+        // Embedded images
+        if (msg.images && msg.images.length > 0) {
+          for (const img of msg.images) {
+            lines.push(`![User attachment](${img})`);
+            lines.push("");
+          }
+        }
+        if (msg.content) {
+          lines.push(msg.content);
+          lines.push("");
+        }
+      } else {
+        lines.push("## 🤖 Assistant");
+        lines.push("");
+        lines.push(msg.content);
+        lines.push("");
+        // Tool executions
+        if (msg.toolExecutions && msg.toolExecutions.length > 0) {
+          lines.push(`<details><summary>🔧 ${msg.toolExecutions.length} tool${msg.toolExecutions.length > 1 ? "s" : ""} executed</summary>`);
+          lines.push("");
+          for (const exec of msg.toolExecutions) {
+            lines.push(`### ${exec.toolName} (${exec.durationMs}ms)`);
+            lines.push("");
+            lines.push("**Input:**");
+            lines.push("```json");
+            lines.push(JSON.stringify(exec.input, null, 2));
+            lines.push("```");
+            lines.push("**Output:**");
+            lines.push("```json");
+            lines.push(typeof exec.output === "string" ? exec.output : JSON.stringify(exec.output, null, 2));
+            lines.push("```");
+            lines.push("");
+          }
+          lines.push("</details>");
+          lines.push("");
+        }
+      }
+      lines.push("---");
+      lines.push("");
+    }
+
+    const md = lines.join("\n");
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `sn-ai-conversation-${now.toISOString().slice(0, 19).replace(/[T:]/g, "-")}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [messages, connected, connInfo, credentials, selectedModel]);
+
   return (
     <div className="flex h-screen bg-gray-950 text-gray-100">
       {/* Sidebar */}
@@ -372,13 +451,23 @@ export default function Home() {
           <div className="flex items-center gap-2">
             <PhaseTracker currentPhase={currentPhase} completedPhases={completedPhases} reqId={activeReqId} />
             {messages.length > 0 && (
-              <button
-                onClick={handleNewChat}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-gray-200 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                New Chat
-              </button>
+              <>
+                <button
+                  onClick={handleDownloadConversation}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-gray-200 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+                  title="Download conversation as Markdown"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  Download
+                </button>
+                <button
+                  onClick={handleNewChat}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-gray-200 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                  New Chat
+                </button>
+              </>
             )}
           </div>
         </header>
