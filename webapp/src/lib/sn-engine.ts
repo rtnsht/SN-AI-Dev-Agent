@@ -64,6 +64,7 @@ const SYSTEM_PROMPT = buildSystemPrompt();
 export async function chat(
   credentials: UserCredentials,
   messages: ChatMessage[],
+  model: string = "claude-sonnet-4-6",
   maxToolRounds: number = 15
 ): Promise<ChatResponse> {
   const registry = getToolRegistry();
@@ -74,6 +75,7 @@ export async function chat(
     instanceUrl: credentials.instanceUrl.replace(/\/$/, ""),
     username: credentials.username,
     password: credentials.password,
+    defaultScope: 'global',
   });
 
   // Build Anthropic tool definitions
@@ -96,7 +98,7 @@ export async function chat(
     rounds++;
     console.log(`[chat] round ${rounds} — calling Anthropic API...`);
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model,
       max_tokens: 8192,
       system: SYSTEM_PROMPT,
       tools,
@@ -163,6 +165,7 @@ export async function testConnection(credentials: Omit<UserCredentials, "claudeA
     instanceUrl: credentials.instanceUrl.replace(/\/$/, ""),
     username: credentials.username,
     password: credentials.password,
+    defaultScope: 'global',
   });
 
   // 1. Test basic connection

@@ -4,8 +4,8 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import SettingsPanel from "@/components/SettingsPanel";
 import ChatWindow from "@/components/ChatWindow";
 import PhaseTracker from "@/components/PhaseTracker";
-import type { ChatMessage, ConnectionResult, UsageInfo, SDLCPhase } from "@/lib/types";
-import { parsePhaseGate } from "@/lib/types";
+import type { ChatMessage, ConnectionResult, UsageInfo, SDLCPhase, ModelChoice } from "@/lib/types";
+import { parsePhaseGate, MODEL_OPTIONS } from "@/lib/types";
 
 export default function Home() {
   const [credentials, setCredentials] = useState({
@@ -23,6 +23,9 @@ export default function Home() {
   const [serverApiKeyConfigured, setServerApiKeyConfigured] = useState(false);
   const [usage, setUsage] = useState<UsageInfo | null>(null);
   const [rateLimitHit, setRateLimitHit] = useState(false);
+  // Model selection — locked after first message sent
+  const [selectedModel, setSelectedModel] = useState<ModelChoice>("sonnet-4");
+  const [modelLocked, setModelLocked] = useState(false);
   // SDLC phase tracking
   const [activeReqId, setActiveReqId] = useState<string | null>(null);
   const [currentPhase, setCurrentPhase] = useState<SDLCPhase | null>(null);
@@ -121,6 +124,8 @@ export default function Home() {
       const newMessages = [...messages, userMsg];
       setMessages(newMessages);
       setIsLoading(true);
+      // Lock model selection after first message
+      if (!modelLocked) setModelLocked(true);
 
       try {
         // Only send user/assistant messages to the API (not system messages)
@@ -131,7 +136,7 @@ export default function Home() {
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ credentials, messages: apiMessages }),
+          body: JSON.stringify({ credentials, messages: apiMessages, model: MODEL_OPTIONS.find((m) => m.key === selectedModel)?.modelId }),
         });
 
         const data = await res.json();
@@ -206,7 +211,7 @@ export default function Home() {
         setIsLoading(false);
       }
     },
-    [messages, credentials, isLoading, serverApiKeyConfigured, activeReqId]
+    [messages, credentials, isLoading, serverApiKeyConfigured, activeReqId, selectedModel, modelLocked]
   );
 
   /** Handle phase gate approval — mark the message as approved and send "approved" to continue */
@@ -249,6 +254,7 @@ export default function Home() {
     setActiveReqId(null);
     setCurrentPhase(null);
     setCompletedPhases([]);
+    setModelLocked(false);
   }, []);
 
   return (
@@ -270,6 +276,9 @@ export default function Home() {
           usage={usage}
           rateLimitHit={rateLimitHit}
           onApiKeyProvided={() => setRateLimitHit(false)}
+          selectedModel={selectedModel}
+          setSelectedModel={setSelectedModel}
+          modelLocked={modelLocked}
         />
       </aside>
 

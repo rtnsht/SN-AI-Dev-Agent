@@ -8,6 +8,14 @@ export const SDLC_PHASES: { key: SDLCPhase; label: string }[] = [
   { key: "deployment", label: "Deployment" },
 ];
 
+/** Model choices available to the user */
+export type ModelChoice = "sonnet-4" | "opus-4";
+
+export const MODEL_OPTIONS: { key: ModelChoice; label: string; modelId: string; description: string }[] = [
+  { key: "sonnet-4", label: "Claude Sonnet 4.6", modelId: "claude-sonnet-4-6", description: "Fast & intelligent" },
+  { key: "opus-4", label: "Claude Opus 4.6", modelId: "claude-opus-4-6", description: "Most capable" },
+];
+
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;

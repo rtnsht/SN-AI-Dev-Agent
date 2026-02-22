@@ -1,6 +1,7 @@
 "use client";
 
-import type { Credentials, ConnectionResult, UsageInfo } from "@/lib/types";
+import type { Credentials, ConnectionResult, UsageInfo, ModelChoice } from "@/lib/types";
+import { MODEL_OPTIONS } from "@/lib/types";
 
 interface Props {
   credentials: Credentials;
@@ -13,11 +14,14 @@ interface Props {
   usage: UsageInfo | null;
   rateLimitHit: boolean;
   onApiKeyProvided: () => void;
+  selectedModel: ModelChoice;
+  setSelectedModel: (m: ModelChoice) => void;
+  modelLocked: boolean;
 }
 
 const INPUT_CLS = "w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors";
 
-export default function SettingsPanel({ credentials, setCredentials, connected, connInfo, isConnecting, onConnect, serverApiKeyConfigured, usage, rateLimitHit, onApiKeyProvided }: Props) {
+export default function SettingsPanel({ credentials, setCredentials, connected, connInfo, isConnecting, onConnect, serverApiKeyConfigured, usage, rateLimitHit, onApiKeyProvided, selectedModel, setSelectedModel, modelLocked }: Props) {
   const update = (field: keyof Credentials, value: string) =>
     setCredentials({ ...credentials, [field]: value });
 
@@ -104,6 +108,41 @@ export default function SettingsPanel({ credentials, setCredentials, connected, 
                 🔒 Your API key is sent per-request over HTTPS and never stored.
               </p>
             </>
+          )}
+        </div>
+
+        {/* Model selection */}
+        <div className="pt-3 border-t border-gray-800">
+          <label className="block text-xs font-medium text-gray-400 mb-1.5">AI Model</label>
+          <div className="space-y-1.5">
+            {MODEL_OPTIONS.map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => !modelLocked && setSelectedModel(opt.key)}
+                disabled={modelLocked}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg border text-left transition-colors ${
+                  selectedModel === opt.key
+                    ? "border-blue-500 bg-blue-500/10"
+                    : "border-gray-700 bg-gray-800 hover:border-gray-600"
+                } ${modelLocked ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+              >
+                <div className={`w-3 h-3 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+                  selectedModel === opt.key ? "border-blue-500" : "border-gray-600"
+                }`}>
+                  {selectedModel === opt.key && <div className="w-1.5 h-1.5 bg-blue-500 rounded-full" />}
+                </div>
+                <div className="min-w-0">
+                  <p className={`text-xs font-medium ${selectedModel === opt.key ? "text-blue-300" : "text-gray-300"}`}>{opt.label}</p>
+                  <p className="text-[10px] text-gray-500">{opt.description}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+          {modelLocked && (
+            <p className="text-[10px] text-gray-600 mt-1.5 flex items-center gap-1">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+              Locked for this session. Start a new chat to change.
+            </p>
           )}
         </div>
 

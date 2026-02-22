@@ -7,9 +7,10 @@ export const maxDuration = 120; // Allow up to 2 minutes for tool-use loops
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { credentials, messages } = body as {
+    const { credentials, messages, model } = body as {
       credentials: UserCredentials;
       messages: ChatMessage[];
+      model?: string;
     };
 
     // Validate required fields
@@ -58,8 +59,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[chat] user=${credentials.username} instance=${credentials.instanceUrl} msgs=${messages.length} key=${userSuppliedKey ? "user" : "server"} ip=${ip}`);
-    const result = await chat(credentials, messages);
+    const selectedModel = model || "claude-sonnet-4-6";
+    console.log(`[chat] user=${credentials.username} instance=${credentials.instanceUrl} msgs=${messages.length} key=${userSuppliedKey ? "user" : "server"} ip=${ip} model=${selectedModel}`);
+    const result = await chat(credentials, messages, selectedModel);
     console.log(`[chat] done — ${result.toolExecutions?.length ?? 0} tool(s) executed`);
 
     // Include usage info in response so frontend can display counter

@@ -1,167 +1,99 @@
-# Project Tracker - SN AI Dev Agent
+# Project Tracker — SN AI Dev Agent Web App
 
 > **Last Updated:** 2026-02-22
-> **Instance:** dev181312.service-now.com (changed from dev300943)
-> **Branch:** `v1-as-webapp` (web app development)
+> **Branch:** `v1-as-webapp`
+> **Status:** MVP Running (`localhost:3000`)
 
 ---
 
-## 📊 Project Status Overview
+## ✅ Shipped Features
 
-| Requirement | Title | Status | Phase | Notes |
-|-------------|-------|--------|-------|-------|
-| REQ-001 | Normal Change Maintenance Window Enforcement | ⚠️ Needs Redeploy | Complete | Was on dev300943, needs redeploy to dev181312 |
-| REQ-002 | New Hire Equipment Bundle Orchestration | ⚠️ Needs Redeploy | Testing | Was on dev300943, flow in draft mode |
-| Web App | Expose SN AI Dev Agent as a web service | ✅ MVP Running | Implementation | Running at localhost:3000 on `v1-as-webapp` branch |
+### Core Engine
 
----
+| # | Feature | Details |
+|---|---------|---------|
+| 1 | **80 ServiceNow Tools** | Full tool parity with CLI — records, scripts, update sets, UI policies, ACLs, notifications, catalog, scheduled jobs, brownfield intelligence, guardrails, persona/4G, multi-instance, recommendations, dashboard, promotion workflow |
+| 2 | **Anthropic Tool-Use Loop** | Multi-round Claude ↔ ServiceNow tool execution loop with up to 15 rounds per request (`sn-engine.ts`) |
+| 3 | **Shared Tool Layer** | `tool-definitions.ts` (single source of truth for all 80 tool schemas) + `tool-registry.ts` (dispatch table) — shared between CLI and webapp |
+| 4 | **Model Selection** | User chooses between Claude Sonnet 4.6 and Claude Opus 4.6; selection locks after first message; resets on New Chat |
+| 5 | **defaultScope: global** | All ServiceNow clients created with `defaultScope: 'global'` matching CLI behavior |
 
-## 🔄 REQ-002: New Hire Equipment Bundle Orchestration
+### Spec-Driven SDLC Methodology
 
-### Current Status
-**Phase:** Testing  
-**Flow Status:** Draft (needs UI activation)
+| # | Feature | Details |
+|---|---------|---------|
+| 6 | **SDLC System Prompt** | Comprehensive prompt teaching Claude the Spec → Design → Implementation → Testing → Deployment workflow, templates, naming conventions, and phase gate rules (`system-prompt.ts`, 191 lines) |
+| 7 | **Phase Gate Detection** | `<!-- PHASE_GATE:xxx -->` markers in Claude's responses trigger approval UI |
+| 8 | **Phase Gate Approval UI** | Green "Approve" button on phase gate messages; user must explicitly approve before Claude proceeds |
+| 9 | **PhaseTracker Component** | Visual stepper in header bar showing current SDLC phase (Spec → Design → Impl → Test → Deploy) |
+| 10 | **Sign-Off Workflow** | ☐/☑ checkboxes in spec/design documents; only user can approve |
 
-### What's Been Done
+### User Interface
 
-| Step | Description | Status |
-|------|-------------|--------|
-| 1 | Spec created and approved | ✅ Complete |
-| 2 | Design created and approved | ✅ Complete |
-| 3 | Implementation files created | ✅ Complete |
-| 4 | Base artifacts deployed (Script Include, Catalog Item, etc.) | ✅ Complete |
-| 5 | Flow Designer flow created via REST API | ✅ Created (Draft) |
-| 6 | Flow activation in UI | ⏳ Pending |
-| 7 | End-to-end testing | ⏳ Pending |
+| # | Feature | Details |
+|---|---------|---------|
+| 11 | **Settings Panel** | Sidebar for ServiceNow instance URL, username, password, Claude API key, model selection |
+| 12 | **Chat Window** | Scrollable message list with auto-scroll, streaming-style UX |
+| 13 | **Markdown Rendering** | `react-markdown` + `remark-gfm` for rich message display (tables, code blocks, lists) |
+| 14 | **System Messages** | Colored banners (info/warning/success/error) for connection status, role warnings, etc. |
+| 15 | **Tool Execution Cards** | Expandable cards showing tool name, input, output, and duration for each tool call |
+| 16 | **Example Prompt Cards** | Pre-built prompts in empty state for SDLC requirements and quick ServiceNow queries |
+| 17 | **New Chat Button** | Resets conversation, unlocks model selection, clears phase tracking |
+| 18 | **Header Info Bar** | Shows connected user, instance, active phase tracker, and New Chat action |
 
-### Flow Designer Artifacts Created
+### Security & Access Control
 
-| Artifact | sys_id | Status |
-|----------|--------|--------|
-| sys_hub_flow | `3a43958493beb2902f57f0ba2bba10b6` | Draft |
-| sys_hub_trigger_instance | `b643958493beb2902f57f0ba2bba10d0` | Created |
-| sys_hub_action_instance | `cf43958493beb2902f57f0ba2bba10d4` | Created |
+| # | Feature | Details |
+|---|---------|---------|
+| 19 | **Connection Testing** | `/api/test-connection` validates ServiceNow credentials before chat begins |
+| 20 | **Role Verification** | Checks for `admin` and `security_admin` roles on connect; injects warning if missing |
+| 21 | **Server-Side API Key** | Optional `CLAUDE_API_KEY` env var — when set, users don't need their own key |
+| 22 | **Rate Limiting** | Sliding-window rate limiter (default: 10 requests / 4 hours) — only applies when using server key; users with own key bypass it |
+| 23 | **Usage Counter & Progress Bar** | Shows remaining requests and resets time when rate-limited |
+| 24 | **Configurable Limits** | `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW_HOURS` env vars |
 
-### Next Steps for REQ-002
+### API Routes
 
-1. **Open Flow Designer UI:**
-   - URL: `https://dev300943.service-now.com/now/nav/ui/classic/params/target/%24flow-designer.do%23%2Fflow/3a43958493beb2902f57f0ba2bba10b6`
-
-2. **Configure the flow:**
-   - Set trigger conditions (when RITM is approved for "New Hire Equipment Bundle")
-   - Add action steps to create 3 catalog tasks (Laptop, Access, Welcome Kit)
-   - Add completion monitoring logic
-   - Add notification actions
-
-3. **Activate the flow:**
-   - Click "Activate" button to publish
-   - This creates required snapshots
-
-4. **Test the flow:**
-   - Submit a New Hire Equipment Bundle request
-   - Approve the RITM
-   - Verify tasks are created
-   - Close tasks and verify RITM auto-closes
-
-5. **Update manifest.json:**
-   - Change status to "deployed"
-   - Change phase to "complete"
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/chat` | POST | Main chat endpoint — credentials, messages, model → Claude tool-use loop |
+| `/api/test-connection` | POST | Validate ServiceNow credentials and fetch user roles |
+| `/api/config` | GET | Returns whether server-side API key is configured |
 
 ---
 
-## 📚 Key Learnings
+## 🔜 Next Up
 
-### Flow Designer Insights
+### P0 — Validate Core Functionality
 
-1. **Snapshots are mandatory** - Flow engine requires `latest_snapshot` and `master_snapshot`
-2. **REST API creates draft flows** - Records are created but flow needs UI activation
-3. **Action types have snapshots** - Use snapshot IDs (e.g., `af51fd0e73141300612c273ffff6a785`) not definition IDs
-4. **UI activation required** - Creates internal metadata and compiles the flow
+- [ ] **Verify spec-driven SDLC actually works end-to-end** — Run a real requirement through all 5 phases (Spec → Design → Implementation → Testing → Deployment) in the webapp; fix any issues with phase gate detection, approval flow, system prompt, and tool execution
+- [ ] **Verify update set deployment works for both scopes** — Test creating and completing update sets in both Global and Application scope; add scope selection option (ask user to pick scope per requirement or default to global)
+- [ ] **Flow Designer tool/MCP** — Build tools to create Flow Designer artifacts (flows, triggers, action instances, stages) via REST API on the ServiceNow instance; current tools cover scripts/rules/policies but not flows
 
-### Key Action Type IDs
+### P1 — Security & Session Management
 
-| Action | Snapshot ID |
-|--------|-------------|
-| Create Catalog Task | `af51fd0e73141300612c273ffff6a785` |
-| Log | `5bc1bcc6531003003bf1d9109ec587d4` |
-| Service Catalog Trigger | `c43a1011c36813002841b63b12d3ae15` |
+- [ ] **Email + OTP verification** — Require email and OTP verification before starting a chat session; prevents unauthorized load on server and Anthropic API costs
+- [ ] **Session-based credential security** — Exchange credentials for HTTP-only session token on connect; encrypt at rest in server memory; stop sending credentials in every request body
+- [ ] **Credential redaction** — Strip passwords/API keys from all log output; sanitize error stack traces; document credential lifecycle
 
----
+### P2 — Logging & Monitoring
 
-## 🛠️ Tools Created
+- [ ] **Structured logging per user session** — Replace `console.log` with structured JSON logging (Winston/Pino); assign unique session IDs; log username, instance, tools called, duration, timestamp, outcome per session
+- [ ] **Admin log viewer** — Build admin view (`/admin/logs`) to search/filter session history by user, instance, date; persist logs to file or external service
 
-| Tool | Location | Purpose |
-|------|----------|---------|
-| create-flow-rest.js | `mcp-servicenow/lib/` | Create Flow Designer flows via REST API |
-| deploy.js | `mcp-servicenow/deploy/` | Generic artifact deployer |
+### P3 — Feature Enhancements
 
----
+- [ ] **Conversation persistence** — Save/load chat history (database or local storage)
+- [ ] **Multi-conversation support** — Sidebar with conversation list, switch between sessions
+- [ ] **Streaming responses** — Stream Claude's text as it generates instead of waiting for full response
+- [ ] **File/artifact viewer** — Display deployed ServiceNow artifacts inline with syntax highlighting
+- [ ] **Deployment dashboard** — Visual summary of all artifacts deployed in current session
+- [ ] **Dark/light theme toggle** — Currently dark only
 
-## 📁 Files Modified This Session
+### P4 — Infrastructure
 
-| File | Change |
-|------|--------|
-| `CLAUDE.md` | Updated Section 13 with Flow Designer learnings |
-| `specs/manifest.json` | Updated REQ-002 status |
-| `specs/REQ-002/*` | Created spec, design, implementation, testing docs |
-
----
-
-## 🎯 Upcoming Work
-
-### Immediate (REQ-002 Completion)
-- [ ] Activate flow in Flow Designer UI
-- [ ] Configure trigger and actions
-- [ ] Test end-to-end workflow
-- [ ] Mark REQ-002 as complete
-
-### Future Enhancements — ServiceNow
-- [ ] Automate flow activation via ServiceNow APIs (if possible)
-- [ ] Create flow templates for common patterns
-- [ ] Add ATF tests for Flow Designer flows
-- [ ] Redeploy REQ-001 and REQ-002 to new instance (dev181312)
-
-### Future Enhancements — Web App (Production Readiness)
-
-> Logged: 2026-02-22 — These must be addressed before exposing the app to multiple users.
-
-- [ ] **FE-001: Server-side encrypted sessions & credential security**
-  - Exchange credentials for a short-lived session token on connect (HTTP-only cookie)
-  - Encrypt credentials at rest in server memory (or Redis/similar) with a server-side key
-  - Stop sending credentials in every request body — subsequent requests use session token only
-  - Credentials must never appear in browser DevTools Network tab after initial exchange
-  - Clear credentials from server memory on disconnect/timeout
-
-- [ ] **FE-002: Structured logging & admin session monitoring**
-  - Assign a unique session ID on connect, attach to all log entries for that session
-  - Replace `console.log` with structured JSON logging (e.g., Winston/Pino)
-  - Persist logs to file or external service (CloudWatch, Datadog, etc.)
-  - Log: session ID, username, instance, tools called, duration, timestamp, outcome
-  - Build an admin view (`/admin/logs` page or API) to search/filter session history by user, instance, date
-
-- [ ] **FE-003: Credential redaction & zero-persistence guarantee**
-  - Strip passwords and API keys from all log output (redact to `***`)
-  - Sanitize error stack traces so credentials are never leaked on exceptions
-  - Credentials must not be stored in localStorage, cookies (only HTTP-only session token), or server-side logs
-  - On the client, credentials live only in React state (browser memory) — cleared on tab close/refresh
-  - Document the credential lifecycle for security audits
-
----
-
-## 📝 Session Notes
-
-**2026-02-03:**
-- Investigated Flow Designer internal structure
-- Discovered snapshots are required for flow execution
-- Created flow via REST API (draft mode)
-- Flow sys_id: `3a43958493beb2902f57f0ba2bba10b6`
-- Updated CLAUDE.md with learnings
-- Cleaned up temporary exploration scripts
-
-**2026-02-22:**
-- Instance changed from dev300943 to dev181312
-- Created `snapshot/2026-02-21` branch and `v1-as-webapp` branch
-- Built full web app (Option A) — Next.js + Anthropic tool-use loop + 60+ SN tools
-- Added role verification (admin/security_admin check on connect)
-- Improved UI: markdown rendering, system messages, example prompts, tool cards
-- Identified 3 production-readiness gaps (FE-001, FE-002, FE-003) — logged as future enhancements
+- [ ] **Database layer** — Persistent storage for sessions, conversations, deployment history
+- [ ] **Authentication** — User accounts, OAuth, or SSO for multi-tenant deployment
+- [ ] **Containerization** — Dockerfile + docker-compose for easy deployment
+- [ ] **CI/CD pipeline** — Automated build, test, and deploy
+- [ ] **Cloud deployment** — Vercel / AWS / GCP deployment configuration
