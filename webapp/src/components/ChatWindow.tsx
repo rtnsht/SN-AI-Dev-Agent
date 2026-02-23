@@ -134,16 +134,19 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
           {showEmptyState && (
             <div className="flex-1 flex items-center justify-center h-full">
               <div className="text-center max-w-lg mx-auto">
-                <div className="w-48 h-48 mx-auto mb-5 flex items-center justify-center">
+                <div className="w-48 h-48 mx-auto -mb-1 flex items-center justify-center">
                   <Image src="/yantra-logo.png" alt="Yantra - AI Dev Agent - SN" width={192} height={192} className="rounded-full" unoptimized />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-200 mb-2">
-                  Yantra - AI Dev Agent - SN
+                <h2 className="text-2xl font-bold text-gray-100 mb-1 tracking-tight">
+                  Say it. Ship it.
                 </h2>
+                <p className="text-xs text-gray-400 tracking-widest uppercase mb-4">
+                  Spec-driven &middot; Human-approved &middot; AI-powered
+                </p>
                 <p className="text-sm text-gray-500 mb-6">
                   {connected
-                    ? "You're connected! Ask me anything — query records, create scripts, analyze code quality, manage update sets, and more."
-                    : "Connect to your ServiceNow instance using the settings panel, then start chatting."}
+                    ? "You're connected! Describe what you need — Yantra builds, tests, and deploys it on your ServiceNow instance."
+                    : "Open the settings panel, connect your instance, and tell Yantra what to build."}
                 </p>
                 {connected && (
                   <div className="grid grid-cols-2 gap-2">

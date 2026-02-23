@@ -53,6 +53,7 @@
 | 18g | **User API Key Control** | `ALLOW_USER_API_KEYS` env var (default: `true`); when `false`, hides API key input, shows "Managed by server" locked badge, rejects user-supplied keys in API routes, adjusts all error messages |
 | 18h | **Info Modal** | ℹ️ icon in header opens feature overview modal with 11 validated user-facing capabilities; no technical/architectural details exposed |
 | 18i | **App Branding — Yantra** | Renamed to "Yantra - AI Dev Agent - SN"; custom logo (`yantra-logo.png`) and favicon (`icon.png`) with transparent backgrounds (white removed via `sharp`); logo in header (36px), sidebar (36px), info modal (36px), empty state (192px); `unoptimized` prop on all `<Image>` tags; Next.js dev indicators disabled |
+| 18j | **Tagline & Empty State Copy** | Hero tagline "Say it. Ship it." with subtitle "Spec-driven · Human-approved · AI-powered" in empty state; page meta description updated; contextual messaging for connected vs disconnected states |
 
 ### Security & Access Control
 
