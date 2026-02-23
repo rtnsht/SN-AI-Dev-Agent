@@ -43,6 +43,15 @@ export default function Home() {
   const [showInfo, setShowInfo] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // Ref to always access the latest handleSend (avoids stale closure in handleApprove setTimeout)
+  const handleSendRef = useRef<(text: string, images?: string[]) => void>(() => {});
+  // Ref to always have access to the latest messages (avoids race conditions with React batching)
+  const messagesRef = useRef<ChatMessage[]>([]);
+
+  // Keep messagesRef in sync with messages state (for use in callbacks that need latest messages)
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   // Fetch server config on mount (API key + SN credentials)
   useEffect(() => {
@@ -126,19 +135,19 @@ export default function Home() {
           });
         }
 
-        setMessages((prev) => [...prev, ...sysMsgs]);
+        const newMsgs = [...messagesRef.current, ...sysMsgs];
+        messagesRef.current = newMsgs;
+        setMessages(newMsgs);
         setTimeout(() => inputRef.current?.focus(), 100);
       } else {
-        setMessages((prev) => [
-          ...prev,
-          { role: "system", type: "error", content: `Connection failed: ${data.message || "Unknown error"}` },
-        ]);
+        const errMsgs = [...messagesRef.current, { role: "system" as const, type: "error" as const, content: `Connection failed: ${data.message || "Unknown error"}` }];
+        messagesRef.current = errMsgs;
+        setMessages(errMsgs);
       }
     } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        { role: "system", type: "error", content: `Connection error: ${err instanceof Error ? err.message : String(err)}` },
-      ]);
+      const errMsgs = [...messagesRef.current, { role: "system" as const, type: "error" as const, content: `Connection error: ${err instanceof Error ? err.message : String(err)}` }];
+      messagesRef.current = errMsgs;
+      setMessages(errMsgs);
     } finally {
       setIsConnecting(false);
     }
@@ -152,13 +161,15 @@ export default function Home() {
       if (pendingRetry) setPendingRetry(null);
 
       const userMsg: ChatMessage = { role: "user", content: text, ...(images?.length ? { images } : {}) };
-      // Use functional updater to get the LATEST messages (avoids stale closure when
-      // called from handleApprove which batches a setMessages just before this).
-      let newMessages: ChatMessage[] = [];
-      setMessages((prev) => {
-        newMessages = [...prev, userMsg];
-        return newMessages;
-      });
+
+      // Build new messages array from the ref (always has latest due to useEffect sync)
+      // This avoids race conditions with React's state batching
+      const newMessages = [...messagesRef.current, userMsg];
+
+      // Update state and ref together
+      setMessages(newMessages);
+      messagesRef.current = newMessages;
+
       setIsLoading(true);
       // Lock model selection after first message
       if (!modelLocked) setModelLocked(true);
@@ -168,6 +179,14 @@ export default function Home() {
         const apiMessages = newMessages
           .filter((m) => m.role === "user" || m.role === "assistant")
           .map((m) => ({ role: m.role, content: m.content, ...(m.images?.length ? { images: m.images } : {}) }));
+
+        // Safety check: ensure we have messages to send
+        if (apiMessages.length === 0) {
+          console.error("[handleSend] No user/assistant messages to send. Messages:", newMessages);
+          setMessages((prev) => [...prev, { role: "system", type: "error", content: "Internal error: No messages to send. Please try again." }]);
+          setIsLoading(false);
+          return;
+        }
 
         // Create an AbortController so the user can cancel
         const controller = new AbortController();
@@ -249,11 +268,14 @@ export default function Home() {
                 : `⏳ **${data.usage.remaining} request${data.usage.remaining === 1 ? "" : "s"} remaining** out of ${data.usage.max} per ${data.usage.windowHours} hours.`,
             });
           }
-          setMessages((prev) => [...prev, ...newMsgs]);
+          // Update both state and ref together before potential auto-approve setTimeout
+          const updatedMsgs = [...messagesRef.current, ...newMsgs];
+          messagesRef.current = updatedMsgs;
+          setMessages(updatedMsgs);
 
           // Auto-send "approved" for phases that don't require user sign-off
           if (isAutoApprove && phaseGate) {
-            setTimeout(() => handleSend("approved"), 100);
+            setTimeout(() => handleSendRef.current("approved"), 100);
           }
         } else if (res.status === 429) {
           if (data.error === "anthropic_rate_limit") {
@@ -315,8 +337,13 @@ export default function Home() {
         setIsLoading(false);
       }
     },
-    [credentials, isLoading, serverApiKeyConfigured, activeReqId, selectedModel, modelLocked, pendingRetry]
+    [credentials, isLoading, serverApiKeyConfigured, activeReqId, selectedModel, modelLocked, pendingRetry, allowUserApiKeys]
   );
+
+  // Keep ref updated with latest handleSend to avoid stale closures in setTimeout callbacks
+  useEffect(() => {
+    handleSendRef.current = handleSend;
+  }, [handleSend]);
 
   /** Cancel an in-flight request */
   const handleCancel = useCallback(() => {
@@ -328,12 +355,12 @@ export default function Home() {
   /** Handle phase gate approval — mark the message as approved and send "approved" to continue */
   const handleApprove = useCallback(
     (phase: SDLCPhase) => {
-      // Mark the gate message as approved
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.phaseGate === phase && !m.approved ? { ...m, approved: true } : m
-        )
+      // Mark the gate message as approved and update messagesRef immediately
+      const updatedMessages = messagesRef.current.map((m) =>
+        m.phaseGate === phase && !m.approved ? { ...m, approved: true } : m
       );
+      messagesRef.current = updatedMessages;
+      setMessages(updatedMessages);
 
       // Track completed phase and advance to next
       setCompletedPhases((prev) => (prev.includes(phase) ? prev : [...prev, phase]));
@@ -348,19 +375,22 @@ export default function Home() {
 
       // Send approval message to continue the conversation
       const approvalMsg = `approved`;
-      // Inject system confirmation
-      setMessages((prev) => [
-        ...prev,
-        { role: "system", type: "success", content: `✅ **${phase.charAt(0).toUpperCase() + phase.slice(1)}** phase approved. Proceeding...` },
-      ]);
+      // Inject system confirmation and update messagesRef immediately
+      const withSystemMsg = [
+        ...messagesRef.current,
+        { role: "system" as const, type: "success" as const, content: `✅ **${phase.charAt(0).toUpperCase() + phase.slice(1)}** phase approved. Proceeding...` },
+      ];
+      messagesRef.current = withSystemMsg;
+      setMessages(withSystemMsg);
 
-      // Trigger the next message
-      setTimeout(() => handleSend(approvalMsg), 100);
+      // Trigger the next message (use ref to get latest handleSend, avoiding stale closure)
+      setTimeout(() => handleSendRef.current(approvalMsg), 100);
     },
-    [handleSend]
+    [] // No dependencies needed - we use handleSendRef which always has the latest
   );
 
   const handleNewChat = useCallback(() => {
+    messagesRef.current = [];
     setMessages([]);
     setActiveReqId(null);
     setCurrentPhase(null);
@@ -472,8 +502,8 @@ export default function Home() {
             if (pendingRetry) {
               const retry = pendingRetry;
               setPendingRetry(null);
-              // Auto-retry the failed message with the new API key
-              setTimeout(() => handleSend(retry.text, retry.images), 150);
+              // Auto-retry the failed message with the new API key (use ref to avoid stale closure)
+              setTimeout(() => handleSendRef.current(retry.text, retry.images), 150);
             }
           }}
           selectedModel={selectedModel}

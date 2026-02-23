@@ -1,7 +1,7 @@
 # Project Tracker — Yantra - AI Dev Agent - SN Web App
 
-> **Last Updated:** 2026-02-22
-> **Branch:** `v1-as-webapp`
+> **Last Updated:** 2026-02-23
+> **Branch:** `sndevaiagentwebapp-v2`
 > **Status:** MVP Running (`localhost:3000`) — P0 Complete ✅
 
 ---
@@ -13,7 +13,7 @@
 | # | Feature | Details |
 |---|---------|---------|
 | 1 | **80 ServiceNow Tools** | Full tool parity with CLI — records, scripts, update sets, UI policies, ACLs, notifications, catalog, scheduled jobs, brownfield intelligence, guardrails, persona/4G, multi-instance, recommendations, dashboard, promotion workflow |
-| 2 | **Anthropic Tool-Use Loop** | Multi-round Claude ↔ ServiceNow tool execution loop with up to 15 rounds per request (`sn-engine.ts`) |
+| 2 | **Anthropic Tool-Use Loop** | Multi-round Claude ↔ ServiceNow tool execution loop with up to 30 rounds per request (`sn-engine.ts`) |
 | 3 | **Shared Tool Layer** | `tool-definitions.ts` (single source of truth for all 80 tool schemas) + `tool-registry.ts` (dispatch table) — shared between CLI and webapp |
 | 4 | **Model Selection** | User chooses between Claude Sonnet 4.6 and Claude Opus 4.6; selection locks after first message; resets on New Chat |
 | 5 | **defaultScope: global** | All ServiceNow clients created with `defaultScope: 'global'` matching CLI behavior |
@@ -113,6 +113,8 @@
 - [x] **Info modal** — ℹ️ icon with 11 user-facing feature descriptions; no technical internals exposed
 - [x] **App branding — Yantra** — Renamed to "Yantra - AI Dev Agent - SN"; custom logo/favicon with transparent backgrounds; consistent branding across header, sidebar, info modal, empty state, export, page title
 - [x] **Approve button stale-closure fix** — `handleSend` used stale `messages` from closure, overwriting `approved: true` set by `handleApprove`; switched to functional state updater `setMessages((prev) => ...)` so approval flag is preserved; removed `messages` from `handleSend` dependency array
+- [x] **handleSend stale closure comprehensive fix** — Added `allowUserApiKeys` to `handleSend` dependency array (was missing); introduced `handleSendRef` to hold latest function reference; all `setTimeout` callbacks (`handleApprove`, auto-approve, `onApiKeyProvided`) now use `handleSendRef.current` to avoid stale closures; increased `maxToolRounds` from 15 to 30 to handle complex requirements like catalog items with flows
+- [x] **messagesRef pattern for React batching race conditions** — Added `messagesRef` to always track latest messages; all message mutations (`handleConnect`, `handleSend`, `handleApprove`, `handleNewChat`) now update both ref and state synchronously; prevents "Messages array is required and must not be empty" error caused by React's state batching when `setTimeout` callbacks fire before state updates propagate
 
 ---
 

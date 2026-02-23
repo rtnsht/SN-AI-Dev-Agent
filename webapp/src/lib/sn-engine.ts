@@ -109,7 +109,7 @@ export async function chat(
   credentials: UserCredentials,
   messages: ChatMessage[],
   model: string = "claude-sonnet-4-6",
-  maxToolRounds: number = 15
+  maxToolRounds: number = 30 // Increased from 15 to handle complex requirements (e.g., catalog items with flows)
 ): Promise<ChatResponse> {
   const registry = getToolRegistry();
   const defs = getToolDefs();
