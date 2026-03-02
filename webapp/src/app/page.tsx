@@ -6,7 +6,7 @@ import SettingsPanel from "@/components/SettingsPanel";
 import ChatWindow from "@/components/ChatWindow";
 import PhaseTracker from "@/components/PhaseTracker";
 import InfoModal from "@/components/InfoModal";
-import type { ChatMessage, ConnectionResult, UsageInfo, SDLCPhase, ModelChoice } from "@/lib/types";
+import type { ChatMessage, ConnectionResult, UsageInfo, SDLCPhase, ModelChoice, LiveStatus } from "@/lib/types";
 import { parsePhaseGate, MODEL_OPTIONS, SDLC_PHASES } from "@/lib/types";
 
 export default function Home() {
@@ -41,6 +41,9 @@ export default function Home() {
   const [allowUserApiKeys, setAllowUserApiKeys] = useState(true);
   // Info modal
   const [showInfo, setShowInfo] = useState(false);
+  // Live status streaming (controlled via NEXT_PUBLIC_SHOW_LIVE_STATUS env)
+  const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
+  const [streamingEnabled, setStreamingEnabled] = useState(true);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   // Ref to always access the latest handleSend (avoids stale closure in handleApprove setTimeout)
@@ -63,6 +66,8 @@ export default function Home() {
 
         // Tool detail visibility
         if (typeof data.showToolDetails === "boolean") setShowToolDetails(data.showToolDetails);
+        // Live status visibility (what the agent is doing)
+        if (typeof data.showLiveStatus === "boolean") setStreamingEnabled(data.showLiveStatus);
         // User API key control
         if (typeof data.allowUserApiKeys === "boolean") setAllowUserApiKeys(data.allowUserApiKeys);
 
@@ -192,6 +197,130 @@ export default function Home() {
         const controller = new AbortController();
         abortRef.current = controller;
 
+        // Use streaming API when enabled for live status updates
+        if (streamingEnabled) {
+          setLiveStatus({ message: "Starting...", phase: "thinking" });
+
+          const res = await fetch("/api/chat-stream", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ credentials, messages: apiMessages, model: MODEL_OPTIONS.find((m) => m.key === selectedModel)?.modelId }),
+            signal: controller.signal,
+          });
+
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+            setLiveStatus(null);
+            setMessages((prev) => [...prev, { role: "system", type: "error", content: `Error: ${errorData.error || errorData.message || "Request failed"}` }]);
+            setIsLoading(false);
+            return;
+          }
+
+          const reader = res.body?.getReader();
+          if (!reader) {
+            setLiveStatus(null);
+            setMessages((prev) => [...prev, { role: "system", type: "error", content: "Streaming not supported" }]);
+            setIsLoading(false);
+            return;
+          }
+
+          const decoder = new TextDecoder();
+          let buffer = "";
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let finalData: any = null;
+
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split("\n\n");
+              buffer = lines.pop() || "";
+
+              for (const line of lines) {
+                if (line.startsWith("data: ")) {
+                  try {
+                    const event = JSON.parse(line.slice(6));
+                    if (event.type === "status") {
+                      setLiveStatus({ message: event.message, phase: event.phase || "thinking" });
+                    } else if (event.type === "tool_start") {
+                      setLiveStatus({ message: `Executing: ${event.toolName}`, phase: "tool", toolName: event.toolName });
+                    } else if (event.type === "tool_end") {
+                      setLiveStatus({ message: `${event.toolName} completed (${event.durationMs}ms)`, phase: "tool", toolName: event.toolName });
+                    } else if (event.type === "done") {
+                      finalData = { reply: event.reply, toolExecutions: event.toolExecutions };
+                    } else if (event.type === "error") {
+                      setLiveStatus(null);
+                      setMessages((prev) => [...prev, { role: "system", type: "error", content: `Error: ${event.message}` }]);
+                      setIsLoading(false);
+                      return;
+                    }
+                  } catch {
+                    // Ignore parse errors for incomplete chunks
+                  }
+                }
+              }
+            }
+          } finally {
+            reader.releaseLock();
+          }
+
+          setLiveStatus(null);
+
+          if (!finalData) {
+            setMessages((prev) => [...prev, { role: "system", type: "error", content: "No response received from streaming API" }]);
+            setIsLoading(false);
+            return;
+          }
+
+          // Process the final response (same logic as non-streaming)
+          const data = finalData;
+
+          // Continue with the same response processing logic below...
+          // (phaseGate detection, assistant message creation, etc.)
+
+          // Detect phase gate in response
+          const phaseGate = parsePhaseGate(data.reply || "");
+          const reqMatch = (data.reply || "").match(/REQ-(\d{3})/);
+          if (reqMatch && !activeReqId) setActiveReqId(reqMatch[0]);
+
+          const phaseInfo = phaseGate ? SDLC_PHASES.find((p) => p.key === phaseGate) : null;
+          const isAutoApprove = phaseInfo ? !phaseInfo.requiresApproval : false;
+
+          if (phaseGate) {
+            const nextPhaseMap: Record<string, SDLCPhase> = { spec: "design", design: "implementation", implementation: "testing", testing: "deployment" };
+            if (isAutoApprove) {
+              setCompletedPhases((prev) => (prev.includes(phaseGate) ? prev : [...prev, phaseGate]));
+              const next = nextPhaseMap[phaseGate];
+              if (next) setCurrentPhase(next);
+            } else {
+              setCurrentPhase(phaseGate);
+            }
+          }
+
+          const assistantMsg: ChatMessage = {
+            role: "assistant",
+            content: data.reply,
+            toolExecutions: data.toolExecutions,
+            phaseGate: phaseGate || undefined,
+            approved: isAutoApprove && phaseGate ? true : undefined,
+            autoApproved: isAutoApprove && phaseGate ? true : undefined,
+          };
+
+          const updatedMsgs = [...messagesRef.current, assistantMsg];
+          messagesRef.current = updatedMsgs;
+          setMessages(updatedMsgs);
+
+          if (isAutoApprove && phaseGate) {
+            setTimeout(() => handleSendRef.current("approved"), 100);
+          }
+
+          setIsLoading(false);
+          return;
+        }
+
+        // Non-streaming fallback
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -337,7 +466,7 @@ export default function Home() {
         setIsLoading(false);
       }
     },
-    [credentials, isLoading, serverApiKeyConfigured, activeReqId, selectedModel, modelLocked, pendingRetry, allowUserApiKeys]
+    [credentials, isLoading, serverApiKeyConfigured, activeReqId, selectedModel, modelLocked, pendingRetry, allowUserApiKeys, streamingEnabled]
   );
 
   // Keep ref updated with latest handleSend to avoid stale closures in setTimeout callbacks
@@ -578,6 +707,7 @@ export default function Home() {
           connected={connected}
           inputRef={inputRef}
           showToolDetails={showToolDetails}
+          liveStatus={liveStatus}
         />
       </main>
 

@@ -54,3 +54,6 @@ requirements/CHG-*/
 requirements/PRB-*/
 requirements/TASK-*/
 !requirements/_templates/
+
+# Temporary test assets (moved from source)
+temp-assets/

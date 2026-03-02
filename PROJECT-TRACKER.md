@@ -1,8 +1,14 @@
 # Project Tracker — Yantra - AI Dev Agent - SN Web App
 
-> **Last Updated:** 2026-02-23
+> **Last Updated:** 2026-03-02
 > **Branch:** `sndevaiagentwebapp-v2`
-> **Status:** MVP Running (`localhost:3000`) — P0 Complete ✅
+> **Status:** MVP Running (`localhost:3000`) — P0 Complete ✅ | Brownfield Step 1 & 2 Complete ✅
+
+### Mission
+
+> Enable any ServiceNow developer to work with the confidence of a senior architect, the precision of a quality engineer, and the foresight of a platform owner — all while respecting the existing landscape.
+
+**Detailed Plan:** [docs/BROWNFIELD-ENHANCEMENT-PLAN.md](docs/BROWNFIELD-ENHANCEMENT-PLAN.md)
 
 ---
 
@@ -12,9 +18,9 @@
 
 | # | Feature | Details |
 |---|---------|---------|
-| 1 | **80 ServiceNow Tools** | Full tool parity with CLI — records, scripts, update sets, UI policies, ACLs, notifications, catalog, scheduled jobs, brownfield intelligence, guardrails, persona/4G, multi-instance, recommendations, dashboard, promotion workflow |
+| 1 | **92 ServiceNow Tools** | Full tool parity with CLI — records, scripts, update sets, UI policies, ACLs, notifications, catalog, scheduled jobs, **12 brownfield intelligence tools**, guardrails, persona/4G, multi-instance, recommendations, dashboard, promotion workflow |
 | 2 | **Anthropic Tool-Use Loop** | Multi-round Claude ↔ ServiceNow tool execution loop with up to 30 rounds per request (`sn-engine.ts`) |
-| 3 | **Shared Tool Layer** | `tool-definitions.ts` (single source of truth for all 80 tool schemas) + `tool-registry.ts` (dispatch table) — shared between CLI and webapp |
+| 3 | **Shared Tool Layer** | `tool-definitions.ts` (single source of truth for all 92 tool schemas) + `tool-registry.ts` (dispatch table) — shared between CLI and webapp |
 | 4 | **Model Selection** | User chooses between Claude Sonnet 4.6 and Claude Opus 4.6; selection locks after first message; resets on New Chat |
 | 5 | **defaultScope: global** | All ServiceNow clients created with `defaultScope: 'global'` matching CLI behavior |
 | 5a | **Update Set Artifact Capture** | Two-layer defense: (1) cookie-jar session persistence + UpdateSetHelper API (`GlideUpdateSet().set()`), (2) post-creation `sys_update_xml` move fallback. Auto-move hooks on `createRecord`, `updateRecord`, `createBusinessRule`, `createScriptInclude`, `createClientScript`. New `sn_move_to_update_set` manual fallback tool. |
@@ -116,6 +122,35 @@
 - [x] **handleSend stale closure comprehensive fix** — Added `allowUserApiKeys` to `handleSend` dependency array (was missing); introduced `handleSendRef` to hold latest function reference; all `setTimeout` callbacks (`handleApprove`, auto-approve, `onApiKeyProvided`) now use `handleSendRef.current` to avoid stale closures; increased `maxToolRounds` from 15 to 30 to handle complex requirements like catalog items with flows
 - [x] **messagesRef pattern for React batching race conditions** — Added `messagesRef` to always track latest messages; all message mutations (`handleConnect`, `handleSend`, `handleApprove`, `handleNewChat`) now update both ref and state synchronously; prevents "Messages array is required and must not be empty" error caused by React's state batching when `setTimeout` callbacks fire before state updates propagate
 
+### Brownfield Intelligence — Step 1: Deep Instance Intelligence ✅
+
+| Tool | Purpose | Lines |
+|------|---------|-------|
+| `sn_analyze_instance` | Comprehensive inventory of 150+ artifact types across 40+ categories; custom vs OOTB detection; instance health scoring (0-100); actionable recommendations | L |
+| `sn_detect_ootb_overrides` | Detects OOTB artifacts modified/customized; severity classification (CRITICAL/HIGH/MEDIUM/LOW); skipped updates tracking; upgrade risk score (0-100) | M |
+| `sn_get_dependency_graph` | Builds dependency graph showing artifact relationships; Script Include references, GlideAjax calls, GlideRecord usage, class inheritance, table triggers | L |
+| `sn_find_anti_patterns` | 25+ anti-pattern detection rules; 5 categories (performance, security, maintainability, upgradability, UX); health score; actionable recommendations | M |
+| `sn_code_quality_score` | Quality scores (0-100) with letter grades (A-F); complexity, documentation, best practices, code style, maintainability metrics | L |
+| `sn_find_dead_code` | Identifies unused Script Includes, empty scripts, stale inactive artifacts; confidence levels (high/medium/low); estimated cleanup effort | M |
+
+**Implementation files:** `mcp-servicenow/src/tools/instance-analyzer.ts`, `ootb-override-detector.ts`, `dependency-graph.ts`, `anti-pattern-detector.ts`, `code-quality-analyzer.ts`, `dead-code-finder.ts`
+
+### Brownfield Intelligence — Step 2: Guardrails & Impact Analysis ✅
+
+| Tool | Purpose | Lines |
+|------|---------|-------|
+| `sn_preview_change_impact` | Preview what will be affected before making a change; dependency cascade; downstream effects | 540 |
+| `sn_detect_conflicts` | Identify overlapping business rules, scripts, execution order conflicts | 440 |
+| `sn_validate_change` | Guardrail rule engine + best practice validation; blocks non-compliant code | 361 |
+| `sn_check_breaking_changes` | Warn about backward compatibility issues; deprecated API usage | 322 |
+| `sn_log_change` | Audit logging for all AI decisions and human confirmations | 258 |
+| `sn_get_audit_history` | Retrieve audit trail for compliance | — |
+
+**Implementation files:** `mcp-servicenow/src/tools/change-impact-analyzer.ts`, `conflict-detector.ts`, `guardrail-validator.ts`, `breaking-change-detector.ts`, `audit-logger.ts`
+
+**Step 1 Enhancement (pending):**
+- [ ] Add option to analyze OOTB artifacts in `sn_analyze_instance` (currently filters to custom/modified only)
+
 ---
 
 ## 🔜 Next Up
@@ -130,6 +165,40 @@
 
 - [ ] **Structured logging per user session** — Replace `console.log` with structured JSON logging (Winston/Pino); assign unique session IDs; log username, instance, tools called, duration, timestamp, outcome per session
 - [ ] **Admin log viewer** — Build admin view (`/admin/logs`) to search/filter session history by user, instance, date; persist logs to file or external service
+
+### P2.5 — Brownfield Step 3: Persona & 4G Framework
+
+> **People Philosophy Framework** — Guardrails, Guidance, Governance, Empowerment
+
+| Task | Priority | Effort | Status |
+|------|----------|--------|--------|
+| Persona Detection Engine | P0 | M | ⬜ Pending |
+| 4G Framework Integration | P0 | M | ⬜ Pending |
+| Approval Gate System | P0 | M | ⬜ Pending |
+| Skill-Adaptive Messaging | P1 | M | ⬜ Pending |
+| Documentation Generator | P1 | M | ⬜ Pending |
+| Mentorship Mode | P1 | M | ⬜ Pending |
+| Smart Defaults System | P1 | S | ⬜ Pending |
+
+### P2.6 — Brownfield Step 4: Multi-Instance & Promotion
+
+| Task | Priority | Effort | Status |
+|------|----------|--------|--------|
+| Instance Registry | P0 | M | ⬜ Pending |
+| Promotion Workflow (Dev → Test → Prod) | P0 | L | ⬜ Pending |
+| Pre-flight Validation | P0 | M | ⬜ Pending |
+| Rollback Support | P0 | M | ⬜ Pending |
+| Instance Comparison (Full Diff) | P2 | L | ⬜ Pending |
+
+### P2.7 — Brownfield Step 5: Predictive Intelligence
+
+| Task | Priority | Effort | Status |
+|------|----------|--------|--------|
+| Upgrade Readiness Scoring | P0 | L | ⬜ Pending |
+| Performance Prediction | P1 | L | ⬜ Pending |
+| Refactoring Recommendations | P1 | M | ⬜ Pending |
+| Tech Debt Remediation Plans | P1 | M | ⬜ Pending |
+| Conflict Prediction | P1 | L | ⬜ Pending |
 
 ### P3 — Feature Enhancements
 

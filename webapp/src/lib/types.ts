@@ -86,3 +86,10 @@ export interface UsageInfo {
   windowHours: number;
 }
 
+/** Live status update during streaming chat */
+export interface LiveStatus {
+  message: string;
+  phase: "thinking" | "tool" | "responding";
+  toolName?: string;
+}
+

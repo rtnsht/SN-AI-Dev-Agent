@@ -1,0 +1,92 @@
+{
+  "name": "Service Catalog Trigger Template",
+  "description": "Flow triggered by Service Catalog item request - creates catalog tasks",
+  "version": "1.0.0",
+  "template_type": "service_catalog",
+  "variables": {
+    "FLOW_NAME": "My Service Catalog Flow",
+    "FLOW_INTERNAL_NAME": "x_my_catalog_flow",
+    "CATALOG_ITEM_SYS_ID": "",
+    "TASK_SHORT_DESCRIPTION": "Process request",
+    "TASK_ASSIGNMENT_GROUP": ""
+  },
+  "flow": {
+    "table": "sys_hub_flow",
+    "fields": {
+      "name": "{{FLOW_NAME}}",
+      "internal_name": "{{FLOW_INTERNAL_NAME}}",
+      "type": "flow",
+      "status": "draft",
+      "active": "false",
+      "access": "public",
+      "run_as": "system",
+      "sys_scope": "global",
+      "sys_domain": "global"
+    }
+  },
+  "trigger": {
+    "table": "sys_hub_trigger_instance",
+    "fields": {
+      "name": "Service Catalog",
+      "trigger_type": "service_catalog",
+      "trigger_definition": "c43a1011c36813002841b63b12d3ae15"
+    },
+    "description": "Triggers when a specific catalog item is requested"
+  },
+  "actions": [
+    {
+      "name": "Log Request Start",
+      "order": 1,
+      "action_type": "5bc1bcc6531003003bf1d9109ec587d4",
+      "description": "Log action - records request initiation",
+      "inputs": {
+        "message": "Processing catalog request: {{trigger.request_item.number}}"
+      }
+    },
+    {
+      "name": "Create Fulfillment Task",
+      "order": 2,
+      "action_type": "af51fd0e73141300612c273ffff6a785",
+      "description": "Create Catalog Task action",
+      "inputs": {
+        "short_description": "{{TASK_SHORT_DESCRIPTION}}",
+        "assignment_group": "{{TASK_ASSIGNMENT_GROUP}}",
+        "request_item": "{{trigger.request_item.sys_id}}"
+      }
+    },
+    {
+      "name": "Log Completion",
+      "order": 3,
+      "action_type": "5bc1bcc6531003003bf1d9109ec587d4",
+      "description": "Log action - records completion",
+      "inputs": {
+        "message": "Catalog task created for: {{trigger.request_item.number}}"
+      }
+    }
+  ],
+  "stages": [
+    {
+      "label": "Initialize",
+      "order": 1
+    },
+    {
+      "label": "Process Request",
+      "order": 2
+    },
+    {
+      "label": "Complete",
+      "order": 3
+    }
+  ],
+  "usage": {
+    "description": "Use this template for flows that process Service Catalog requests",
+    "steps": [
+      "1. Set FLOW_NAME and FLOW_INTERNAL_NAME",
+      "2. Optionally set CATALOG_ITEM_SYS_ID to filter to specific items",
+      "3. Configure TASK_SHORT_DESCRIPTION and TASK_ASSIGNMENT_GROUP",
+      "4. Run: node lib/create-flow-from-template.js service-catalog-trigger",
+      "5. Activate flow in Flow Designer UI"
+    ]
+  }
+}
+

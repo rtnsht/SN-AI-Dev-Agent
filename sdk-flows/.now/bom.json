@@ -1,0 +1,43 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "serialNumber": "urn:uuid:89d7ad38-2374-41c0-9ff4-a3586a3b64cc",
+  "metadata": {
+    "timestamp": "2026-03-02T02:01:49.767Z",
+    "tools": {
+      "components": [
+        {
+          "type": "library",
+          "name": "sdk-build-plugins",
+          "group": "@servicenow",
+          "version": "4.3.0",
+          "author": "ServiceNow"
+        }
+      ]
+    },
+    "component": {
+      "type": "application",
+      "name": "yantra-flows",
+      "version": "1.0.0",
+      "bom-ref": "pkg:servicenow/yantra-flows@1.0.0?sys_scope_id=2ea695fec3d7321034b6b1f1b40131f0",
+      "author": "Yantra AI Dev Agent",
+      "description": "ServiceNow Flow Designer artifacts using SDK Fluent API for Yantra AI Dev Agent",
+      "licenses": [
+        {
+          "license": {
+            "id": "ISC"
+          }
+        }
+      ],
+      "purl": "pkg:servicenow/yantra-flows@1.0.0?sys_scope_id=2ea695fec3d7321034b6b1f1b40131f0"
+    }
+  },
+  "components": [],
+  "dependencies": [
+    {
+      "ref": "pkg:servicenow/yantra-flows@1.0.0?sys_scope_id=2ea695fec3d7321034b6b1f1b40131f0"
+    }
+  ]
+}

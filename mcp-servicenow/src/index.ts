@@ -45,6 +45,7 @@ import * as recommendationEngine from './tools/recommendation-engine.js';
 import * as dashboardReporter from './tools/dashboard-reporter.js';
 import * as multiInstanceManager from './tools/multi-instance-manager.js';
 import * as promotionWorkflow from './tools/promotion-workflow.js';
+import * as scopedApps from './tools/scoped-apps.js';
 import { ALL_TOOLS } from './tool-definitions.js';
 
 // Load environment variables
@@ -420,6 +421,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'sn_list_promotion_packages':
         result = await promotionWorkflow.listPromotionPackages(snClient, {});
+        break;
+
+      // Scoped Application tools
+      case 'sn_get_custom_apps':
+        result = await scopedApps.getCustomApps(snClient, scopedApps.getCustomAppsSchema.parse(args));
+        break;
+
+      case 'sn_get_scope_selection_options':
+        result = await scopedApps.getScopeSelectionOptions(snClient, scopedApps.getScopeSelectionOptionsSchema.parse(args));
+        break;
+
+      case 'sn_create_custom_app':
+        result = await scopedApps.createCustomApp(snClient, scopedApps.createCustomAppSchema.parse(args));
         break;
 
       default:

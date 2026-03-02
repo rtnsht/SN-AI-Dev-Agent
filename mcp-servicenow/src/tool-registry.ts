@@ -37,6 +37,7 @@ import * as dashboardReporter from './tools/dashboard-reporter.js';
 import * as multiInstanceManager from './tools/multi-instance-manager.js';
 import * as promotionWorkflow from './tools/promotion-workflow.js';
 import * as flowDesigner from './tools/flow-designer.js';
+import * as scopedApps from './tools/scoped-apps.js';
 
 /**
  * Tool handler mapping: tool name -> async function(snClient, args) => result
@@ -176,6 +177,40 @@ const TOOL_HANDLERS: Record<string, (snClient: ServiceNowClient, args: unknown) 
   sn_create_flow_action_instance: async (c, a) => flowDesigner.createActionInstance(c, flowDesigner.createActionInstanceSchema.parse(a)),
   sn_list_flow_stages: async (c, a) => flowDesigner.listFlowStages(c, flowDesigner.listFlowStagesSchema.parse(a)),
   sn_create_flow_stage: async (c, a) => flowDesigner.createFlowStage(c, flowDesigner.createFlowStageSchema.parse(a)),
+
+  // Flow Designer - Phase 1: Discovery Tools
+  sn_list_action_types: async (c, a) => flowDesigner.listActionTypes(c, flowDesigner.listActionTypesSchema.parse(a)),
+  sn_list_trigger_definitions: async (c, a) => flowDesigner.listTriggerDefinitions(c, flowDesigner.listTriggerDefinitionsSchema.parse(a)),
+  sn_get_action_type_schema: async (c, a) => flowDesigner.getActionTypeSchema(c, flowDesigner.getActionTypeSchemaSchema.parse(a)),
+  sn_analyze_flow: async (c, a) => flowDesigner.analyzeFlow(c, flowDesigner.analyzeFlowSchema.parse(a)),
+
+  // Flow Designer - Phase 2: Subflow & Custom Action Tools
+  sn_list_subflows: async (c, a) => flowDesigner.listSubflows(c, flowDesigner.listSubflowsSchema.parse(a)),
+  sn_create_subflow: async (c, a) => flowDesigner.createSubflow(c, flowDesigner.createSubflowSchema.parse(a)),
+  sn_list_custom_actions: async (c, a) => flowDesigner.listCustomActions(c, flowDesigner.listCustomActionsSchema.parse(a)),
+  sn_create_custom_action: async (c, a) => flowDesigner.createCustomAction(c, flowDesigner.createCustomActionSchema.parse(a)),
+  sn_call_subflow_in_flow: async (c, a) => flowDesigner.callSubflowInFlow(c, flowDesigner.callSubflowInFlowSchema.parse(a)),
+
+  // Flow Designer - Phase 3: Flow Variables & Action Inputs
+  sn_list_flow_variables: async (c, a) => flowDesigner.listFlowVariables(c, flowDesigner.listFlowVariablesSchema.parse(a)),
+  sn_create_flow_variable: async (c, a) => flowDesigner.createFlowVariable(c, flowDesigner.createFlowVariableSchema.parse(a)),
+  sn_list_action_inputs: async (c, a) => flowDesigner.listActionInputs(c, flowDesigner.listActionInputsSchema.parse(a)),
+  sn_create_action_input: async (c, a) => flowDesigner.createActionInput(c, flowDesigner.createActionInputSchema.parse(a)),
+
+  // Flow Designer - Phase 4: Update Set Template System
+  sn_export_flow_as_template: async (c, a) => flowDesigner.exportFlowAsTemplate(c, flowDesigner.exportFlowAsTemplateSchema.parse(a)),
+  sn_list_flow_templates: async (c, a) => flowDesigner.listFlowTemplates(c, flowDesigner.listFlowTemplatesSchema.parse(a)),
+  sn_create_flow_from_template: async (c, a) => flowDesigner.createFlowFromTemplate(c, flowDesigner.createFlowFromTemplateSchema.parse(a)),
+
+  // Flow Designer - Phase 5: Flow Execution API
+  sn_execute_flow: async (c, a) => flowDesigner.executeFlow(c, flowDesigner.executeFlowSchema.parse(a)),
+  sn_get_flow_execution_status: async (c, a) => flowDesigner.getFlowExecutionStatus(c, flowDesigner.getFlowExecutionStatusSchema.parse(a)),
+  sn_list_flow_executions: async (c, a) => flowDesigner.listFlowExecutions(c, flowDesigner.listFlowExecutionsSchema.parse(a)),
+
+  // Scoped Applications - CRITICAL for Flow Designer deployment
+  sn_get_custom_apps: async (c, a) => scopedApps.getCustomApps(c, scopedApps.getCustomAppsSchema.parse(a)),
+  sn_get_scope_selection_options: async (c, a) => scopedApps.getScopeSelectionOptions(c, scopedApps.getScopeSelectionOptionsSchema.parse(a)),
+  sn_create_custom_app: async (c, a) => scopedApps.createCustomApp(c, scopedApps.createCustomAppSchema.parse(a)),
 };
 
 /**

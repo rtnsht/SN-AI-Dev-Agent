@@ -1,0 +1,26 @@
+{
+    "name": "yantra-flows",
+    "version": "1.0.0",
+    "description": "ServiceNow Flow Designer artifacts using SDK Fluent API for Yantra AI Dev Agent",
+    "keywords": [
+        "servicenow",
+        "flow",
+        "automation",
+        "yantra"
+    ],
+    "author": "Yantra AI Dev Agent",
+    "license": "ISC",
+    "scripts": {
+        "build": "now-sdk build",
+        "deploy": "now-sdk deploy",
+        "watch": "now-sdk build --watch",
+        "clean": "rm -rf dist .now-sdk-cache"
+    },
+    "devDependencies": {
+        "@servicenow/sdk": "^4.3.0",
+        "typescript": "^5.0.0"
+    },
+    "engines": {
+        "node": ">=20.0.0"
+    }
+}

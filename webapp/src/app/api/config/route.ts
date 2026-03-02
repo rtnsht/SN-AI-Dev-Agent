@@ -32,6 +32,8 @@ export async function GET(request: NextRequest) {
     usage,
     // Tool execution detail visibility (default: true)
     showToolDetails: process.env.NEXT_PUBLIC_SHOW_TOOL_DETAILS !== "false",
+    // Live status visibility - shows what agent is doing (default: true)
+    showLiveStatus: process.env.NEXT_PUBLIC_SHOW_LIVE_STATUS !== "false",
     // Whether users are allowed to provide their own Claude API key (default: true)
     allowUserApiKeys: process.env.ALLOW_USER_API_KEYS !== "false",
   });

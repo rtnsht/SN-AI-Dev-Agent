@@ -2108,10 +2108,312 @@ export const FLOW_DESIGNER_TOOLS: ToolDefinition[] = [
       },
       required: ['flow', 'label']
     }
+  },
+  // ============ PHASE 1: DISCOVERY TOOLS ============
+  {
+    name: 'sn_list_action_types',
+    description: 'List available Flow Designer action types (Lookup Record, Create Task, Update Record, etc.) with their snapshot IDs. IMPORTANT: Use the returned snapshot_sys_id (not definition_sys_id) when calling sn_create_flow_action_instance.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        category: { type: 'string', description: 'Filter by category (e.g., "Core", "Service Catalog")' },
+        search: { type: 'string', description: 'Search by name, label, or internal_name' },
+        scope: { type: 'string', description: 'Filter by scope (e.g., "global")' },
+        limit: { type: 'number', description: 'Maximum results to return (default 50)' }
+      },
+      required: []
+    }
+  },
+  {
+    name: 'sn_list_trigger_definitions',
+    description: 'List available Flow Designer trigger definitions (Record-based, Schedule, Service Catalog, Inbound Email, etc.). Use the returned sys_id as trigger_definition in sn_create_flow_trigger.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', description: 'Filter by trigger type (e.g., "record", "schedule", "service_catalog")' },
+        search: { type: 'string', description: 'Search by name or label' },
+        limit: { type: 'number', description: 'Maximum results to return (default 30)' }
+      },
+      required: []
+    }
+  },
+  {
+    name: 'sn_get_action_type_schema',
+    description: 'Get the input/output schema for a specific action type. Shows what parameters the action expects and what outputs it produces. Useful for understanding how to configure action inputs.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sys_id: { type: 'string', description: 'The sys_id of the action type definition or snapshot' }
+      },
+      required: ['sys_id']
+    }
+  },
+  {
+    name: 'sn_analyze_flow',
+    description: 'Analyze a flow\'s complete structure including triggers, actions, stages, and variables. Returns detailed breakdown of all components. Useful for understanding existing flows, debugging, or creating similar flows.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sys_id: { type: 'string', description: 'The sys_id of the flow to analyze' },
+        include_action_inputs: { type: 'boolean', description: 'Include action input configurations (default false)' },
+        include_conditions: { type: 'boolean', description: 'Include trigger and flow logic conditions (default false)' }
+      },
+      required: ['sys_id']
+    }
+  },
+  // ============ PHASE 2: SUBFLOW & CUSTOM ACTION TOOLS ============
+  {
+    name: 'sn_list_subflows',
+    description: 'List available subflows on the instance. Subflows are reusable flows that can be called from other flows.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['draft', 'published', 'all'], description: 'Filter by status (default all)' },
+        search: { type: 'string', description: 'Search by name or internal_name' },
+        limit: { type: 'number', description: 'Maximum results (default 30)' }
+      },
+      required: []
+    }
+  },
+  {
+    name: 'sn_create_subflow',
+    description: 'Create a new subflow (as draft). Subflows are reusable flow components callable from other flows. Must be activated in Flow Designer UI.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Display name of the subflow' },
+        internal_name: { type: 'string', description: 'Internal/programmatic name (auto-generated if omitted)' },
+        description: { type: 'string', description: 'Description of the subflow' },
+        application: { type: 'string', description: 'Scope sys_id. Omit for Global scope.' }
+      },
+      required: ['name']
+    }
+  },
+  {
+    name: 'sn_list_custom_actions',
+    description: 'List custom (user-created) action type definitions. These are reusable actions that can be used in flows.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        scope: { type: 'string', description: 'Filter by scope (e.g., "global")' },
+        search: { type: 'string', description: 'Search by name or label' },
+        limit: { type: 'number', description: 'Maximum results (default 30)' }
+      },
+      required: []
+    }
+  },
+  {
+    name: 'sn_create_custom_action',
+    description: 'Create a custom action type definition. Custom actions encapsulate reusable server-side logic that can be called from flows.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name of the custom action' },
+        label: { type: 'string', description: 'Label shown in Flow Designer' },
+        internal_name: { type: 'string', description: 'Internal/programmatic name' },
+        description: { type: 'string', description: 'Description of what the action does' },
+        script: { type: 'string', description: 'Server-side script that executes when the action runs' },
+        application: { type: 'string', description: 'Scope sys_id. Omit for Global scope.' }
+      },
+      required: ['name', 'label', 'script']
+    }
+  },
+  {
+    name: 'sn_call_subflow_in_flow',
+    description: 'Add a subflow call as an action step within a flow. This creates an action instance that invokes a subflow.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        flow: { type: 'string', description: 'sys_id of the parent flow' },
+        subflow: { type: 'string', description: 'sys_id of the subflow to call' },
+        order: { type: 'number', description: 'Position in the flow' },
+        stage: { type: 'string', description: 'sys_id of the stage this call belongs to' },
+        name: { type: 'string', description: 'Display name for this subflow call' }
+      },
+      required: ['flow', 'subflow']
+    }
+  },
+  // ============ PHASE 3: FLOW VARIABLES & ACTION INPUTS TOOLS ============
+  {
+    name: 'sn_list_flow_variables',
+    description: 'List flow input and/or output variables. Flow inputs define parameters the flow accepts; outputs define what it returns.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        flow: { type: 'string', description: 'sys_id of the flow' },
+        type: { type: 'string', enum: ['input', 'output', 'all'], description: 'Filter by variable type (default all)' }
+      },
+      required: ['flow']
+    }
+  },
+  {
+    name: 'sn_create_flow_variable',
+    description: 'Create a flow input or output variable. Inputs define parameters the flow accepts; outputs define what it returns. Access via pill path: {{flow.variable_name}}',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        flow: { type: 'string', description: 'sys_id of the flow' },
+        type: { type: 'string', enum: ['input', 'output'], description: 'Variable type' },
+        element: { type: 'string', description: 'Variable name (internal)' },
+        label: { type: 'string', description: 'Display label' },
+        internal_type: { type: 'string', description: 'Data type: string, boolean, reference, integer, glide_date_time, etc.' },
+        reference: { type: 'string', description: 'Table name for reference types' },
+        mandatory: { type: 'boolean', description: 'Whether the variable is required (inputs only)' },
+        default_value: { type: 'string', description: 'Default value (inputs only)' }
+      },
+      required: ['flow', 'type', 'element', 'label', 'internal_type']
+    }
+  },
+  {
+    name: 'sn_list_action_inputs',
+    description: 'List input mappings for an action instance. Shows how data is passed to an action\'s input parameters.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action_instance: { type: 'string', description: 'sys_id of the action instance' }
+      },
+      required: ['action_instance']
+    }
+  },
+  {
+    name: 'sn_create_action_input',
+    description: 'Create or update an action instance input mapping. Maps a value to an action\'s input parameter. Value can be static text, a pill reference like "{{trigger.record.field}}", or a script.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action_instance: { type: 'string', description: 'sys_id of the action instance' },
+        name: { type: 'string', description: 'Name of the input parameter' },
+        value: { type: 'string', description: 'Value to map (static, pill reference, or script)' }
+      },
+      required: ['action_instance', 'name', 'value']
+    }
+  },
+  // ============ PHASE 4: UPDATE SET TEMPLATE TOOLS ============
+  {
+    name: 'sn_export_flow_as_template',
+    description: 'Export a flow\'s complete structure as a template. Returns all related records (triggers, actions, stages, variables) that can be used to recreate or clone the flow.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        flow: { type: 'string', description: 'sys_id of the flow to export' },
+        include_subflows: { type: 'boolean', description: 'Include referenced subflows (default false)' }
+      },
+      required: ['flow']
+    }
+  },
+  {
+    name: 'sn_list_flow_templates',
+    description: 'List flows that can be used as templates. Published flows with snapshots can be cloned via update set to preserve their executable state.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        search: { type: 'string', description: 'Search by name' },
+        status: { type: 'string', enum: ['draft', 'published', 'all'], description: 'Filter by status (default published)' }
+      },
+      required: []
+    }
+  },
+  {
+    name: 'sn_create_flow_from_template',
+    description: 'Create a new flow by cloning an existing flow\'s structure. Copies triggers, actions, stages, and variables. NOTE: Creates a draft flow - for published clones with snapshots, use update set export/import.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        template_flow: { type: 'string', description: 'sys_id of the source flow to clone' },
+        new_name: { type: 'string', description: 'Name for the new flow' },
+        new_internal_name: { type: 'string', description: 'Internal name (auto-generated if omitted)' },
+        description: { type: 'string', description: 'Description for the new flow' }
+      },
+      required: ['template_flow', 'new_name']
+    }
+  },
+  // ============ PHASE 5: FLOW EXECUTION TOOLS ============
+  {
+    name: 'sn_execute_flow',
+    description: 'Check if a flow is ready for execution and get execution guidance. Direct REST API execution is not supported by ServiceNow - use Background Script or Scripted REST API.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        flow_internal_name: { type: 'string', description: 'Internal name of the flow (e.g., "global.my_flow")' },
+        inputs: { type: 'object', description: 'Input values as key-value pairs' },
+        wait: { type: 'boolean', description: 'Wait for completion (default false)' }
+      },
+      required: ['flow_internal_name']
+    }
+  },
+  {
+    name: 'sn_get_flow_execution_status',
+    description: 'Get the execution status of a flow context. Use the context_id from flow execution results.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        context_id: { type: 'string', description: 'Flow execution context sys_id' }
+      },
+      required: ['context_id']
+    }
+  },
+  {
+    name: 'sn_list_flow_executions',
+    description: 'List recent flow executions from sys_hub_flow_context. Shows execution history, status, and any errors.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        flow: { type: 'string', description: 'Filter by flow sys_id' },
+        status: { type: 'string', description: 'Filter by status: running, completed, error' },
+        limit: { type: 'number', description: 'Maximum results (default 20)' }
+      },
+      required: []
+    }
   }
 ];
 
-export const ALL_TOOLS = [...TOOLS, ...MORE_TOOLS, ...ADDITIONAL_TOOLS, ...BROWNFIELD_TOOLS, ...FLOW_DESIGNER_TOOLS];
+// Scoped Application Tools - CRITICAL for Flow Designer deployment
+export const SCOPED_APP_TOOLS: ToolDefinition[] = [
+  {
+    name: 'sn_get_custom_apps',
+    description: 'Get all custom scoped applications from the instance. IMPORTANT: Must be called before implementation phase to determine deployment scope. Flow Designer artifacts (flows, subflows, flow actions) REQUIRE a custom scoped application.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        activeOnly: { type: 'boolean', description: 'Only return active applications (default: true)' },
+        includeGlobal: { type: 'boolean', description: 'Include Global scope as an option (default: true)' },
+        limit: { type: 'number', description: 'Max applications to return (default: 50)' }
+      },
+      required: []
+    }
+  },
+  {
+    name: 'sn_get_scope_selection_options',
+    description: 'Get scope selection options with deployment method recommendations. Analyzes artifact types and suggests appropriate scopes. Call this BEFORE starting implementation to determine which scope to use.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        artifactTypes: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Types of artifacts being deployed (e.g., ["flow", "business_rule", "script_include"])'
+        }
+      },
+      required: []
+    }
+  },
+  {
+    name: 'sn_create_custom_app',
+    description: 'Create a new custom scoped application. Use this when user wants to deploy Flow Designer artifacts but no suitable custom app exists.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Application name (e.g., "My Custom App")' },
+        scope: { type: 'string', description: 'Application scope (auto-generated if not provided)' },
+        shortDescription: { type: 'string', description: 'Short description of the application' },
+        version: { type: 'string', description: 'Application version (default: 1.0.0)' }
+      },
+      required: ['name']
+    }
+  }
+];
+
+export const ALL_TOOLS = [...TOOLS, ...MORE_TOOLS, ...ADDITIONAL_TOOLS, ...BROWNFIELD_TOOLS, ...FLOW_DESIGNER_TOOLS, ...SCOPED_APP_TOOLS];
 
 /**
  * Convert tool definitions to Anthropic Messages API format.

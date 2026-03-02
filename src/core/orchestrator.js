@@ -15,6 +15,7 @@ import { TaskPlanner } from './task-planner.js';
 import { CodeGenerator } from './code-generator.js';
 import { UpdateSetManager } from './update-set-manager.js';
 import { Deployer } from './deployer.js';
+import { ScopeSelector } from './scope-selector.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -29,6 +30,7 @@ export class Orchestrator {
     this.tasks = null;
     this.artifacts = null;
     this.updateSet = null;
+    this.selectedScope = null;
     this.outputDir = options.outputDir || './output';
   }
 
@@ -36,8 +38,8 @@ export class Orchestrator {
    * Execute the full development pipeline
    */
   async execute(requirement) {
-    const totalSteps = 9;
-    
+    const totalSteps = 10;
+
     try {
       logger.box('SN AI Dev Pipeline', `Processing requirement:\n${requirement.substring(0, 100)}...`);
 
@@ -61,24 +63,28 @@ export class Orchestrator {
       logger.step(5, totalSteps, 'Designing technical solution...');
       await this.designSolution();
 
-      // Step 6: Plan tasks
-      logger.step(6, totalSteps, 'Planning development tasks...');
+      // Step 6: Select application scope (MANDATORY before implementation)
+      logger.step(6, totalSteps, 'Selecting application scope...');
+      await this.selectScope();
+
+      // Step 7: Plan tasks
+      logger.step(7, totalSteps, 'Planning development tasks...');
       await this.planTasks();
 
-      // Step 7: Generate code
-      logger.step(7, totalSteps, 'Generating ServiceNow artifacts...');
+      // Step 8: Generate code
+      logger.step(8, totalSteps, 'Generating ServiceNow artifacts...');
       await this.generateCode();
 
-      // Step 8: Create update set and deploy
-      logger.step(8, totalSteps, 'Creating and deploying update set...');
+      // Step 9: Create update set and deploy
+      logger.step(9, totalSteps, 'Creating and deploying update set...');
       await this.createAndDeploy();
 
-      // Step 9: Generate summary
-      logger.step(9, totalSteps, 'Generating summary...');
+      // Step 10: Generate summary
+      logger.step(10, totalSteps, 'Generating summary...');
       const summary = await this.generateSummary();
 
-      logger.box('Pipeline Complete', `Artifacts: ${this.artifacts.length}\nUpdate Set: ${this.updateSet?.name || 'N/A'}`);
-      
+      logger.box('Pipeline Complete', `Artifacts: ${this.artifacts.length}\nUpdate Set: ${this.updateSet?.name || 'N/A'}\nScope: ${this.selectedScope?.name || 'Global'}`);
+
       return summary;
     } catch (error) {
       logger.error('Pipeline failed', { error: error.message, stack: error.stack });
@@ -135,12 +141,37 @@ export class Orchestrator {
   async designSolution() {
     const designer = new SolutionDesigner(this.analysis, this.context);
     this.solution = designer.design();
-    
+
     // Export solution design
     const solutionPath = path.join(this.outputDir, 'docs', `solution-${this.solution.id}.md`);
     designer.exportToMarkdown(solutionPath);
-    
+
     logger.info(`Solution artifacts: ${this.solution.artifacts.length}`);
+  }
+
+  /**
+   * Select application scope for deployment
+   * CRITICAL: Must be called before implementation
+   * Flow Designer artifacts require a custom scoped application
+   */
+  async selectScope() {
+    const scopeSelector = new ScopeSelector(this.client);
+
+    // Prompt user to select scope based on solution artifacts
+    this.selectedScope = await scopeSelector.promptForScope(this.solution);
+
+    // Get deployment recommendations
+    const recommendations = scopeSelector.getDeploymentRecommendations(this.solution);
+
+    logger.info(`Selected scope: ${this.selectedScope.name} (${this.selectedScope.scope})`);
+
+    if (recommendations.hasFlowArtifacts) {
+      logger.warn('Flow Designer artifacts detected - will use SDK for deployment');
+      recommendations.notes.forEach(note => logger.info(note));
+    }
+
+    // Store recommendations for later use in deployment
+    this.deploymentRecommendations = recommendations;
   }
 
   async planTasks() {
@@ -168,35 +199,66 @@ export class Orchestrator {
 
   async createAndDeploy() {
     const usManager = new UpdateSetManager(this.client);
-    
-    // Create update set
+
+    // Create update set with selected scope
+    const scopeId = this.selectedScope?.type === 'custom' ? this.selectedScope.sys_id : null;
     this.updateSet = await usManager.createUpdateSet(
       null, // Auto-generate name
-      `AI-generated for: ${this.analysis.title}`
+      `AI-generated for: ${this.analysis.title}`,
+      scopeId // Pass scope for scoped update set
     );
-    
-    // Deploy artifacts
-    const deployResults = await usManager.deployArtifacts(this.artifacts);
-    
+
+    logger.info(`Update set created in scope: ${this.selectedScope?.name || 'Global'}`);
+
+    // Separate REST API vs SDK artifacts
+    const restArtifacts = this.artifacts.filter(a =>
+      !this.deploymentRecommendations?.deploymentMethods?.sdk?.some(s => s.name === a.name)
+    );
+    const sdkArtifacts = this.deploymentRecommendations?.deploymentMethods?.sdk || [];
+
+    // Deploy REST API artifacts
+    if (restArtifacts.length > 0) {
+      const deployResults = await usManager.deployArtifacts(restArtifacts);
+      logger.info(`Deployed ${deployResults.filter(r => r.success).length}/${restArtifacts.length} REST API artifacts`);
+    }
+
+    // Log SDK artifacts for manual deployment
+    if (sdkArtifacts.length > 0) {
+      logger.warn(`${sdkArtifacts.length} Flow Designer artifacts require SDK deployment:`);
+      sdkArtifacts.forEach(a => logger.info(`  - ${a.name} (${a.type})`));
+      logger.info('Run: cd sdk-flows && npx now-sdk install --auth <profile> --reinstall');
+    }
+
     // Complete update set
     if (this.options.autoComplete !== false) {
       await usManager.complete();
     }
-    
+
     // Export update set XML
     const xmlPath = path.join(this.outputDir, 'update_sets', `${this.updateSet.name}.xml`);
     await usManager.exportToXML(xmlPath);
-    
-    logger.info(`Deployed ${deployResults.filter(r => r.success).length}/${deployResults.length} artifacts`);
   }
 
   async generateSummary() {
+    const sdkArtifacts = this.deploymentRecommendations?.deploymentMethods?.sdk || [];
+
     const summary = {
       timestamp: new Date().toISOString(),
       requirement: { id: this.analysis.id, title: this.analysis.title, type: this.analysis.type },
       solution: { id: this.solution.id, artifactCount: this.solution.artifacts.length },
       tasks: { total: this.tasks.length, estimatedHours: Math.round(new TaskPlanner(this.solution, this.analysis).getTotalEstimate() / 60) },
-      deployment: { updateSet: this.updateSet?.name, artifactsDeployed: this.artifacts.length },
+      scope: {
+        name: this.selectedScope?.name || 'Global',
+        scope: this.selectedScope?.scope || 'global',
+        type: this.selectedScope?.type || 'global'
+      },
+      deployment: {
+        updateSet: this.updateSet?.name,
+        artifactsDeployed: this.artifacts.length,
+        restApiArtifacts: this.artifacts.length - sdkArtifacts.length,
+        sdkArtifacts: sdkArtifacts.length,
+        requiresSDK: sdkArtifacts.length > 0
+      },
       outputs: {
         spec: path.join(this.outputDir, 'docs', `spec-${this.analysis.id}.md`),
         solution: path.join(this.outputDir, 'docs', `solution-${this.solution.id}.md`),

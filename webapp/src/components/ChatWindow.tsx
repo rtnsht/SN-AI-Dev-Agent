@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, type RefObject } from "react";
 import Image from "next/image";
-import type { ChatMessage, SDLCPhase } from "@/lib/types";
+import type { ChatMessage, SDLCPhase, LiveStatus } from "@/lib/types";
 import MessageBubble from "./MessageBubble";
 
 const EXAMPLE_PROMPTS = [
@@ -35,9 +35,11 @@ interface Props {
   inputRef: RefObject<HTMLTextAreaElement | null>;
   /** When false, tool executions show only a compact summary (controlled by env) */
   showToolDetails?: boolean;
+  /** Live status during streaming (tool execution updates) */
+  liveStatus?: LiveStatus | null;
 }
 
-export default function ChatWindow({ messages, isLoading, onSend, onCancel, onApprove, connected, inputRef, showToolDetails = true }: Props) {
+export default function ChatWindow({ messages, isLoading, onSend, onCancel, onApprove, connected, inputRef, showToolDetails = true, liveStatus }: Props) {
   const [input, setInput] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState(false);
@@ -68,11 +70,12 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
   }, [input, images, isLoading, onSend, inputRef]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Shift+Enter = send, plain Enter = new line
-    if (e.key === "Enter" && e.shiftKey) {
+    // Enter = send, Shift+Enter = new line
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
     }
+    // Shift+Enter allows default behavior (new line in textarea)
   };
 
   /** Process image files and add as base64 data URIs */
@@ -179,11 +182,22 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
               <div className="bg-gray-800/80 rounded-2xl rounded-tl-sm px-4 py-3 border border-gray-700/50">
                 <div className="flex items-center gap-2 text-sm text-gray-400">
                   <div className="flex gap-1">
-                    <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                    <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                    <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                    <span className={`w-2 h-2 rounded-full animate-bounce ${liveStatus?.phase === "tool" ? "bg-amber-400" : liveStatus?.phase === "responding" ? "bg-green-400" : "bg-blue-400"}`} style={{ animationDelay: "0ms" }} />
+                    <span className={`w-2 h-2 rounded-full animate-bounce ${liveStatus?.phase === "tool" ? "bg-amber-400" : liveStatus?.phase === "responding" ? "bg-green-400" : "bg-blue-400"}`} style={{ animationDelay: "150ms" }} />
+                    <span className={`w-2 h-2 rounded-full animate-bounce ${liveStatus?.phase === "tool" ? "bg-amber-400" : liveStatus?.phase === "responding" ? "bg-green-400" : "bg-blue-400"}`} style={{ animationDelay: "300ms" }} />
                   </div>
-                  <span className="text-xs text-gray-500">Thinking & executing tools...</span>
+                  <span className="text-xs text-gray-500">
+                    {liveStatus ? (
+                      <span className="flex items-center gap-1.5">
+                        {liveStatus.phase === "tool" && <span className="text-amber-400">🔧</span>}
+                        {liveStatus.phase === "thinking" && <span className="text-blue-400">💭</span>}
+                        {liveStatus.phase === "responding" && <span className="text-green-400">✍️</span>}
+                        {liveStatus.message}
+                      </span>
+                    ) : (
+                      "Thinking & executing tools..."
+                    )}
+                  </span>
                   <button
                     onClick={onCancel}
                     className="ml-2 flex items-center gap-1 px-2 py-0.5 text-xs text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40 rounded-md transition-colors"
@@ -296,7 +310,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
                 onClick={handleSubmit}
                 disabled={!connected || (!input.trim() && images.length === 0)}
                 className="p-3 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-xl transition-colors flex-shrink-0"
-                title="Send (Shift+Enter)"
+                title="Send (Enter)"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -310,18 +324,18 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
             <div className="w-[44px] flex-shrink-0" />
             <div className="flex-1 flex items-center justify-center gap-5 px-4 py-1.5 rounded-lg bg-indigo-950/50 border border-indigo-500/25 text-xs">
               <span className="flex items-center gap-1.5 font-bold text-blue-300">
-                <kbd className="px-1.5 py-0.5 bg-blue-500/20 border border-blue-400/40 rounded text-[11px] text-blue-200 font-mono font-bold shadow-sm shadow-blue-500/10">⇧ Shift</kbd>
-                <span className="text-blue-400/80">+</span>
                 <kbd className="px-1.5 py-0.5 bg-blue-500/20 border border-blue-400/40 rounded text-[11px] text-blue-200 font-mono font-bold shadow-sm shadow-blue-500/10">Enter</kbd>
                 <span className="ml-0.5 text-blue-200">to Send</span>
               </span>
               <span className="text-indigo-500/60">│</span>
               <span className="flex items-center gap-1.5 font-bold text-gray-200">
+                <kbd className="px-1.5 py-0.5 bg-gray-600/40 border border-gray-500/50 rounded text-[11px] text-gray-200 font-mono font-bold shadow-sm shadow-gray-700/20">⇧ Shift</kbd>
+                <span className="text-gray-400/80">+</span>
                 <kbd className="px-1.5 py-0.5 bg-gray-600/40 border border-gray-500/50 rounded text-[11px] text-gray-200 font-mono font-bold shadow-sm shadow-gray-700/20">Enter</kbd>
                 <span className="ml-0.5 text-gray-300">for New Line</span>
               </span>
               <span className="text-indigo-500/60">│</span>
-              <span className="font-bold text-gray-300">📎 Paste or drag images</span>
+              <span className="font-bold text-gray-300">Paste or drag images</span>
             </div>
             {/* Spacer matching send button width */}
             <div className="w-[44px] flex-shrink-0" />

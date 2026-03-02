@@ -1,0 +1,120 @@
+{
+  "name": "Record-Based Trigger Template",
+  "description": "Flow triggered by record changes (insert/update/delete) - common automation pattern",
+  "version": "1.0.0",
+  "template_type": "record",
+  "variables": {
+    "FLOW_NAME": "My Record Flow",
+    "FLOW_INTERNAL_NAME": "x_my_record_flow",
+    "TABLE_NAME": "incident",
+    "TRIGGER_CONDITION": "priority=1",
+    "TRIGGER_OPERATION": "insert_or_update",
+    "NOTIFICATION_USER_FIELD": "assigned_to"
+  },
+  "flow": {
+    "table": "sys_hub_flow",
+    "fields": {
+      "name": "{{FLOW_NAME}}",
+      "internal_name": "{{FLOW_INTERNAL_NAME}}",
+      "type": "flow",
+      "status": "draft",
+      "active": "false",
+      "access": "public",
+      "run_as": "system",
+      "sys_scope": "global",
+      "sys_domain": "global"
+    }
+  },
+  "trigger": {
+    "table": "sys_hub_trigger_instance",
+    "fields": {
+      "name": "Record Updated",
+      "trigger_type": "record",
+      "trigger_definition": "a45d9180c32222002841b63b12d3aea7"
+    },
+    "config": {
+      "table": "{{TABLE_NAME}}",
+      "condition": "{{TRIGGER_CONDITION}}",
+      "operation": "{{TRIGGER_OPERATION}}"
+    },
+    "description": "Triggers when a record matching the condition is created or updated"
+  },
+  "actions": [
+    {
+      "name": "Log Trigger",
+      "order": 1,
+      "action_type": "0e0ae8c2531003003bf1d9109ec587c8",
+      "description": "Log action - records trigger activation",
+      "inputs": {
+        "message": "Flow triggered for record: {{trigger.current.number}}"
+      }
+    },
+    {
+      "name": "Look Up User",
+      "order": 2,
+      "action_type": "b93f42810b30030085c083eb37673a63",
+      "description": "Lookup user details for notification",
+      "inputs": {
+        "table": "sys_user",
+        "sys_id": "{{trigger.current.{{NOTIFICATION_USER_FIELD}}}}"
+      }
+    },
+    {
+      "name": "Send Notification",
+      "order": 3,
+      "action_type": "7eda5d710f11101051218e8ebc767ec1",
+      "description": "Send email notification",
+      "inputs": {
+        "recipient": "{{lookup.email}}",
+        "subject": "Record Updated: {{trigger.current.number}}",
+        "body": "A record you are assigned to has been updated."
+      }
+    },
+    {
+      "name": "Log Completion",
+      "order": 4,
+      "action_type": "0e0ae8c2531003003bf1d9109ec587c8",
+      "description": "Log action - records completion",
+      "inputs": {
+        "message": "Notification sent for: {{trigger.current.number}}"
+      }
+    }
+  ],
+  "stages": [
+    {
+      "label": "Trigger",
+      "order": 1
+    },
+    {
+      "label": "Process",
+      "order": 2
+    },
+    {
+      "label": "Notify",
+      "order": 3
+    },
+    {
+      "label": "Complete",
+      "order": 4
+    }
+  ],
+  "usage": {
+    "description": "Use this template for flows triggered by record changes",
+    "steps": [
+      "1. Set FLOW_NAME and FLOW_INTERNAL_NAME",
+      "2. Configure TABLE_NAME (e.g., incident, change_request)",
+      "3. Set TRIGGER_CONDITION (e.g., priority=1^state=1)",
+      "4. Choose TRIGGER_OPERATION: insert, update, delete, or insert_or_update",
+      "5. Run: node lib/create-flow-from-template.js record-trigger",
+      "6. Activate flow in Flow Designer UI"
+    ],
+    "common_tables": [
+      "incident - IT incidents",
+      "change_request - Change management",
+      "problem - Problem records",
+      "sc_req_item - Requested items",
+      "kb_knowledge - Knowledge articles"
+    ]
+  }
+}
+
