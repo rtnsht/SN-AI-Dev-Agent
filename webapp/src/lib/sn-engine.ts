@@ -42,23 +42,59 @@ function sleep(ms: number) {
 }
 
 /**
+ * ServiceNow metadata fields that waste tokens but carry no decision value.
+ * Stripped from records before truncation to maximise information density.
+ */
+const SN_NOISE_FIELDS = new Set([
+  "sys_mod_count", "sys_created_on", "sys_created_by", "sys_updated_on",
+  "sys_updated_by", "sys_tags", "sys_domain", "sys_domain_path",
+  "sys_policy", "sys_replace_on_upgrade", "sys_customer_update",
+  "sys_update_name", "sys_package", "sys_scope", "sys_class_name",
+  "sys_overrides",
+]);
+
+/**
+ * Recursively strip noisy ServiceNow metadata from a value.
+ * Handles single records, arrays of records, and nested result wrappers.
+ */
+function stripSnMetadata(val: unknown): unknown {
+  if (val === null || val === undefined || typeof val !== "object") return val;
+
+  if (Array.isArray(val)) {
+    return val.map(stripSnMetadata);
+  }
+
+  const obj = val as Record<string, unknown>;
+  const cleaned: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (SN_NOISE_FIELDS.has(k)) continue;
+    // Recurse into nested objects/arrays (e.g. result wrappers)
+    cleaned[k] = (typeof v === "object" && v !== null) ? stripSnMetadata(v) : v;
+  }
+  return cleaned;
+}
+
+/**
  * Truncate a tool result if it exceeds the max character limit.
- * Preserves structure for objects/arrays by keeping first/last items.
+ * First strips noisy SN metadata, then preserves structure for
+ * objects/arrays by keeping first/last items.
  */
 function truncateToolResult(result: unknown): string {
-  const jsonStr = JSON.stringify(result);
+  // Phase 4a: strip ServiceNow noise fields before serialising
+  const cleaned = stripSnMetadata(result);
+  const jsonStr = JSON.stringify(cleaned);
 
   if (jsonStr.length <= MAX_TOOL_RESULT_CHARS) {
     return jsonStr;
   }
 
   // For arrays, keep first and last few items
-  if (Array.isArray(result) && result.length > 5) {
+  if (Array.isArray(cleaned) && cleaned.length > 5) {
     const truncated = {
       _truncated: true,
-      _originalCount: result.length,
+      _originalCount: cleaned.length,
       _showing: "first 3 and last 2 items",
-      items: [...result.slice(0, 3), { _more: `... ${result.length - 5} more items ...` }, ...result.slice(-2)]
+      items: [...cleaned.slice(0, 3), { _more: `... ${cleaned.length - 5} more items ...` }, ...cleaned.slice(-2)]
     };
     return JSON.stringify(truncated);
   }
@@ -98,9 +134,86 @@ function estimateConversationTokens(messages: Anthropic.MessageParam[]): number 
   return total;
 }
 
+/* ── Phase 4c: Progressive tool-result compression ────────────── */
+
 /**
- * Trim older messages to stay within token limits.
- * Keeps the first user message and recent conversation turns.
+ * Compress tool_result blocks in older messages.
+ * Keeps tool name + success/error + first 200 chars of output.
+ * Only compresses messages older than `preserveRecent`.
+ */
+function compressOldToolResults(
+  messages: Anthropic.MessageParam[],
+  preserveRecent: number = 12
+): Anthropic.MessageParam[] {
+  const cutoff = Math.max(0, messages.length - preserveRecent);
+  return messages.map((msg, idx) => {
+    if (idx >= cutoff) return msg; // keep recent messages intact
+    if (msg.role !== "user" || !Array.isArray(msg.content)) return msg;
+
+    const compressed = (msg.content as Anthropic.ContentBlockParam[]).map((block) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const b = block as any;
+      if (b.type !== "tool_result") return block;
+      const text = typeof b.content === "string" ? b.content
+        : Array.isArray(b.content)
+          ? b.content.map((c: { text?: string }) => c.text ?? "").join("")
+          : "";
+      const preview = text.length > 200 ? text.slice(0, 200) + "..." : text;
+      const status = b.is_error ? "[ERROR]" : "[OK]";
+      return {
+        type: "tool_result" as const,
+        tool_use_id: b.tool_use_id,
+        content: `${status} ${preview}`,
+      };
+    });
+    return { role: msg.role, content: compressed } as Anthropic.MessageParam;
+  });
+}
+
+/* ── Phase 4b: Extractive summary of dropped messages ────────── */
+
+/**
+ * Build a concise extractive summary from a slice of messages
+ * that are about to be dropped. Captures:
+ *   - User intents (first 120 chars of each user text)
+ *   - Key assistant decisions (first 120 chars of each assistant text)
+ *   - Tool calls made (tool name only)
+ *   - Errors encountered
+ */
+function summarizeDroppedMessages(dropped: Anthropic.MessageParam[]): string {
+  const bullets: string[] = [];
+  for (const msg of dropped) {
+    const blocks = typeof msg.content === "string"
+      ? [{ type: "text" as const, text: msg.content }]
+      : (msg.content as { type: string; text?: string; name?: string; content?: string; is_error?: boolean }[]);
+
+    for (const b of blocks) {
+      if (b.type === "text" && b.text) {
+        const prefix = msg.role === "user" ? "User" : "Assistant";
+        const snippet = b.text.length > 120 ? b.text.slice(0, 120) + "..." : b.text;
+        bullets.push(`- ${prefix}: ${snippet}`);
+      } else if (b.type === "tool_use" && b.name) {
+        bullets.push(`- Called tool: ${b.name}`);
+      } else if (b.type === "tool_result" && b.is_error) {
+        const errSnippet = (b.content ?? "").toString().slice(0, 80);
+        bullets.push(`- Tool error: ${errSnippet}`);
+      }
+    }
+  }
+  // Cap at ~30 bullets to keep summary tight
+  const capped = bullets.length > 30
+    ? [...bullets.slice(0, 15), `  ... ${bullets.length - 30} more actions ...`, ...bullets.slice(-15)]
+    : bullets;
+  return capped.join("\n");
+}
+
+/**
+ * Smart conversation trimming with progressive compression and extractive summary.
+ *
+ * Strategy (applied in order until under budget):
+ *   1. Compress old tool_result blocks (Phase 4c)
+ *   2. Drop middle messages, replace with extractive summary (Phase 4b)
+ *   3. Keep first 2 + summary + last N recent messages
  */
 function trimConversationHistory(messages: Anthropic.MessageParam[]): Anthropic.MessageParam[] {
   const estimatedTokens = estimateConversationTokens(messages);
@@ -109,28 +222,41 @@ function trimConversationHistory(messages: Anthropic.MessageParam[]): Anthropic.
     return messages;
   }
 
-  console.log(`  [context] Estimated ${estimatedTokens} tokens, trimming older messages...`);
+  console.log(`  [context] Estimated ${estimatedTokens} tokens, applying progressive compression...`);
 
-  // Keep first 2 messages (usually initial user request + first response)
-  // and recent messages (last 10-20 depending on size)
-  const keepStart = Math.min(2, messages.length);
-  const result: Anthropic.MessageParam[] = messages.slice(0, keepStart);
+  // Step 1: Compress old tool results (keeps all messages, just shrinks content)
+  let compressed = compressOldToolResults(messages);
+  let compressedTokens = estimateConversationTokens(compressed);
+  console.log(`  [context] After tool-result compression: ~${compressedTokens} tokens`);
 
-  // Add a summary marker
-  if (messages.length > keepStart + 10) {
-    result.push({
-      role: "user",
-      content: "[Earlier conversation history trimmed to manage context size. Recent messages follow.]"
-    });
-    result.push({
-      role: "assistant",
-      content: "Understood. I'll continue based on the recent context."
-    });
+  if (compressedTokens < CONTEXT_WARNING_TOKENS) {
+    return compressed;
   }
 
-  // Keep the most recent messages
-  const recentCount = Math.min(10, messages.length - keepStart);
-  result.push(...messages.slice(-recentCount));
+  // Step 2: Still over budget — drop middle section with extractive summary
+  const keepStart = Math.min(2, compressed.length);
+  const recentCount = Math.min(14, compressed.length - keepStart);
+  const dropStart = keepStart;
+  const dropEnd = compressed.length - recentCount;
+
+  if (dropEnd <= dropStart) {
+    // Not enough messages to drop; return compressed as-is
+    return compressed;
+  }
+
+  const droppedSlice = compressed.slice(dropStart, dropEnd);
+  const summary = summarizeDroppedMessages(droppedSlice);
+
+  const result: Anthropic.MessageParam[] = compressed.slice(0, keepStart);
+  result.push({
+    role: "user",
+    content: `[Context summary of ${droppedSlice.length} earlier messages]\n${summary}\n[End summary — recent messages follow]`
+  });
+  result.push({
+    role: "assistant",
+    content: "Understood. I have the summary context above and will continue with the recent messages."
+  });
+  result.push(...compressed.slice(-recentCount));
 
   const newTokens = estimateConversationTokens(result);
   console.log(`  [context] Trimmed from ${estimatedTokens} to ~${newTokens} tokens (${messages.length} → ${result.length} messages)`);

@@ -7,6 +7,7 @@ export const maxDuration = 120; // Allow up to 2 minutes for tool-use loops
 
 export async function POST(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  let sessionId = "unknown";
 
   try {
     const body = await request.json();
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
     };
 
     // Use client-provided session ID to maintain same log file throughout chat session
-    const sessionId = clientSessionId || generateSessionId();
+    sessionId = clientSessionId || generateSessionId();
 
     // Fall back to server-side env vars for ServiceNow credentials
     if (!credentials.instanceUrl) credentials.instanceUrl = process.env.SN_INSTANCE_URL || "";
@@ -144,10 +145,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ...result, usage: usageInfo });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Internal server error";
-    // Note: sessionId may not be defined if error occurred before body parsing
-    const logSessionId = typeof sessionId !== 'undefined' ? sessionId : 'unknown';
-
-    logger.error(logSessionId, "chat", "Chat API error", {
+    logger.error(sessionId, "chat", "Chat API error", {
       error: message,
       stack: error instanceof Error ? error.stack : undefined,
     });
@@ -155,7 +153,7 @@ export async function POST(request: NextRequest) {
     // Detect Anthropic rate limit (after retries exhausted in sn-engine)
     if (message === "anthropic_rate_limit") {
       const allowUserKeys = process.env.ALLOW_USER_API_KEYS !== "false";
-      logger.error(logSessionId, "claude_api", "Anthropic rate limit exceeded after retries");
+      logger.error(sessionId, "claude_api", "Anthropic rate limit exceeded after retries");
       return NextResponse.json(
         {
           error: "anthropic_rate_limit",
@@ -172,7 +170,7 @@ export async function POST(request: NextRequest) {
 
     // Detect specific error types
     if (message.includes("authentication") || message.includes("401") || message.includes("invalid x-api-key")) {
-      logger.error(logSessionId, "auth", "Authentication failed", { error: message });
+      logger.error(sessionId, "auth", "Authentication failed", { error: message });
       return NextResponse.json({ error: `Authentication failed: ${message}` }, { status: 401 });
     }
 
