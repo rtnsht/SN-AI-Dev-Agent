@@ -231,11 +231,12 @@ export async function chat(
   credentials: UserCredentials,
   messages: ChatMessage[],
   model: string = "claude-sonnet-4-6",
-  sessionId: string = "unknown"
+  sessionId: string = "unknown",
+  phase?: string | null
 ): Promise<ChatResponse> {
   // Route to OpenRouter if selected
   if (credentials.aiProvider === "openrouter" && credentials.openRouterApiKey) {
-    return chatOpenRouter(credentials, messages, model, sessionId);
+    return chatOpenRouter(credentials, messages, model, sessionId, phase);
   }
 
   const maxToolRounds = 30; // Handle complex requirements (e.g., catalog items with flows)
@@ -250,8 +251,10 @@ export async function chat(
     defaultScope: 'global',
   });
 
-  // Build Anthropic tool definitions
-  const tools = defs.getAnthropicToolDefinitions() as Anthropic.Tool[];
+  // Build Anthropic tool definitions (filtered by SDLC phase when available)
+  const tools = (phase
+    ? defs.getAnthropicToolDefinitionsForPhase(phase)
+    : defs.getAnthropicToolDefinitions()) as Anthropic.Tool[];
 
   // Build Anthropic client with user's API key
   const anthropic = new Anthropic({ apiKey: credentials.claudeApiKey });
@@ -461,7 +464,8 @@ async function chatOpenRouter(
   credentials: UserCredentials,
   messages: ChatMessage[],
   model: string,
-  sessionId: string
+  sessionId: string,
+  phase?: string | null
 ): Promise<ChatResponse> {
   const maxToolRounds = 30;
   const registry = getToolRegistry();
@@ -475,8 +479,10 @@ async function chatOpenRouter(
     defaultScope: 'global',
   });
 
-  // Convert Anthropic tool definitions to OpenRouter format
-  const anthropicTools = defs.getAnthropicToolDefinitions() as Anthropic.Tool[];
+  // Convert Anthropic tool definitions to OpenRouter format (filtered by phase)
+  const anthropicTools = (phase
+    ? defs.getAnthropicToolDefinitionsForPhase(phase)
+    : defs.getAnthropicToolDefinitions()) as Anthropic.Tool[];
   const tools: OpenRouterTool[] = anthropicTools.map((t) => ({
     type: "function" as const,
     function: {
@@ -680,11 +686,12 @@ export async function* chatStream(
   messages: ChatMessage[],
   model: string = "claude-sonnet-4-6",
   maxToolRounds: number = 30,
-  sessionId: string = "unknown"
+  sessionId: string = "unknown",
+  phase?: string | null
 ): AsyncGenerator<StreamEvent> {
   // Route to OpenRouter if selected
   if (credentials.aiProvider === "openrouter" && credentials.openRouterApiKey) {
-    yield* chatStreamOpenRouter(credentials, messages, model, maxToolRounds, sessionId);
+    yield* chatStreamOpenRouter(credentials, messages, model, maxToolRounds, sessionId, phase);
     return;
   }
 
@@ -699,8 +706,10 @@ export async function* chatStream(
     defaultScope: 'global',
   });
 
-  // Build Anthropic tool definitions
-  const tools = defs.getAnthropicToolDefinitions() as Anthropic.Tool[];
+  // Build Anthropic tool definitions (filtered by SDLC phase)
+  const tools = (phase
+    ? defs.getAnthropicToolDefinitionsForPhase(phase)
+    : defs.getAnthropicToolDefinitions()) as Anthropic.Tool[];
 
   // Build Anthropic client with user's API key
   const anthropic = new Anthropic({ apiKey: credentials.claudeApiKey });
@@ -879,7 +888,8 @@ async function* chatStreamOpenRouter(
   messages: ChatMessage[],
   model: string,
   maxToolRounds: number,
-  sessionId: string
+  sessionId: string,
+  phase?: string | null
 ): AsyncGenerator<StreamEvent> {
   const registry = getToolRegistry();
   const defs = getToolDefs();
@@ -891,7 +901,10 @@ async function* chatStreamOpenRouter(
     defaultScope: 'global',
   });
 
-  const anthropicTools = defs.getAnthropicToolDefinitions() as Anthropic.Tool[];
+  // Filter tools by SDLC phase when available
+  const anthropicTools = (phase
+    ? defs.getAnthropicToolDefinitionsForPhase(phase)
+    : defs.getAnthropicToolDefinitions()) as Anthropic.Tool[];
   const tools: OpenRouterTool[] = anthropicTools.map((t) => ({
     type: "function" as const,
     function: {

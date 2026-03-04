@@ -1925,3 +1925,164 @@ export function getAnthropicToolDefinitions() {
     input_schema: tool.inputSchema,
   }));
 }
+
+// ---------------------------------------------------------------------------
+// Phase-based tool subsetting
+// ---------------------------------------------------------------------------
+// Tools are grouped by SDLC phase. "core" tools are always included.
+// When a phase is active, only core + that phase's tools are sent to the LLM,
+// dramatically reducing the tool-definition token footprint.
+
+export type SDLCToolPhase = 'spec' | 'design' | 'implementation' | 'testing' | 'deployment';
+
+/** Core tools included in every phase */
+const CORE_TOOL_NAMES = new Set([
+  // Connection & instance info
+  'sn_test_connection', 'sn_get_instance_info', 'sn_initialize_instance',
+  // Schema inspection
+  'sn_get_tables', 'sn_get_table_schema',
+  // Generic read/query
+  'sn_query_records', 'sn_get_record',
+  // Update set read (always needed for context)
+  'sn_list_update_sets', 'sn_get_update_set', 'sn_get_update_set_contents',
+]);
+
+/** Phase-specific tool names (in addition to core) */
+const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
+  spec: new Set([
+    // Read existing artifacts
+    'sn_get_business_rules', 'sn_get_script_includes', 'sn_get_client_scripts',
+    'sn_get_ui_policies', 'sn_get_ui_policy_actions', 'sn_get_ui_actions',
+    'sn_get_notifications', 'sn_get_events',
+    'sn_get_acls', 'sn_get_roles',
+    'sn_get_catalog_items', 'sn_get_catalog_item', 'sn_get_catalog_variables', 'sn_get_requests',
+    'sn_get_scheduled_jobs', 'sn_get_fix_scripts',
+    // Instance analysis & brownfield discovery
+    'sn_analyze_instance', 'sn_detect_ootb_overrides', 'sn_get_dependency_graph',
+    'sn_find_anti_patterns', 'sn_code_quality_score', 'sn_find_dead_code',
+    'sn_compare_to_ootb', 'sn_assess_upgrade_readiness',
+    'sn_detect_persona', 'sn_apply_4g_framework',
+    'sn_generate_report', 'sn_get_dashboard_data',
+    // Flow read
+    'sn_list_flows', 'sn_get_flow', 'sn_analyze_flow',
+    'sn_list_subflows', 'sn_list_custom_actions',
+    // Scope read
+    'sn_get_custom_apps', 'sn_get_scope_selection_options',
+  ]),
+
+  design: new Set([
+    // Everything from spec
+    'sn_get_business_rules', 'sn_get_script_includes', 'sn_get_client_scripts',
+    'sn_get_ui_policies', 'sn_get_ui_policy_actions', 'sn_get_ui_actions',
+    'sn_get_notifications', 'sn_get_events',
+    'sn_get_acls', 'sn_get_roles',
+    'sn_get_catalog_items', 'sn_get_catalog_item', 'sn_get_catalog_variables', 'sn_get_requests',
+    'sn_get_scheduled_jobs', 'sn_get_fix_scripts',
+    'sn_analyze_instance', 'sn_detect_ootb_overrides', 'sn_get_dependency_graph',
+    'sn_find_anti_patterns', 'sn_code_quality_score', 'sn_find_dead_code',
+    'sn_compare_to_ootb', 'sn_assess_upgrade_readiness',
+    'sn_detect_persona', 'sn_apply_4g_framework',
+    'sn_generate_report', 'sn_get_dashboard_data',
+    'sn_list_flows', 'sn_get_flow', 'sn_analyze_flow',
+    'sn_list_subflows', 'sn_list_custom_actions',
+    'sn_get_custom_apps', 'sn_get_scope_selection_options',
+    // Design-specific: conflict prediction, best practices, templates
+    'sn_predict_conflicts', 'sn_compare_instances',
+    'sn_preview_change_impact', 'sn_detect_conflicts',
+    'sn_get_best_practices', 'sn_get_code_templates', 'sn_get_fix_recommendations',
+  ]),
+
+  implementation: new Set([
+    // Read tools for verification
+    'sn_get_business_rules', 'sn_get_script_includes', 'sn_get_client_scripts',
+    'sn_get_ui_policies', 'sn_get_ui_policy_actions', 'sn_get_ui_actions',
+    'sn_get_notifications', 'sn_get_events',
+    'sn_get_acls', 'sn_get_roles',
+    'sn_get_catalog_items', 'sn_get_catalog_item', 'sn_get_catalog_variables',
+    'sn_get_scheduled_jobs', 'sn_get_fix_scripts',
+    // Generic create/update
+    'sn_create_record', 'sn_update_record',
+    // Artifact creation
+    'sn_create_business_rule', 'sn_create_script_include', 'sn_create_client_script',
+    'sn_create_ui_policy', 'sn_create_ui_policy_action', 'sn_create_ui_action',
+    'sn_create_notification', 'sn_create_event',
+    'sn_create_acl', 'sn_create_role',
+    'sn_create_scheduled_job',
+    'sn_create_fix_script', 'sn_run_fix_script',
+    // Update set management
+    'sn_create_update_set', 'sn_set_current_update_set', 'sn_move_to_update_set',
+    // Flow Designer creation
+    'sn_list_flows', 'sn_get_flow', 'sn_create_flow',
+    'sn_create_flow_trigger', 'sn_create_flow_action_instance',
+    'sn_create_flow_stage', 'sn_list_flow_stages', 'sn_list_flow_action_instances',
+    'sn_list_action_types', 'sn_list_trigger_definitions', 'sn_get_action_type_schema',
+    'sn_list_subflows', 'sn_create_subflow',
+    'sn_list_custom_actions', 'sn_create_custom_action',
+    'sn_call_subflow_in_flow',
+    'sn_list_flow_variables', 'sn_create_flow_variable',
+    'sn_list_action_inputs', 'sn_create_action_input',
+    'sn_export_flow_as_template', 'sn_list_flow_templates', 'sn_create_flow_from_template',
+    // Scope management
+    'sn_get_custom_apps', 'sn_get_scope_selection_options', 'sn_create_custom_app',
+    // Best practices & templates for implementation guidance
+    'sn_get_best_practices', 'sn_get_code_templates',
+    'sn_predict_conflicts', 'sn_get_dependency_graph',
+  ]),
+
+  testing: new Set([
+    // Read tools for verification
+    'sn_get_business_rules', 'sn_get_script_includes', 'sn_get_client_scripts',
+    'sn_get_ui_policies', 'sn_get_ui_policy_actions', 'sn_get_ui_actions',
+    'sn_get_acls',
+    'sn_get_catalog_items', 'sn_get_catalog_item', 'sn_get_catalog_variables',
+    // Code quality & validation
+    'sn_find_anti_patterns', 'sn_code_quality_score',
+    'sn_preview_change_impact', 'sn_detect_conflicts', 'sn_validate_change',
+    'sn_check_breaking_changes',
+    'sn_get_fix_recommendations', 'sn_get_best_practices',
+    // Flow execution & testing
+    'sn_list_flows', 'sn_get_flow', 'sn_analyze_flow',
+    'sn_execute_flow', 'sn_get_flow_execution_status', 'sn_list_flow_executions',
+    // Fix scripts for test data
+    'sn_get_fix_scripts', 'sn_create_fix_script', 'sn_run_fix_script',
+  ]),
+
+  deployment: new Set([
+    // Update set completion
+    'sn_create_update_set', 'sn_set_current_update_set',
+    'sn_complete_update_set', 'sn_move_to_update_set',
+    // Change management & audit
+    'sn_log_change', 'sn_get_audit_history',
+    'sn_request_approval', 'sn_process_approval', 'sn_get_approval_status',
+    // Instance management & promotion
+    'sn_register_instance', 'sn_list_instances',
+    'sn_register_instance_v2', 'sn_switch_instance', 'sn_get_active_instance',
+    'sn_test_instance_connection',
+    'sn_diff_artifact', 'sn_compare_instances',
+    'sn_create_promotion_package', 'sn_preview_promotion',
+    'sn_validate_promotion', 'sn_execute_promotion',
+    'sn_rollback_promotion', 'sn_list_promotion_history', 'sn_list_promotion_packages',
+    // Reports
+    'sn_generate_report', 'sn_get_dashboard_data',
+  ]),
+};
+
+/**
+ * Get tool definitions filtered by SDLC phase (Anthropic format).
+ * Returns core tools + phase-specific tools.
+ * If phase is null/undefined, returns ALL tools (backwards compatible).
+ */
+export function getAnthropicToolDefinitionsForPhase(phase?: SDLCToolPhase | null) {
+  if (!phase) return getAnthropicToolDefinitions();
+
+  const phaseNames = PHASE_TOOL_NAMES[phase];
+  if (!phaseNames) return getAnthropicToolDefinitions();
+
+  return ALL_TOOLS
+    .filter(t => CORE_TOOL_NAMES.has(t.name) || phaseNames.has(t.name))
+    .map(tool => ({
+      name: tool.name,
+      description: tool.description,
+      input_schema: tool.inputSchema,
+    }));
+}

@@ -11,12 +11,13 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { credentials, messages, model, aiProvider, sessionId: clientSessionId } = body as {
+    const { credentials, messages, model, aiProvider, sessionId: clientSessionId, phase } = body as {
       credentials: UserCredentials;
       messages: ChatMessage[];
       model?: string;
       aiProvider?: "anthropic" | "openrouter";
       sessionId?: string;
+      phase?: string;
     };
 
     // Use client-provided session ID to maintain same log file throughout chat session
@@ -125,7 +126,7 @@ export async function POST(request: NextRequest) {
         let toolCount = 0;
 
         try {
-          for await (const event of chatStream(credentials, chatMessages, selectedModel, 30, sessionId)) {
+          for await (const event of chatStream(credentials, chatMessages, selectedModel, 30, sessionId, phase)) {
             if (event.type === "tool_end") toolCount++;
             const data = `data: ${JSON.stringify(event)}\n\n`;
             controller.enqueue(encoder.encode(data));

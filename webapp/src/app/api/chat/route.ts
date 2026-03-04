@@ -10,12 +10,13 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { credentials, messages, model, aiProvider, sessionId: clientSessionId } = body as {
+    const { credentials, messages, model, aiProvider, sessionId: clientSessionId, phase } = body as {
       credentials: UserCredentials;
       messages: ChatMessage[];
       model?: string;
       aiProvider?: "anthropic" | "openrouter";
       sessionId?: string;
+      phase?: string;
     };
 
     // Use client-provided session ID to maintain same log file throughout chat session
@@ -129,7 +130,7 @@ export async function POST(request: NextRequest) {
     });
 
     const startTime = Date.now();
-    const result = await chat(credentials, chatMessages, selectedModel, sessionId);
+    const result = await chat(credentials, chatMessages, selectedModel, sessionId, phase);
     const durationMs = Date.now() - startTime;
 
     logger.info(sessionId, "chat", "Chat request completed", {
