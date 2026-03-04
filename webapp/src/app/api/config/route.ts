@@ -8,6 +8,7 @@ import { getUsage, MAX_REQUESTS, WINDOW_MS } from "@/lib/rate-limiter";
  */
 export async function GET(request: NextRequest) {
   const serverApiKeyConfigured = !!process.env.CLAUDE_API_KEY;
+  const serverOpenRouterKeyConfigured = !!process.env.OPENROUTER_API_KEY;
 
   // Check if server-side ServiceNow credentials are configured (all three required)
   const snUrl = process.env.SN_INSTANCE_URL || "";
@@ -21,6 +22,8 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     serverApiKeyConfigured,
+    // OpenRouter server-side API key status
+    serverOpenRouterKeyConfigured,
     // Expose non-sensitive SN credential info (never send password)
     serverSnCredsConfigured,
     ...(serverSnCredsConfigured

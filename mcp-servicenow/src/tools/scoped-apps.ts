@@ -104,7 +104,7 @@ export async function getScopeSelectionOptions(
   input: z.infer<typeof getScopeSelectionOptionsSchema>
 ) {
   // Get available apps
-  const appsResult = await getCustomApps(client, { activeOnly: true, includeGlobal: true });
+  const appsResult = await getCustomApps(client, { activeOnly: true, includeGlobal: true, limit: 100 });
   
   // Determine if Flow Designer artifacts are involved
   const flowArtifactTypes = ['flow', 'subflow', 'flow_action', 'sys_hub_flow', 'sys_hub_action_type_definition'];

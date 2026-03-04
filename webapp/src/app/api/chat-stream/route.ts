@@ -1,57 +1,76 @@
 import { NextRequest } from "next/server";
 import { chatStream, type UserCredentials, type ChatMessage } from "@/lib/sn-engine";
 import { consume } from "@/lib/rate-limiter";
-import { createSession, endSession, logger, generateSessionId } from "@/lib/logger";
+import { logger, generateSessionId } from "@/lib/logger";
 
 export const maxDuration = 120;
 
 export async function POST(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  const sessionId = generateSessionId();
+  let sessionId: string = 'unknown'; // Declare outside try block for error handler access
 
   try {
     const body = await request.json();
-    const { credentials, messages, model } = body as {
+    const { credentials, messages, model, aiProvider, sessionId: clientSessionId } = body as {
       credentials: UserCredentials;
       messages: ChatMessage[];
       model?: string;
+      aiProvider?: "anthropic" | "openrouter";
+      sessionId?: string;
     };
+
+    // Use client-provided session ID to maintain same log file throughout chat session
+    // Fall back to generating a new one if client didn't provide one
+    sessionId = clientSessionId || generateSessionId();
 
     // Fall back to server-side env vars for ServiceNow credentials
     if (!credentials.instanceUrl) credentials.instanceUrl = process.env.SN_INSTANCE_URL || "";
     if (!credentials.username) credentials.username = process.env.SN_USERNAME || "";
     if (!credentials.password) credentials.password = process.env.SN_PASSWORD || "";
 
-    // Create session for logging
-    createSession({
-      sessionId,
-      username: credentials.username,
-      instanceUrl: credentials.instanceUrl,
-      ip,
-    });
+    // Set AI provider
+    credentials.aiProvider = aiProvider || "anthropic";
+
+    // Note: We don't call createSession() because in serverless/edge environments,
+    // in-memory state doesn't persist across requests. Instead, we log directly
+    // using the client-provided sessionId, which ensures all logs for a browser
+    // session go to the same file (filename is derived deterministically from sessionId).
 
     if (!credentials.instanceUrl || !credentials.username || !credentials.password) {
       logger.error(sessionId, "validation", "Missing credentials", { ip });
-      endSession(sessionId, "error");
       return new Response(
         JSON.stringify({ error: "Missing credentials" }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // Resolve Claude API key
+    // Resolve API key based on provider
     const allowUserKeys = process.env.ALLOW_USER_API_KEYS !== "false";
-    const userSuppliedKey = allowUserKeys && !!credentials.claudeApiKey;
-    const claudeApiKey = (allowUserKeys ? credentials.claudeApiKey : "") || process.env.CLAUDE_API_KEY || "";
-    if (!claudeApiKey) {
-      logger.error(sessionId, "validation", "No Claude API key available", { userSuppliedKey, allowUserKeys });
-      endSession(sessionId, "error");
-      return new Response(
-        JSON.stringify({ error: "No Claude API key available" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
+    let userSuppliedKey = false;
+
+    if (credentials.aiProvider === "openrouter") {
+      const openRouterKey = (allowUserKeys ? credentials.openRouterApiKey : "") || process.env.OPENROUTER_API_KEY || "";
+      if (!openRouterKey) {
+        logger.error(sessionId, "validation", "No OpenRouter API key available");
+        return new Response(
+          JSON.stringify({ error: "No OpenRouter API key available" }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      credentials.openRouterApiKey = openRouterKey;
+      userSuppliedKey = allowUserKeys && !!credentials.openRouterApiKey;
+    } else {
+      userSuppliedKey = allowUserKeys && !!credentials.claudeApiKey;
+      const claudeApiKey = (allowUserKeys ? credentials.claudeApiKey : "") || process.env.CLAUDE_API_KEY || "";
+      if (!claudeApiKey) {
+        logger.error(sessionId, "validation", "No Claude API key available", { userSuppliedKey, allowUserKeys });
+        return new Response(
+          JSON.stringify({ error: "No Claude API key available" }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      credentials.claudeApiKey = claudeApiKey;
     }
-    credentials.claudeApiKey = claudeApiKey;
 
     // Rate limiting
     if (!userSuppliedKey && process.env.CLAUDE_API_KEY) {
@@ -63,7 +82,6 @@ export async function POST(request: NextRequest) {
           windowHours: usage.windowHours,
           ip,
         });
-        endSession(sessionId, "error");
         return new Response(
           JSON.stringify({
             error: "rate_limit_exceeded",
@@ -76,7 +94,6 @@ export async function POST(request: NextRequest) {
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       logger.error(sessionId, "validation", "Messages array is required");
-      endSession(sessionId, "error");
       return new Response(
         JSON.stringify({ error: "Messages array is required" }),
         { status: 400, headers: { "Content-Type": "application/json" } }
@@ -116,7 +133,7 @@ export async function POST(request: NextRequest) {
 
           const durationMs = Date.now() - startTime;
           logger.info(sessionId, "chat_stream", "Streaming chat completed", { toolCount, durationMs });
-          endSession(sessionId, "success");
+          // Don't end session on success - client may send more requests in this session
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
           logger.error(sessionId, "chat_stream", "Stream error", { error: errorMsg });
@@ -126,7 +143,7 @@ export async function POST(request: NextRequest) {
             message: errorMsg,
           })}\n\n`;
           controller.enqueue(encoder.encode(errorEvent));
-          endSession(sessionId, "error");
+          // Don't end session on stream error - client may retry
         } finally {
           controller.close();
         }
@@ -146,7 +163,6 @@ export async function POST(request: NextRequest) {
       error: errorMsg,
       stack: error instanceof Error ? error.stack : undefined,
     });
-    endSession(sessionId, "error");
 
     return new Response(
       JSON.stringify({ error: errorMsg }),

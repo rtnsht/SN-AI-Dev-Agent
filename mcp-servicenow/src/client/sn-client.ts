@@ -5,6 +5,7 @@
  * Features:
  * - Cookie-jar session persistence (so GlideUpdateSet().set() persists across calls)
  * - Active update set tracking with post-creation artifact move
+ * - Auto-initialization of helper APIs on first connection
  */
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
@@ -12,12 +13,18 @@ import { wrapper } from 'axios-cookiejar-support';
 import { CookieJar } from 'tough-cookie';
 import { SNConfig, SNRecord, SNQueryParams, SNApiResponse, SNErrorResponse } from '../types/index.js';
 
+// Cache for helper API paths per instance
+const helperApiPaths = new Map<string, { uiPolicyActionHelper?: string; updateSetHelper?: string }>();
+
 export class ServiceNowClient {
   private client: AxiosInstance;
   private config: SNConfig;
 
   /** The sys_id of the currently active update set (set via sn_set_current_update_set) */
   private _activeUpdateSetId: string | null = null;
+
+  /** Whether helper APIs have been initialized for this instance */
+  private _helperApisInitialized: boolean = false;
 
   constructor(config: SNConfig) {
     this.config = config;
@@ -43,6 +50,40 @@ export class ServiceNowClient {
       jar,
       withCredentials: true
     }));
+  }
+
+  /**
+   * Get the cached helper API path for a specific helper
+   */
+  getHelperApiPath(apiKey: 'uiPolicyActionHelper' | 'updateSetHelper'): string | undefined {
+    const paths = helperApiPaths.get(this.config.instanceUrl);
+    return paths?.[apiKey];
+  }
+
+  /**
+   * Set a helper API path (called after initialization)
+   */
+  setHelperApiPath(apiKey: 'uiPolicyActionHelper' | 'updateSetHelper', path: string): void {
+    let paths = helperApiPaths.get(this.config.instanceUrl);
+    if (!paths) {
+      paths = {};
+      helperApiPaths.set(this.config.instanceUrl, paths);
+    }
+    paths[apiKey] = path;
+  }
+
+  /**
+   * Check if helper APIs have been initialized
+   */
+  get helperApisInitialized(): boolean {
+    return this._helperApisInitialized;
+  }
+
+  /**
+   * Mark helper APIs as initialized
+   */
+  set helperApisInitialized(value: boolean) {
+    this._helperApisInitialized = value;
   }
 
   // ─── Active Update Set Tracking ──────────────────────────────
@@ -315,6 +356,29 @@ export class ServiceNowClient {
 
   get instanceUrl(): string {
     return this.config.instanceUrl;
+  }
+
+  /**
+   * Call a custom Scripted REST API endpoint
+   * @param path API path (e.g., '/api/37610/ui_policy_action_helper/create')
+   * @param method HTTP method
+   * @param data Request body
+   * @returns API response
+   */
+  async callScriptedRestApi<T = unknown>(
+    path: string,
+    method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'GET',
+    data?: Record<string, unknown>
+  ): Promise<T> {
+    const config = {
+      method,
+      url: path,
+      ...(data && method !== 'GET' ? { data } : {}),
+      ...(data && method === 'GET' ? { params: data } : {})
+    };
+
+    const response = await this.client.request<{ result: T }>(config);
+    return response.data.result;
   }
 }
 

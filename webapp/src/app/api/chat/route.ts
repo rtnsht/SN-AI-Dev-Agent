@@ -1,60 +1,79 @@
 import { NextRequest, NextResponse } from "next/server";
 import { chat, type UserCredentials, type ChatMessage } from "@/lib/sn-engine";
 import { consume, getUsage } from "@/lib/rate-limiter";
-import { createSession, endSession, logger, generateSessionId } from "@/lib/logger";
+import { logger, generateSessionId } from "@/lib/logger";
 
 export const maxDuration = 120; // Allow up to 2 minutes for tool-use loops
 
 export async function POST(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  const sessionId = generateSessionId();
 
   try {
     const body = await request.json();
-    const { credentials, messages, model } = body as {
+    const { credentials, messages, model, aiProvider, sessionId: clientSessionId } = body as {
       credentials: UserCredentials;
       messages: ChatMessage[];
       model?: string;
+      aiProvider?: "anthropic" | "openrouter";
+      sessionId?: string;
     };
+
+    // Use client-provided session ID to maintain same log file throughout chat session
+    const sessionId = clientSessionId || generateSessionId();
 
     // Fall back to server-side env vars for ServiceNow credentials
     if (!credentials.instanceUrl) credentials.instanceUrl = process.env.SN_INSTANCE_URL || "";
     if (!credentials.username) credentials.username = process.env.SN_USERNAME || "";
     if (!credentials.password) credentials.password = process.env.SN_PASSWORD || "";
 
-    // Create session for logging
-    createSession({
-      sessionId,
-      username: credentials.username,
-      instanceUrl: credentials.instanceUrl,
-      ip,
-    });
+    // Set AI provider
+    credentials.aiProvider = aiProvider || "anthropic";
+
+    // Note: We don't call createSession() because in serverless/edge environments,
+    // in-memory state doesn't persist across requests. Instead, we log directly
+    // using the client-provided sessionId, which ensures all logs for a browser
+    // session go to the same file (filename is derived deterministically from sessionId).
 
     // Validate required fields
     if (!credentials.instanceUrl || !credentials.username || !credentials.password) {
       logger.error(sessionId, "validation", "Missing credentials", { ip });
-      endSession(sessionId, "error");
       return NextResponse.json(
         { error: "Missing credentials. Provide instanceUrl, username, and password." },
         { status: 400 }
       );
     }
 
-    // Resolve Claude API key: user-supplied takes priority (if allowed), then server env var
+    // Resolve API key based on provider
     const allowUserKeys = process.env.ALLOW_USER_API_KEYS !== "false";
-    const userSuppliedKey = allowUserKeys && !!credentials.claudeApiKey;
-    const claudeApiKey = (allowUserKeys ? credentials.claudeApiKey : "") || process.env.CLAUDE_API_KEY || "";
-    if (!claudeApiKey) {
-      logger.error(sessionId, "validation", "No Claude API key available", { userSuppliedKey, allowUserKeys });
-      endSession(sessionId, "error");
-      return NextResponse.json(
-        { error: allowUserKeys
-            ? "No Claude API key available. Either provide one in settings or ask the admin to configure a server-side key."
-            : "No Claude API key configured on the server. Please contact the admin." },
-        { status: 400 }
-      );
+    let userSuppliedKey = false;
+
+    if (credentials.aiProvider === "openrouter") {
+      // OpenRouter: use user-supplied key or server env var
+      const openRouterKey = (allowUserKeys ? credentials.openRouterApiKey : "") || process.env.OPENROUTER_API_KEY || "";
+      if (!openRouterKey) {
+        logger.error(sessionId, "validation", "No OpenRouter API key available");
+        return NextResponse.json(
+          { error: "No OpenRouter API key available. Provide one in settings or ask admin to configure it." },
+          { status: 400 }
+        );
+      }
+      credentials.openRouterApiKey = openRouterKey;
+      userSuppliedKey = allowUserKeys && !!credentials.openRouterApiKey;
+    } else {
+      // Anthropic: use user-supplied key or server env var
+      userSuppliedKey = allowUserKeys && !!credentials.claudeApiKey;
+      const claudeApiKey = (allowUserKeys ? credentials.claudeApiKey : "") || process.env.CLAUDE_API_KEY || "";
+      if (!claudeApiKey) {
+        logger.error(sessionId, "validation", "No Claude API key available", { userSuppliedKey, allowUserKeys });
+        return NextResponse.json(
+          { error: allowUserKeys
+              ? "No Claude API key available. Either provide one in settings or ask the admin to configure a server-side key."
+              : "No Claude API key configured on the server. Please contact the admin." },
+          { status: 400 }
+        );
+      }
+      credentials.claudeApiKey = claudeApiKey;
     }
-    credentials.claudeApiKey = claudeApiKey;
 
     // Rate limiting — only applies when using the server-provided key
     let usageInfo = null;
@@ -70,7 +89,6 @@ export async function POST(request: NextRequest) {
           windowHours: usage.windowHours,
           ip,
         });
-        endSession(sessionId, "error");
         return NextResponse.json(
           {
             error: "rate_limit_exceeded",
@@ -87,7 +105,6 @@ export async function POST(request: NextRequest) {
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       logger.error(sessionId, "validation", "Messages array is required and must not be empty");
-      endSession(sessionId, "error");
       return NextResponse.json(
         { error: "Messages array is required and must not be empty." },
         { status: 400 }
@@ -120,24 +137,24 @@ export async function POST(request: NextRequest) {
       durationMs,
     });
 
-    endSession(sessionId, "success");
+    // Don't end session - client may send more requests in this session
 
     // Include usage info in response so frontend can display counter
     return NextResponse.json({ ...result, usage: usageInfo });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Internal server error";
+    // Note: sessionId may not be defined if error occurred before body parsing
+    const logSessionId = typeof sessionId !== 'undefined' ? sessionId : 'unknown';
 
-    logger.error(sessionId, "chat", "Chat API error", {
+    logger.error(logSessionId, "chat", "Chat API error", {
       error: message,
       stack: error instanceof Error ? error.stack : undefined,
     });
 
-    endSession(sessionId, "error");
-
     // Detect Anthropic rate limit (after retries exhausted in sn-engine)
     if (message === "anthropic_rate_limit") {
       const allowUserKeys = process.env.ALLOW_USER_API_KEYS !== "false";
-      logger.error(sessionId, "claude_api", "Anthropic rate limit exceeded after retries");
+      logger.error(logSessionId, "claude_api", "Anthropic rate limit exceeded after retries");
       return NextResponse.json(
         {
           error: "anthropic_rate_limit",
@@ -154,7 +171,7 @@ export async function POST(request: NextRequest) {
 
     // Detect specific error types
     if (message.includes("authentication") || message.includes("401") || message.includes("invalid x-api-key")) {
-      logger.error(sessionId, "auth", "Authentication failed", { error: message });
+      logger.error(logSessionId, "auth", "Authentication failed", { error: message });
       return NextResponse.json({ error: `Authentication failed: ${message}` }, { status: 401 });
     }
 

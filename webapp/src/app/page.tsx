@@ -6,8 +6,8 @@ import SettingsPanel from "@/components/SettingsPanel";
 import ChatWindow from "@/components/ChatWindow";
 import PhaseTracker from "@/components/PhaseTracker";
 import InfoModal from "@/components/InfoModal";
-import type { ChatMessage, ConnectionResult, UsageInfo, SDLCPhase, ModelChoice, LiveStatus } from "@/lib/types";
-import { parsePhaseGate, MODEL_OPTIONS, SDLC_PHASES } from "@/lib/types";
+import type { ChatMessage, ConnectionResult, UsageInfo, SDLCPhase, LiveStatus, AIProvider, ModelOption } from "@/lib/types";
+import { parsePhaseGate, ANTHROPIC_MODELS, SDLC_PHASES, openRouterModelToOption } from "@/lib/types";
 
 export default function Home() {
   const [credentials, setCredentials] = useState({
@@ -15,6 +15,7 @@ export default function Home() {
     username: "",
     password: "",
     claudeApiKey: "",
+    openRouterApiKey: "",
   });
   const [connected, setConnected] = useState(false);
   const [connInfo, setConnInfo] = useState<ConnectionResult | null>(null);
@@ -23,14 +24,20 @@ export default function Home() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [showSettings, setShowSettings] = useState(true);
   const [serverApiKeyConfigured, setServerApiKeyConfigured] = useState(false);
+  const [serverOpenRouterKeyConfigured, setServerOpenRouterKeyConfigured] = useState(false);
   const [serverSnCredsConfigured, setServerSnCredsConfigured] = useState(false);
   const [usage, setUsage] = useState<UsageInfo | null>(null);
   const [rateLimitHit, setRateLimitHit] = useState(false);
   // Pending retry — stores the failed message so it can be auto-retried after user provides an API key
   const [pendingRetry, setPendingRetry] = useState<{ text: string; images?: string[] } | null>(null);
+  // AI Provider selection
+  const [aiProvider, setAiProvider] = useState<AIProvider>("anthropic");
   // Model selection — locked after first message sent
-  const [selectedModel, setSelectedModel] = useState<ModelChoice>("sonnet-4");
+  const [selectedModel, setSelectedModel] = useState<string>("sonnet-4");
   const [modelLocked, setModelLocked] = useState(false);
+  // OpenRouter models
+  const [openRouterModels, setOpenRouterModels] = useState<ModelOption[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
   // SDLC phase tracking
   const [activeReqId, setActiveReqId] = useState<string | null>(null);
   const [currentPhase, setCurrentPhase] = useState<SDLCPhase | null>(null);
@@ -44,6 +51,8 @@ export default function Home() {
   // Live status streaming (controlled via NEXT_PUBLIC_SHOW_LIVE_STATUS env)
   const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
   const [streamingEnabled, setStreamingEnabled] = useState(true);
+  // Persistent session ID for logging - generated once per page load
+  const [clientSessionId] = useState(() => `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   // Ref to always access the latest handleSend (avoids stale closure in handleApprove setTimeout)
@@ -62,6 +71,7 @@ export default function Home() {
       .then((r) => r.json())
       .then((data) => {
         setServerApiKeyConfigured(!!data.serverApiKeyConfigured);
+        setServerOpenRouterKeyConfigured(!!data.serverOpenRouterKeyConfigured);
         if (data.usage) setUsage(data.usage);
 
         // Tool detail visibility
@@ -84,6 +94,57 @@ export default function Home() {
       })
       .catch(() => {}); // ignore — default to false
   }, []);
+
+  // Fetch OpenRouter models when provider changes to openrouter
+  useEffect(() => {
+    if (aiProvider !== "openrouter") return;
+    if (openRouterModels.length > 0) return; // Already loaded
+
+    const fetchModels = async () => {
+      setModelsLoading(true);
+      try {
+        const headers: HeadersInit = {};
+        if (credentials.openRouterApiKey) {
+          headers["x-openrouter-key"] = credentials.openRouterApiKey;
+        }
+        const res = await fetch("/api/openrouter-models", { headers });
+        if (res.ok) {
+          const data = await res.json();
+          // Convert to ModelOption format
+          const models: ModelOption[] = data.models.map((m: { id: string; name: string; description?: string; contextLength?: number; pricing?: { prompt: number; completion: number }; supportsTools?: boolean }) => ({
+            key: m.id,
+            label: m.name,
+            modelId: m.id,
+            description: m.description || `${Math.round((m.contextLength || 0) / 1000)}K context`,
+            provider: "openrouter" as const,
+          }));
+          setOpenRouterModels(models);
+          // Select first model if none selected for openrouter
+          if (models.length > 0 && !models.find(m => m.key === selectedModel)) {
+            setSelectedModel(models[0].key);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch OpenRouter models:", err);
+      } finally {
+        setModelsLoading(false);
+      }
+    };
+
+    fetchModels();
+  }, [aiProvider, credentials.openRouterApiKey, openRouterModels.length, selectedModel]);
+
+  // Reset model selection when switching providers
+  useEffect(() => {
+    if (modelLocked) return; // Don't reset if locked
+    if (aiProvider === "anthropic") {
+      setSelectedModel("sonnet-4");
+    } else if (aiProvider === "openrouter" && openRouterModels.length > 0) {
+      // Pick a good default - prefer Claude models on OpenRouter
+      const claudeModel = openRouterModels.find(m => m.key.includes("claude"));
+      setSelectedModel(claudeModel?.key || openRouterModels[0].key);
+    }
+  }, [aiProvider, modelLocked, openRouterModels]);
 
   const handleConnect = useCallback(async () => {
     setIsConnecting(true);
@@ -197,6 +258,10 @@ export default function Home() {
         const controller = new AbortController();
         abortRef.current = controller;
 
+        // Get the model ID based on provider
+        const currentModels = aiProvider === "openrouter" ? openRouterModels : ANTHROPIC_MODELS;
+        const modelId = currentModels.find((m) => m.key === selectedModel)?.modelId || selectedModel;
+
         // Use streaming API when enabled for live status updates
         if (streamingEnabled) {
           setLiveStatus({ message: "Starting...", phase: "thinking" });
@@ -204,7 +269,7 @@ export default function Home() {
           const res = await fetch("/api/chat-stream", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ credentials, messages: apiMessages, model: MODEL_OPTIONS.find((m) => m.key === selectedModel)?.modelId }),
+            body: JSON.stringify({ credentials, messages: apiMessages, model: modelId, aiProvider, sessionId: clientSessionId }),
             signal: controller.signal,
           });
 
@@ -324,7 +389,7 @@ export default function Home() {
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ credentials, messages: apiMessages, model: MODEL_OPTIONS.find((m) => m.key === selectedModel)?.modelId }),
+          body: JSON.stringify({ credentials, messages: apiMessages, model: modelId, aiProvider, sessionId: clientSessionId }),
           signal: controller.signal,
         });
 
@@ -541,7 +606,8 @@ export default function Home() {
       lines.push(`**User:** ${connInfo.userInfo.name} (${credentials.username})`);
       lines.push(`**Instance:** ${credentials.instanceUrl}`);
     }
-    const modelLabel = MODEL_OPTIONS.find((m) => m.key === selectedModel)?.label || selectedModel;
+    const currentModels = aiProvider === "openrouter" ? openRouterModels : ANTHROPIC_MODELS;
+    const modelLabel = currentModels.find((m) => m.key === selectedModel)?.label || selectedModel;
     lines.push(`**Model:** ${modelLabel}`);
     lines.push("");
     lines.push("---");
@@ -623,6 +689,7 @@ export default function Home() {
           isConnecting={isConnecting}
           onConnect={handleConnect}
           serverApiKeyConfigured={serverApiKeyConfigured}
+          serverOpenRouterKeyConfigured={serverOpenRouterKeyConfigured}
           serverSnCredsConfigured={serverSnCredsConfigured}
           usage={usage}
           rateLimitHit={rateLimitHit}
@@ -635,8 +702,12 @@ export default function Home() {
               setTimeout(() => handleSendRef.current(retry.text, retry.images), 150);
             }
           }}
+          aiProvider={aiProvider}
+          setAiProvider={setAiProvider}
           selectedModel={selectedModel}
           setSelectedModel={setSelectedModel}
+          modelOptions={openRouterModels}
+          modelsLoading={modelsLoading}
           modelLocked={modelLocked}
           allowUserApiKeys={allowUserApiKeys}
         />

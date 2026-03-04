@@ -16,6 +16,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { buildSystemPrompt } from "./system-prompt";
 import { logger } from "./logger";
+import { chatCompletion, OpenRouterRequest, OpenRouterMessage, OpenRouterTool } from "./openrouter";
 
 /* ── Context management constants ─────────────────────────────── */
 
@@ -191,6 +192,10 @@ export interface UserCredentials {
   username: string;
   password: string;
   claudeApiKey: string;
+  /** OpenRouter API key (when using OpenRouter provider) */
+  openRouterApiKey?: string;
+  /** Which AI provider to use */
+  aiProvider?: "anthropic" | "openrouter";
 }
 
 export interface ChatMessage {
@@ -215,7 +220,7 @@ export interface ChatResponse {
 const SYSTEM_PROMPT = buildSystemPrompt();
 
 /**
- * Run one full Anthropic tool-use conversation loop.
+ * Run one full AI tool-use conversation loop (supports Anthropic and OpenRouter).
  * Returns the assistant's final text reply plus all tool executions.
  */
 export async function chat(
@@ -224,6 +229,11 @@ export async function chat(
   model: string = "claude-sonnet-4-6",
   sessionId: string = "unknown"
 ): Promise<ChatResponse> {
+  // Route to OpenRouter if selected
+  if (credentials.aiProvider === "openrouter" && credentials.openRouterApiKey) {
+    return chatOpenRouter(credentials, messages, model, sessionId);
+  }
+
   const maxToolRounds = 30; // Handle complex requirements (e.g., catalog items with flows)
   const registry = getToolRegistry();
   const defs = getToolDefs();
@@ -421,6 +431,145 @@ export async function chat(
 }
 
 /**
+ * OpenRouter chat implementation with tool-use loop.
+ */
+async function chatOpenRouter(
+  credentials: UserCredentials,
+  messages: ChatMessage[],
+  model: string,
+  sessionId: string
+): Promise<ChatResponse> {
+  const maxToolRounds = 30;
+  const registry = getToolRegistry();
+  const defs = getToolDefs();
+
+  // Create per-request ServiceNow client
+  const snClient = new registry.ServiceNowClient({
+    instanceUrl: credentials.instanceUrl.replace(/\/$/, ""),
+    username: credentials.username,
+    password: credentials.password,
+    defaultScope: 'global',
+  });
+
+  // Convert Anthropic tool definitions to OpenRouter format
+  const anthropicTools = defs.getAnthropicToolDefinitions() as Anthropic.Tool[];
+  const tools: OpenRouterTool[] = anthropicTools.map((t) => ({
+    type: "function" as const,
+    function: {
+      name: t.name,
+      description: t.description || "",
+      parameters: t.input_schema,
+    },
+  }));
+
+  // Build OpenRouter messages with system prompt
+  const orMessages: OpenRouterMessage[] = [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...messages.map((m) => {
+      if (m.images && m.images.length > 0 && m.role === "user") {
+        const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
+        for (const dataUri of m.images) {
+          content.push({ type: "image_url", image_url: { url: dataUri } });
+        }
+        if (m.content.trim()) {
+          content.push({ type: "text", text: m.content });
+        }
+        return { role: m.role as "user", content };
+      }
+      return { role: m.role as "user" | "assistant", content: m.content };
+    }),
+  ];
+
+  const toolExecutions: ToolExecution[] = [];
+  let rounds = 0;
+
+  while (rounds < maxToolRounds) {
+    rounds++;
+    logger.info(sessionId, "openrouter_api", `Round ${rounds}: Calling OpenRouter API`, {
+      messageCount: orMessages.length,
+      model,
+    });
+
+    const response = await chatCompletion(
+      { apiKey: credentials.openRouterApiKey!, siteName: "Yantra AI Dev Agent" },
+      { model, messages: orMessages, tools, tool_choice: "auto", max_tokens: 8192 }
+    );
+
+    const choice = response.choices[0];
+    if (!choice) {
+      throw new Error("No response from OpenRouter");
+    }
+
+    const message = choice.message;
+    if (!message) {
+      throw new Error("No message in OpenRouter response");
+    }
+
+    // Check for tool calls
+    if (message.tool_calls && message.tool_calls.length > 0) {
+      // Add assistant message with tool calls
+      orMessages.push({
+        role: "assistant",
+        content: message.content || "",
+      });
+
+      // Execute each tool call
+      for (const toolCall of message.tool_calls) {
+        const start = Date.now();
+        let output: unknown;
+        let hasError = false;
+        try {
+          const args = JSON.parse(toolCall.function.arguments);
+          output = await registry.executeToolCall(toolCall.function.name, args, snClient);
+        } catch (err) {
+          output = { error: err instanceof Error ? err.message : String(err) };
+          hasError = true;
+        }
+        const durationMs = Date.now() - start;
+
+        if (hasError) {
+          logger.error(sessionId, "mcp_tool", `Tool failed: ${toolCall.function.name}`, {
+            toolName: toolCall.function.name,
+            durationMs,
+            error: typeof output === "object" && output !== null ? (output as Record<string, unknown>).error : output,
+          });
+        } else {
+          logger.info(sessionId, "mcp_tool", `Tool executed: ${toolCall.function.name}`, {
+            toolName: toolCall.function.name,
+            durationMs,
+            success: true,
+          });
+        }
+
+        toolExecutions.push({
+          toolName: toolCall.function.name,
+          input: toolCall.function.arguments,
+          output,
+          durationMs,
+        });
+
+        // Add tool result message
+        orMessages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: truncateToolResult(output),
+        });
+      }
+    } else {
+      // Final text response
+      logger.info(sessionId, "chat", "OpenRouter chat completed", { toolCount: toolExecutions.length });
+      return { reply: message.content || "", toolExecutions };
+    }
+  }
+
+  logger.warn(sessionId, "chat", "Max tool rounds reached (OpenRouter)", { rounds: maxToolRounds });
+  return {
+    reply: "I reached the maximum number of tool execution rounds. Please try a more specific request.",
+    toolExecutions,
+  };
+}
+
+/**
  * Quick connection test — validates SN credentials and checks roles.
  */
 export async function testConnection(credentials: Omit<UserCredentials, "claudeApiKey">) {
@@ -509,6 +658,12 @@ export async function* chatStream(
   maxToolRounds: number = 30,
   sessionId: string = "unknown"
 ): AsyncGenerator<StreamEvent> {
+  // Route to OpenRouter if selected
+  if (credentials.aiProvider === "openrouter" && credentials.openRouterApiKey) {
+    yield* chatStreamOpenRouter(credentials, messages, model, maxToolRounds, sessionId);
+    return;
+  }
+
   const registry = getToolRegistry();
   const defs = getToolDefs();
 
@@ -692,3 +847,122 @@ export async function* chatStream(
   };
 }
 
+/**
+ * OpenRouter streaming chat implementation.
+ */
+async function* chatStreamOpenRouter(
+  credentials: UserCredentials,
+  messages: ChatMessage[],
+  model: string,
+  maxToolRounds: number,
+  sessionId: string
+): AsyncGenerator<StreamEvent> {
+  const registry = getToolRegistry();
+  const defs = getToolDefs();
+
+  const snClient = new registry.ServiceNowClient({
+    instanceUrl: credentials.instanceUrl.replace(/\/$/, ""),
+    username: credentials.username,
+    password: credentials.password,
+    defaultScope: 'global',
+  });
+
+  const anthropicTools = defs.getAnthropicToolDefinitions() as Anthropic.Tool[];
+  const tools: OpenRouterTool[] = anthropicTools.map((t) => ({
+    type: "function" as const,
+    function: {
+      name: t.name,
+      description: t.description || "",
+      parameters: t.input_schema,
+    },
+  }));
+
+  const orMessages: OpenRouterMessage[] = [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...messages.map((m) => {
+      if (m.images && m.images.length > 0 && m.role === "user") {
+        const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
+        for (const dataUri of m.images) {
+          content.push({ type: "image_url", image_url: { url: dataUri } });
+        }
+        if (m.content.trim()) {
+          content.push({ type: "text", text: m.content });
+        }
+        return { role: m.role as "user", content };
+      }
+      return { role: m.role as "user" | "assistant", content: m.content };
+    }),
+  ];
+
+  const toolExecutions: ToolExecution[] = [];
+  let rounds = 0;
+
+  while (rounds < maxToolRounds) {
+    rounds++;
+    yield { type: "status", message: `Round ${rounds}: Analyzing request...`, phase: "thinking" };
+
+    try {
+      const response = await chatCompletion(
+        { apiKey: credentials.openRouterApiKey!, siteName: "Yantra AI Dev Agent" },
+        { model, messages: orMessages, tools, tool_choice: "auto", max_tokens: 8192 }
+      );
+
+      const choice = response.choices[0];
+      if (!choice?.message) {
+        yield { type: "error", message: "No response from OpenRouter" };
+        return;
+      }
+
+      const message = choice.message;
+
+      if (message.tool_calls && message.tool_calls.length > 0) {
+        orMessages.push({ role: "assistant", content: message.content || "" });
+
+        for (const toolCall of message.tool_calls) {
+          yield { type: "tool_start", toolName: toolCall.function.name, input: toolCall.function.arguments };
+          yield { type: "status", message: `Executing: ${toolCall.function.name}`, phase: "tool" };
+
+          const start = Date.now();
+          let output: unknown;
+          let success = true;
+          try {
+            const args = JSON.parse(toolCall.function.arguments);
+            output = await registry.executeToolCall(toolCall.function.name, args, snClient);
+          } catch (err) {
+            output = { error: err instanceof Error ? err.message : String(err) };
+            success = false;
+          }
+          const durationMs = Date.now() - start;
+
+          yield { type: "tool_end", toolName: toolCall.function.name, durationMs, success };
+
+          toolExecutions.push({
+            toolName: toolCall.function.name,
+            input: toolCall.function.arguments,
+            output,
+            durationMs,
+          });
+
+          orMessages.push({
+            role: "tool",
+            tool_call_id: toolCall.id,
+            content: truncateToolResult(output),
+          });
+        }
+      } else {
+        yield { type: "status", message: "Generating response...", phase: "responding" };
+        yield { type: "done", reply: message.content || "", toolExecutions };
+        return;
+      }
+    } catch (err) {
+      yield { type: "error", message: err instanceof Error ? err.message : String(err) };
+      return;
+    }
+  }
+
+  yield {
+    type: "done",
+    reply: "I reached the maximum number of tool execution rounds. Please try a more specific request.",
+    toolExecutions,
+  };
+}

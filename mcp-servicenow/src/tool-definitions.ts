@@ -29,6 +29,20 @@ export const TOOLS: ToolDefinition[] = [
     inputSchema: { type: 'object', properties: {}, required: [] }
   },
   {
+    name: 'sn_initialize_instance',
+    description: 'Initialize a ServiceNow instance with required helper APIs. Call this when connecting to a new instance to auto-deploy helper APIs (e.g., UIPolicyActionHelper, UpdateSetHelper) that work around platform limitations.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deployMissingApis: {
+          type: 'boolean',
+          description: 'Deploy missing helper APIs to the instance (default: true)',
+          default: true
+        }
+      }
+    }
+  },
+  {
     name: 'sn_get_tables',
     description: 'List available tables in the instance',
     inputSchema: {
@@ -281,6 +295,9 @@ export const ADDITIONAL_TOOLS: ToolDefinition[] = [
   // UI Policies
   { name: 'sn_get_ui_policies', description: 'Get UI policies for a table', inputSchema: { type: 'object', properties: { table: { type: 'string' }, activeOnly: { type: 'boolean', default: true } }, required: ['table'] } },
   { name: 'sn_create_ui_policy', description: 'Create a new UI policy', inputSchema: { type: 'object', properties: { name: { type: 'string' }, table: { type: 'string' }, conditions: { type: 'string' }, scriptTrue: { type: 'string' }, scriptFalse: { type: 'string' }, onLoad: { type: 'boolean', default: true }, active: { type: 'boolean', default: true } }, required: ['name', 'table'] } },
+  // UI Policy Actions (field behaviors when policy triggers)
+  { name: 'sn_get_ui_policy_actions', description: 'Get UI policy actions for a UI policy. UI Policy Actions define field behaviors (mandatory, visible, disabled) when the policy triggers.', inputSchema: { type: 'object', properties: { uiPolicySysId: { type: 'string', description: 'sys_id of the UI Policy' }, limit: { type: 'number', default: 50 } }, required: ['uiPolicySysId'] } },
+  { name: 'sn_create_ui_policy_action', description: 'Create a UI policy action to define field behavior when policy triggers. Use this AFTER creating a UI Policy to set fields as mandatory, visible, or disabled.', inputSchema: { type: 'object', properties: { uiPolicySysId: { type: 'string', description: 'sys_id of the parent UI Policy' }, field: { type: 'string', description: 'Field name to apply action to' }, mandatory: { type: 'string', enum: ['true', 'false', 'ignore'], default: 'ignore', description: 'Make field mandatory' }, visible: { type: 'string', enum: ['true', 'false', 'ignore'], default: 'ignore', description: 'Make field visible' }, disabled: { type: 'string', enum: ['true', 'false', 'ignore'], default: 'ignore', description: 'Make field read-only/disabled' }, value: { type: 'string', description: 'Set field value (optional)' } }, required: ['uiPolicySysId', 'field'] } },
   // UI Actions
   { name: 'sn_get_ui_actions', description: 'Get UI actions for a table', inputSchema: { type: 'object', properties: { table: { type: 'string' }, activeOnly: { type: 'boolean', default: true } }, required: ['table'] } },
   { name: 'sn_create_ui_action', description: 'Create a new UI action', inputSchema: { type: 'object', properties: { name: { type: 'string' }, table: { type: 'string' }, script: { type: 'string' }, clientScript: { type: 'string' }, formButton: { type: 'boolean', default: true }, condition: { type: 'string' }, active: { type: 'boolean', default: true } }, required: ['name', 'table', 'script'] } },

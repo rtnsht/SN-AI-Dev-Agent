@@ -29,7 +29,7 @@ interface LogEntry {
   durationMs?: number;
 }
 
-// Active sessions map
+// Active sessions map (for tracking within single request lifecycle)
 const sessions = new Map<string, SessionContext>();
 
 // Logs directory (at project root)
@@ -47,11 +47,25 @@ export function generateSessionId(): string {
   return `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
 
-// Get log filename with full datetime
+// Get log filename for a session - DETERMINISTIC based on sessionId
+// This ensures the same sessionId always maps to the same log file,
+// even across different API requests (important for serverless/edge where
+// in-memory state doesn't persist across requests)
 function getLogFilename(sessionId: string): string {
-  const now = new Date();
-  const timestamp = now.toISOString().replace(/:/g, "-").replace(/\./g, "-");
-  return `session-log-${timestamp}-${sessionId.substring(5, 15)}.txt`;
+  // Extract the timestamp and random suffix from the session ID
+  // Format: sess_<timestamp>_<random>
+  // We use this to create a stable, deterministic filename
+  const parts = sessionId.split('_');
+  if (parts.length >= 3) {
+    const timestamp = parts[1];
+    const suffix = parts[2];
+    // Convert timestamp to date format for readability
+    const date = new Date(parseInt(timestamp));
+    const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
+    return `session-${dateStr}-${timestamp}-${suffix}.txt`;
+  }
+  // Fallback for non-standard session IDs
+  return `session-${sessionId.replace(/[^a-zA-Z0-9]/g, '-')}.txt`;
 }
 
 // Redact sensitive data from objects

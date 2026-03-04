@@ -40,5 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# session logs
-/logs/
+# session logs (ignore contents, keep folder)
+/logs/*
+!/logs/.gitkeep

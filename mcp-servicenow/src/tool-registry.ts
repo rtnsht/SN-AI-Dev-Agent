@@ -47,6 +47,7 @@ const TOOL_HANDLERS: Record<string, (snClient: ServiceNowClient, args: unknown) 
   // Connection
   sn_test_connection: async (c) => connection.testConnection(c),
   sn_get_instance_info: async (c) => connection.getInstanceInfo(c),
+  sn_initialize_instance: async (c, a) => connection.initializeInstance(c, connection.initializeInstanceSchema.parse(a)),
   sn_get_tables: async (c, a) => connection.getTables(c, connection.getTablesSchema.parse(a)),
   sn_get_table_schema: async (c, a) => connection.getTableSchema(c, connection.getTableSchemaInputSchema.parse(a)),
 
@@ -80,6 +81,8 @@ const TOOL_HANDLERS: Record<string, (snClient: ServiceNowClient, args: unknown) 
   // UI Policies & Actions
   sn_get_ui_policies: async (c, a) => uiPolicies.getUiPolicies(c, uiPolicies.getUiPoliciesSchema.parse(a)),
   sn_create_ui_policy: async (c, a) => uiPolicies.createUiPolicy(c, uiPolicies.createUiPolicySchema.parse(a)),
+  sn_get_ui_policy_actions: async (c, a) => uiPolicies.getUiPolicyActions(c, uiPolicies.getUiPolicyActionsSchema.parse(a)),
+  sn_create_ui_policy_action: async (c, a) => uiPolicies.createUiPolicyAction(c, uiPolicies.createUiPolicyActionSchema.parse(a)),
   sn_get_ui_actions: async (c, a) => uiPolicies.getUiActions(c, uiPolicies.getUiActionsSchema.parse(a)),
   sn_create_ui_action: async (c, a) => uiPolicies.createUiAction(c, uiPolicies.createUiActionSchema.parse(a)),
 
