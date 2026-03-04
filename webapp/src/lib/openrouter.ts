@@ -13,9 +13,16 @@ export interface OpenRouterConfig {
   siteName?: string;
 }
 
+export interface OpenRouterContentBlock {
+  type: string;
+  text?: string;
+  image_url?: { url: string };
+  cache_control?: { type: "ephemeral"; ttl?: string };
+}
+
 export interface OpenRouterMessage {
   role: "user" | "assistant" | "system" | "tool";
-  content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+  content: string | OpenRouterContentBlock[];
   tool_call_id?: string;
   name?: string;
 }

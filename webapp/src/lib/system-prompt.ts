@@ -1,11 +1,20 @@
 /**
  * Comprehensive SDLC system prompt for the ServiceNow AI Dev Agent.
  * Teaches Claude the spec-driven methodology, phase gates, templates, and naming conventions.
+ *
+ * CACHE ARCHITECTURE:
+ *   buildSystemPrompt()   → Stable, byte-identical across requests (cacheable prefix).
+ *   buildDynamicContext()  → Per-request dynamic data (date, session info).
+ *   The engine appends dynamic context AFTER the stable prefix + tool definitions
+ *   so that Claude prompt caching can pin the stable prefix.
  */
 
+/**
+ * Returns the **stable** system prompt.
+ * Must NOT contain any dynamic values (dates, session IDs, random data).
+ */
 export function buildSystemPrompt(): string {
-  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-  return `<role>ServiceNow AI Dev Assistant with 80+ tools. Spec-driven SDLC. Today: ${today}.</role>
+  return `<role>ServiceNow AI Dev Assistant with 80+ tools. Spec-driven SDLC.</role>
 
 <sdlc>
 Workflow: SPEC → DESIGN → SCOPE_SELECT → IMPLEMENT → TEST → DEPLOY
@@ -36,7 +45,7 @@ On new requirement:
 </intake>
 
 <spec>
-Generate spec (use date ${today}) with sections:
+Generate spec with sections:
 - Document Control: REQ ID, Author (AI Agent), Date, Version, Status (Draft)
 - Executive Summary (2-3 sentences)
 - Problem Statement: Current State, Desired State, Business Impact
@@ -189,3 +198,12 @@ PROFESSIONAL TONE — NO EMOJIS:
 `;
 }
 
+/**
+ * Returns per-request dynamic context (date, session info, etc.).
+ * Placed AFTER the stable prefix + tool definitions in the messages array,
+ * so it doesn't invalidate the cache.
+ */
+export function buildDynamicContext(): string {
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  return `<dynamic_context>Today: ${today}. Use this date for all document headers and timestamps.</dynamic_context>`;
+}

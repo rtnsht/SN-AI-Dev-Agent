@@ -331,66 +331,7 @@ export const ADDITIONAL_TOOLS: ToolDefinition[] = [
 export const BROWNFIELD_TOOLS: ToolDefinition[] = [
   {
     name: 'sn_analyze_instance',
-    description: `COMPREHENSIVE ServiceNow instance analyzer covering 150+ artifact types across 40+ categories:
-
-**CORE DEVELOPMENT:**
-- Server Scripts: Business Rules, Script Includes, Fix Scripts, Script Actions, Processors, Scheduled Jobs, MID Server Script Includes, Script Validators
-- Client Scripts: Client Scripts, UI Scripts, UI Macros, Catalog Client Scripts, Wizard Client Scripts
-- UI: UI Policies, UI Actions, UI Pages, Form/List Layouts, Views, Formatters, Context Menus, Related Lists, Form Sections, Field Styles, UI Messages
-- Flow Designer: Flows, Subflows, Flow Actions, Flow Triggers, Flow Inputs/Outputs
-- Process Automation: Playbooks, Decision Tables, Document Task Types
-- Integration Hub: Spokes, Connection Aliases, Connections, Credentials, Certificates
-- Legacy Workflows: Workflows, Workflow Activities, Versions, Stages
-
-**EVENTS & EMAIL:**
-- Events: Event Registry, Script Actions, Scheduled Triggers
-- Email: Notifications, Email Scripts, Email Templates, Inbound Actions, Email Layouts
-
-**PORTALS & EXPERIENCES:**
-- Service Portal: Widgets, Pages, Portals, Themes, Angular Providers, CSS/JS Includes, Headers/Footers
-- Now Experience (UI Builder): UX Apps, Pages, Macroponents, Components, Themes, Data Brokers, UX Events
-- Workspace (Agent Workspace): Configs, Form/List/Table Configs, Record Pages, Related Lists
-
-**ANALYTICS & AI:**
-- Analytics: Reports, PA Dashboards, Indicators (KPIs), Breakdowns, Scorecards, Widgets, Homepages
-- Virtual Agent: Topics, Goals, NLU Models, Intents, Utterances
-- AI/ML: ML Solutions, ML Capabilities, AI Search Configs, Search Sources, Agent Assist
-
-**APPLICATIONS:**
-- Service Catalog: Catalog Items, Categories, Record Producers, Variables, Variable Sets, Order Guides
-- Knowledge: Articles, Knowledge Bases, Categories, Templates
-- Employee Center: HR Portals, Case Types, Topics, Content Blocks
-- Customer Service (CSM): Consumers, Case Types, CSM Cases
-- CMDB: CI Types, Relationship Types, Identification Rules, Business Services
-- GRC: Policies, Risks, Controls, Audits, Profiles
-- Field Service: Work Orders, Agents, Territories
-- APM: Business Applications, App Assessments
-
-**INTEGRATION & DISCOVERY:**
-- REST/SOAP: REST Messages, Scripted REST APIs, SOAP Messages
-- Data Import: Transform Maps, Data Sources, Scheduled Imports
-- Discovery: Schedules, Probes, Sensors, Patterns, MID Servers, Credentials
-- Service Mapping: Patterns, Extensions, CI Associations
-
-**CONFIGURATION:**
-- Rules Engine: Assignment Rules, Approval Rules, Escalation Rules, Data Lookups, View Rules
-- SLA Management: SLA Definitions, Condition Classes, Relative Durations, Service Offerings
-- Navigation: Application Menus, Modules, Categories, Perspectives
-- Localization: Field Labels, Translations, Choice Lists
-- Guided Setup: Wizards, Panels, Content Groups
-- Documents: Templates, Document Templates, Content Blocks, Embedded Help
-- Assessments: Metric Types, Metrics, Categories, Survey Templates
-- Metrics: Metric Definitions, System Metrics
-
-**ADMIN & DEPLOYMENT:**
-- Testing: ATF Tests, Test Suites, Test Steps
-- Security: ACLs, Data Policies, Roles
-- Properties: System Properties, Property Categories
-- Deployment: Update Sets, Scoped Apps, Store Apps, Plugins
-- Tables: Custom Tables, Dictionary Entries, Database Views, M2M Relationships
-- Scheduled Jobs: All Types, Reports, PA Jobs, Table Cleaner Rules
-
-Returns: Instance health score (0-100), artifact counts by type/category, custom vs OOTB-modified detection, and actionable recommendations.`,
+    description: 'Comprehensive instance analyzer covering 150+ artifact types across 40+ categories (server/client scripts, UI, flows, portals, analytics, integrations, CMDB, etc.). Returns health score (0-100), artifact counts by type/category, custom vs OOTB detection, and recommendations. Use categories param to scope analysis.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -420,35 +361,7 @@ Returns: Instance health score (0-100), artifact counts by type/category, custom
   },
   {
     name: 'sn_detect_ootb_overrides',
-    description: `Detects Out-of-the-Box (OOTB) artifacts that have been modified/customized in the instance.
-
-**PURPOSE:**
-- Identify all customer modifications to baseline ServiceNow artifacts
-- Calculate upgrade risk score for the instance
-- Track skipped updates from previous upgrades
-- Provide recommendations for reducing technical debt
-
-**KEY FEATURES:**
-- Queries sys_update_xml (Customer Updates) table to find all OOTB modifications
-- Classifies overrides by severity: CRITICAL, HIGH, MEDIUM, LOW
-- Tracks "Replace on Upgrade" settings (protected vs unprotected items)
-- Retrieves skipped updates from upgrade history
-- Calculates overall upgrade risk score (0-100)
-
-**SEVERITY CLASSIFICATION:**
-- CRITICAL: Business Rules, Script Includes, ACLs, Dictionary entries on core tables (incident, task, etc.)
-- HIGH: UI Policies, UI Actions, Client Scripts, Notifications on core tables
-- MEDIUM: Form layouts, List layouts, Service Portal widgets, Properties
-- LOW: Other customizations with minimal upgrade impact
-
-**USE CASES:**
-- Pre-upgrade planning and risk assessment
-- Technical debt analysis
-- Instance health assessment
-- Compliance and governance audits
-- Change management planning
-
-Returns: Upgrade risk score, override counts by severity/type/table, skipped updates, and actionable recommendations.`,
+    description: 'Detects OOTB artifacts modified in the instance. Classifies by severity (critical/high/medium/low), calculates upgrade risk score (0-100), tracks skipped updates. Use for pre-upgrade planning and technical debt analysis.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -492,43 +405,7 @@ Returns: Upgrade risk score, override counts by severity/type/table, skipped upd
   },
   {
     name: 'sn_get_dependency_graph',
-    description: `Builds a dependency graph showing relationships between ServiceNow artifacts.
-
-**PURPOSE:**
-- Map dependencies between scripts, tables, and configurations
-- Understand impact radius before making changes
-- Find orphaned/unused artifacts
-- Identify highly connected "hub" artifacts
-- Plan refactoring efforts
-
-**DEPENDENCY TYPES DETECTED:**
-- Script Include calls (new ClassName(), ClassName.method())
-- GlideAjax calls (Client Script → Script Include)
-- GlideRecord usage (Script → Table references)
-- Class inheritance (Script Include extends another)
-- Table triggers (Business Rule/Client Script on specific table)
-
-**ARTIFACT TYPES ANALYZED:**
-- Script Includes
-- Business Rules
-- Client Scripts
-- UI Actions
-- UI Policies
-- Scheduled Jobs
-- ACLs
-- Notifications
-
-**OUTPUT:**
-- Nodes: All artifacts in the graph with type, name, scope
-- Edges: Relationships between artifacts with dependency type
-- Summary: Counts by type, orphaned artifacts, highly connected hubs
-- Recommendations: Refactoring suggestions based on graph analysis
-
-**USE CASES:**
-- "What will be affected if I change this Script Include?"
-- "Which artifacts use this table?"
-- "Find all unused Script Includes"
-- "Show me the most connected artifacts in this scope"`,
+    description: 'Builds dependency graph between artifacts. Detects Script Include calls, GlideAjax, GlideRecord usage, class inheritance, table triggers. Returns nodes, edges, orphaned artifacts, hub artifacts, and refactoring recommendations.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -572,45 +449,7 @@ Returns: Upgrade risk score, override counts by severity/type/table, skipped upd
   },
   {
     name: 'sn_find_anti_patterns',
-    description: `Detects common anti-patterns and bad practices in ServiceNow code.
-
-**PURPOSE:**
-- Find performance issues before they impact users
-- Identify security vulnerabilities in scripts
-- Detect maintainability problems
-- Ensure upgrade compatibility
-- Improve code quality
-
-**CATEGORIES:**
-- **Performance**: current.update(), getXMLWait(), getRowCount(), global scripts, GlideRecord in ACLs
-- **Security**: eval(), GlideRecord in client scripts, setBasicAuth(), undeclared variables
-- **Maintainability**: hardcoded sys_ids, hardcoded URLs, debug statements, poor naming
-- **Upgradability**: GlideRecord without new, unsupported APIs
-- **User Experience**: alert(), confirm(), setWorkflow(false), missing isLoading
-
-**ANTI-PATTERNS DETECTED (25+):**
-- current.update() in business rules (causes infinite loops)
-- Synchronous GlideAjax (getXMLWait)
-- getRowCount() usage (performance killer)
-- GlideRecord queries in ACLs
-- eval() usage (security risk)
-- GlideRecord in client scripts (bypasses ACLs)
-- Hardcoded sys_ids and instance URLs
-- Global business rules and client scripts
-- Business rules without conditions
-- Client-callable Script Includes without GlideRecordSecure
-- And many more...
-
-**OUTPUT:**
-- Summary with health score (0-100)
-- Issues grouped by severity (critical/high/medium/low)
-- Counts by category and pattern type
-- Actionable recommendations
-
-**USE CASES:**
-- "Find all critical anti-patterns in my scope"
-- "Check for security issues in client scripts"
-- "What performance problems exist in business rules?"`,
+    description: 'Detects 25+ anti-patterns in ServiceNow code across categories: performance (current.update, getRowCount), security (eval, GlideRecord in client), maintainability (hardcoded sys_ids), upgradability, UX. Returns health score and issues by severity.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -652,39 +491,7 @@ Returns: Upgrade risk score, override counts by severity/type/table, skipped upd
   },
   {
     name: 'sn_code_quality_score',
-    description: `Analyzes ServiceNow script quality and provides metrics and recommendations.
-
-**PURPOSE:**
-- Calculate code quality scores for scripts
-- Identify complexity, documentation, and maintainability issues
-- Track quality trends over time
-- Prioritize refactoring efforts
-
-**METRICS ANALYZED:**
-- **Complexity**: Cyclomatic complexity, nesting depth
-- **Documentation**: Comment ratio, JSDoc presence
-- **Best Practices**: Error handling, strict mode, constants
-- **Code Style**: Function length, naming conventions
-- **Maintainability**: Script size, modularization
-
-**GRADING:**
-- A (90-100): Excellent quality
-- B (80-89): Good quality
-- C (70-79): Fair quality
-- D (60-69): Poor quality
-- F (0-59): Needs attention
-
-**OUTPUT:**
-- Overall grade and average score
-- Score distribution across artifacts
-- Top issues with counts
-- Category-specific scores
-- Per-artifact details with metrics
-
-**USE CASES:**
-- "What's the overall code quality of my scope?"
-- "Which scripts need the most attention?"
-- "Show me all scripts with failing quality scores"`,
+    description: 'Scores script quality (A-F grade, 0-100) based on complexity, documentation, best practices, code style, and maintainability. Returns overall grade, per-artifact scores, and top issues.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -721,36 +528,7 @@ Returns: Upgrade risk score, override counts by severity/type/table, skipped upd
   },
   {
     name: 'sn_find_dead_code',
-    description: `Identifies unused, orphaned, or dead code in ServiceNow instances.
-
-**PURPOSE:**
-- Find Script Includes never referenced anywhere
-- Identify artifacts with empty scripts
-- Detect artifacts referencing non-existent tables
-- Find stale inactive artifacts (2+ years old)
-- Prioritize cleanup efforts
-
-**DETECTION METHODS:**
-- **Reference Checking**: Scans all scripts to find unreferenced Script Includes
-- **Table Validation**: Verifies tables still exist for Business Rules/Client Scripts
-- **Empty Script Detection**: Finds active artifacts with no actual code
-- **Staleness Analysis**: Identifies long-inactive artifacts safe to remove
-
-**CONFIDENCE LEVELS:**
-- **High**: Confirmed dead (unreferenced, empty, or referencing deleted table)
-- **Medium**: Likely dead (inactive but may have external references)
-- **Low**: Possibly dead (needs manual verification)
-
-**OUTPUT:**
-- Summary with counts by type, reason, and confidence
-- Estimated cleanup effort
-- Sorted list of dead code candidates
-- Actionable recommendations
-
-**USE CASES:**
-- "Find all unused Script Includes in my scope"
-- "What dead code can I safely remove?"
-- "How much cleanup do we need before the upgrade?"`,
+    description: 'Finds unused/orphaned code: unreferenced Script Includes, empty scripts, artifacts on deleted tables, stale inactive artifacts. Returns candidates with confidence levels (high/medium/low) and cleanup effort estimate.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -787,30 +565,7 @@ Returns: Upgrade risk score, override counts by severity/type/table, skipped upd
   },
   {
     name: 'sn_preview_change_impact',
-    description: `Previews the impact of proposed changes BEFORE they are made. Essential guardrail for brownfield instances.
-
-**PURPOSE:**
-- Analyze proposed script changes for performance, security, and upgrade risks
-- Detect conflicts with existing Business Rules, Client Scripts, and other artifacts
-- Identify dependencies that will be affected by the change
-- Calculate overall risk score and determine if approval is required
-
-**ANALYSIS TYPES:**
-- **Performance Analysis**: Detects current.update(), getRowCount(), gs.sleep(), inefficient loops
-- **Security Analysis**: Finds eval(), hardcoded credentials, dangerous patterns
-- **Upgrade Risk**: Identifies deprecated APIs like jQuery, gel(), direct DOM access
-- **Conflict Detection**: Checks for duplicate triggers, condition overlaps, order conflicts
-- **Dependency Analysis**: Finds all artifacts that reference/depend on the target
-
-**RISK SCORING:**
-- Score 0-100 (higher = safer)
-- Risk Levels: critical (<30), high (<50), medium (<70), low (70+)
-- Automatic approval requirement for critical changes
-
-**USE CASES:**
-- "Before creating this Business Rule, show me potential conflicts"
-- "What will break if I modify this Script Include?"
-- "Is this script safe to deploy?"`,
+    description: 'Previews impact of proposed changes BEFORE applying. Analyzes performance, security, upgrade risk, conflicts, and dependencies. Returns risk score (0-100) and approval requirements.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -867,24 +622,7 @@ Returns: Upgrade risk score, override counts by severity/type/table, skipped upd
   },
   {
     name: 'sn_detect_conflicts',
-    description: `Detects conflicts between ServiceNow artifacts on a table. Essential for brownfield instances with many customizations.
-
-**PURPOSE:**
-- Find Business Rules/Client Scripts with duplicate execution orders
-- Detect artifacts with identical conditions (duplicate processing)
-- Identify multiple scripts modifying the same field
-- Calculate table-level health score
-
-**CONFLICT TYPES:**
-- **Order Conflicts**: Multiple artifacts with same order value (undefined sequence)
-- **Condition Overlaps**: Identical conditions causing duplicate processing
-- **Field Conflicts**: Multiple scripts modifying same field at same trigger time
-- **Trigger Conflicts**: Competing triggers for same event
-
-**USE CASES:**
-- "Check incident table for conflicting Business Rules"
-- "Find all order conflicts on the task table"
-- "What Client Scripts have overlapping conditions?"`,
+    description: 'Detects conflicts between artifacts on a table: order conflicts, condition overlaps, field conflicts, trigger conflicts. Returns table-level health score.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -928,33 +666,7 @@ Returns: Upgrade risk score, override counts by severity/type/table, skipped upd
   },
   {
     name: 'sn_validate_change',
-    description: `Validates proposed changes against configurable guardrails. Core governance tool for brownfield instances.
-
-**PURPOSE:**
-- Enforce coding standards before deployment
-- Block dangerous patterns (eval, current.update, hardcoded credentials)
-- Warn about performance anti-patterns
-- Check naming conventions and best practices
-
-**GUARDRAIL CATEGORIES:**
-- **Performance**: current.update(), getRowCount(), gs.sleep(), GlideRecord loops
-- **Security**: eval(), hardcoded credentials, setBasicAuth()
-- **Naming**: PascalCase for Script Includes, table prefix for Business Rules
-- **Best Practice**: Global scope warnings, try/catch recommendations
-- **Compliance**: jQuery deprecation, synchronous AJAX blocking
-
-**SEVERITY LEVELS:**
-- **block**: Cannot proceed without exception approval
-- **warn**: Should be addressed, requires justification
-- **info**: Suggestions for improvement
-
-**STRICT MODE:**
-Enables additional rules: try/catch requirement, comment requirements, jQuery blocking, synchronous AJAX blocking
-
-**USE CASES:**
-- "Validate this Business Rule before I create it"
-- "Check if this Script Include follows our standards"
-- "Run strict validation on this client script"`,
+    description: 'Validates changes against guardrails: performance, security, naming, best practices, compliance. Severity levels: block/warn/info. Supports strict mode for additional rules.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1004,31 +716,7 @@ Enables additional rules: try/catch requirement, comment requirements, jQuery bl
   },
   {
     name: 'sn_check_breaking_changes',
-    description: `Detects breaking changes BEFORE modifying shared artifacts. Critical for brownfield instances.
-
-**PURPOSE:**
-- Find all artifacts that depend on a Script Include before modifying/deleting
-- Detect Business Rules, Client Scripts, UI Actions that will break
-- Identify table dependencies before schema changes
-- Generate migration steps for safe changes
-
-**CHANGE TYPES:**
-- **delete**: Find all references that will break
-- **rename**: Find all references needing updates
-- **modify_signature**: Find callers affected by API changes
-- **remove_method**: Find callers of the method being removed
-- **deactivate**: Find dependencies on the deactivated artifact
-- **change_field_type/remove_field**: Find scripts using the field
-
-**OUTPUT:**
-- List of affected artifacts with severity
-- Safe to proceed indicator
-- Migration steps for complex changes
-
-**USE CASES:**
-- "What breaks if I delete this Script Include?"
-- "Find all callers before I change this API"
-- "Is it safe to rename this table?"`,
+    description: 'Detects breaking changes before modifying shared artifacts. Finds dependent artifacts for delete/rename/modify_signature/deactivate operations. Returns affected list, safe-to-proceed flag, and migration steps.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1067,32 +755,7 @@ Enables additional rules: try/catch requirement, comment requirements, jQuery bl
   },
   {
     name: 'sn_log_change',
-    description: `Logs AI-assisted changes for compliance, audit trails, and rollback support.
-
-**PURPOSE:**
-- Create audit trail for all AI-assisted changes
-- Support compliance requirements
-- Enable rollback with generated scripts
-- Track validation results with changes
-
-**ACTIONS:**
-- **create**: Artifact was created
-- **update**: Artifact was modified
-- **delete**: Artifact was removed
-- **preview**: Change was previewed (not applied)
-- **validate**: Change was validated
-- **analyze**: Artifact was analyzed
-
-**FEATURES:**
-- Automatic rollback script generation
-- Session-based change grouping
-- Validation result tracking
-- Before/after script capture
-
-**USE CASES:**
-- "Log that I created this Business Rule"
-- "Track the validation results for this change"
-- "Generate rollback script for this update"`,
+    description: 'Logs AI-assisted changes for audit trails. Actions: create/update/delete/preview/validate/analyze. Generates rollback scripts, groups by session, captures before/after.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1153,18 +816,7 @@ Enables additional rules: try/catch requirement, comment requirements, jQuery bl
   },
   {
     name: 'sn_get_audit_history',
-    description: `Retrieves audit history of AI-assisted changes.
-
-**PURPOSE:**
-- Review past changes made by AI assistant
-- Track changes by session
-- Filter by artifact or action type
-- Support compliance audits
-
-**USE CASES:**
-- "Show all changes from this session"
-- "What changes were made to this artifact?"
-- "Show all create actions today"`,
+    description: 'Retrieves audit history of AI-assisted changes. Filter by session, artifact, or action type.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1192,27 +844,7 @@ Enables additional rules: try/catch requirement, comment requirements, jQuery bl
   // Step 3: Persona & 4G Framework Tools
   {
     name: 'sn_detect_persona',
-    description: `Detects and returns user persona with adaptive settings.
-
-**PURPOSE:**
-- Identify user skill level and role
-- Configure guardrail strictness based on persona
-- Adapt communication style and verbosity
-- Enable persona-specific capabilities
-
-**PERSONAS:**
-- **junior_developer**: Beginner, needs guidance, strict guardrails
-- **senior_developer**: Advanced, efficiency-focused, standard guardrails
-- **architect**: Expert, strategic view, relaxed guardrails
-- **admin**: Intermediate, configuration-focused
-- **business_analyst**: Beginner, requirement-focused
-- **qa_engineer**: Intermediate, testing-focused
-- **project_manager**: Beginner, tracking-focused
-
-**USE CASES:**
-- "Set me up as a junior developer"
-- "What guardrails apply to my role?"
-- "Configure AI for architect mode"`,
+    description: 'Detects user persona (junior_developer/senior_developer/architect/admin/business_analyst/qa_engineer/project_manager) and returns adaptive guardrail settings.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1238,24 +870,7 @@ Enables additional rules: try/catch requirement, comment requirements, jQuery bl
   },
   {
     name: 'sn_apply_4g_framework',
-    description: `Applies the 4G Framework (Guardrails, Guidance, Governance, Growth) to a proposed action.
-
-**THE 4G FRAMEWORK:**
-- 🛡️ **GUARDRAILS**: Prevent bad practices (errors block, warnings flag)
-- 🧭 **GUIDANCE**: Suggest better approaches (contextual tips)
-- 📋 **GOVERNANCE**: Enforce approval workflows (role-based gates)
-- 📈 **GROWTH**: Enable learning (skill-building recommendations)
-
-**GUARDRAIL CATEGORIES:**
-- code_quality, performance, security, upgrade_safety, naming
-
-**GOVERNANCE LEVELS:**
-- team_lead, admin, architect (based on persona + action)
-
-**USE CASES:**
-- "Check this Business Rule before I create it"
-- "What approvals do I need as a junior dev?"
-- "Run 4G checks on this script"`,
+    description: 'Applies 4G Framework (Guardrails, Guidance, Governance, Growth) to a proposed action. Checks code quality, performance, security, naming. Determines approval level based on persona.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1281,22 +896,7 @@ Enables additional rules: try/catch requirement, comment requirements, jQuery bl
   },
   {
     name: 'sn_request_approval',
-    description: `Submits a change for approval based on governance rules.
-
-**PURPOSE:**
-- Submit changes requiring approval
-- Track approval status
-- Document justification and risk
-
-**APPROVAL LEVELS:**
-- **team_lead**: Junior dev script creation, deletions
-- **admin**: ACL changes, workflow changes
-- **architect**: Schema changes, integration changes
-- **platform_owner**: Critical security changes
-
-**USE CASES:**
-- "Submit this ACL for admin approval"
-- "Request architect sign-off on table change"`,
+    description: 'Submits a change for approval. Levels: team_lead, admin, architect, platform_owner. Tracks status and documents justification.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1393,16 +993,7 @@ Enables additional rules: try/catch requirement, comment requirements, jQuery bl
   // Step 4: Multi-Instance & Predictive Tools
   {
     name: 'sn_register_instance',
-    description: `Registers a ServiceNow instance for multi-instance workflows.
-
-**PURPOSE:**
-- Manage multiple instances (Dev, Test, Prod)
-- Enable cross-environment comparisons
-- Support promotion workflows
-
-**USE CASES:**
-- "Register my dev instance"
-- "Add production instance to registry"`,
+    description: 'Registers a ServiceNow instance (dev/test/stage/prod) for multi-instance workflows and cross-environment comparisons.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1430,16 +1021,7 @@ Enables additional rules: try/catch requirement, comment requirements, jQuery bl
   },
   {
     name: 'sn_compare_instances',
-    description: `Compares artifacts between two instances.
-
-**PURPOSE:**
-- Identify differences between environments
-- Plan promotions from Dev to Prod
-- Detect drift between instances
-
-**USE CASES:**
-- "Compare dev and prod instances"
-- "What's different between test and prod?"`,
+    description: 'Compares artifacts between two instances to identify drift, plan promotions, and detect differences.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1457,17 +1039,7 @@ Enables additional rules: try/catch requirement, comment requirements, jQuery bl
   },
   {
     name: 'sn_assess_upgrade_readiness',
-    description: `Analyzes instance for upgrade compatibility.
-
-**PURPOSE:**
-- Score upgrade readiness (0-100)
-- Identify deprecated API usage
-- Find OOTB overrides that may conflict
-- Estimate remediation effort
-
-**USE CASES:**
-- "How ready are we for Xanadu upgrade?"
-- "What risks exist for Vancouver upgrade?"`,
+    description: 'Scores upgrade readiness (0-100). Identifies deprecated APIs, conflicting OOTB overrides, and estimates remediation effort.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1480,17 +1052,7 @@ Enables additional rules: try/catch requirement, comment requirements, jQuery bl
   },
   {
     name: 'sn_predict_conflicts',
-    description: `Predicts potential conflicts before making changes.
-
-**PURPOSE:**
-- Identify order collisions before creating artifacts
-- Detect condition overlaps
-- Find script conflicts (multiple current.update)
-- Recommend safe execution order
-
-**USE CASES:**
-- "Will this BR conflict with existing rules?"
-- "What order should I use for this BR?"`,
+    description: 'Predicts conflicts before changes: order collisions, condition overlaps, script conflicts. Recommends safe execution order.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1518,28 +1080,7 @@ Enables additional rules: try/catch requirement, comment requirements, jQuery bl
   // OOTB Baseline Comparator - v5 Enhancement
   {
     name: 'sn_compare_to_ootb',
-    description: `Compares your instance against a clean OOTB (Out-of-the-Box) baseline.
-
-**PURPOSE:**
-- Identify what's been customized vs what's standard ServiceNow
-- Calculate your "customization footprint" score
-- Assess upgrade readiness based on customizations
-- Find technical debt from OOTB overrides
-
-**RETURNS:**
-- Customization Score (0-100, lower is better)
-- Grade (A-F based on customization level)
-- Upgrade Readiness (excellent/good/fair/poor/critical)
-- Category breakdown (BRs, Scripts, ACLs, etc.)
-- Top customizers and customized tables
-- Prioritized recommendations
-
-**USE CASES:**
-- "How customized is my instance?"
-- "What's been changed from OOTB?"
-- "Is my instance safe to upgrade?"
-- "Show me our customization footprint"
-- "Compare my instance to clean baseline"`,
+    description: 'Compares instance against clean OOTB baseline. Returns customization score (0-100), grade (A-F), upgrade readiness, category breakdown, and recommendations.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1570,31 +1111,7 @@ Enables additional rules: try/catch requirement, comment requirements, jQuery bl
   // AI-Powered Recommendation Engine - v5 Enhancement
   {
     name: 'sn_get_fix_recommendations',
-    description: `Get detailed fix recommendations for a specific issue type.
-
-**PURPOSE:**
-- Provides rich context for generating better fixes
-- Explains why the issue matters and its impact
-- Offers multiple fix patterns with before/after code
-- Includes best practices and related issues
-
-**ISSUE TYPES:**
-- gr_in_client - GlideRecord in client scripts
-- hardcoded_sysid - Hardcoded sys_ids
-- missing_null_check - Missing null checks
-- synchronous_ajax - Synchronous AJAX calls
-- global_business_rule - Global business rules
-- empty_catch - Empty catch blocks
-- current_update_loop - current.update() in loops
-- answer_true_acl - answer=true in ACLs
-- And more...
-
-**RETURNS:**
-- Detailed explanation of the issue
-- Multiple fix patterns with code examples
-- Best practices
-- Related issues to check
-- Documentation links`,
+    description: 'Returns fix recommendations for specific issue types (gr_in_client, hardcoded_sysid, synchronous_ajax, etc.). Includes explanation, fix patterns with before/after code, and best practices.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1618,27 +1135,7 @@ Enables additional rules: try/catch requirement, comment requirements, jQuery bl
   },
   {
     name: 'sn_get_best_practices',
-    description: `Get comprehensive best practices for a ServiceNow artifact type.
-
-**PURPOSE:**
-- Provides do's and don'ts for creating/modifying artifacts
-- Includes security and performance considerations
-- Offers code templates as starting points
-- Lists common mistakes to avoid
-
-**ARTIFACT TYPES:**
-- business_rule, client_script, script_include
-- ui_policy, ui_action, acl
-- scheduled_job, flow, rest_api
-- transform_map, catalog_client_script, fix_script
-
-**ACTIONS:**
-- create - When building new artifacts
-- modify - When changing existing code
-- review - When auditing code quality
-- optimize - When improving performance
-- secure - When hardening security
-- debug - When troubleshooting issues`,
+    description: 'Returns best practices for a ServiceNow artifact type and action (create/modify/review/optimize/secure/debug). Includes do/don\'t lists, security/performance tips, and common mistakes.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1659,22 +1156,7 @@ Enables additional rules: try/catch requirement, comment requirements, jQuery bl
   },
   {
     name: 'sn_get_code_templates',
-    description: `Get code templates for common ServiceNow patterns.
-
-**PURPOSE:**
-- Provides ready-to-use code templates
-- Ensures consistent patterns across codebase
-- Includes error handling and best practices
-- Shows variable placeholders to fill in
-
-**PATTERNS:**
-- gliderecord_query, gliderecord_insert, gliderecord_update
-- glideajax_call, rest_message
-- script_include_class
-- business_rule_before, business_rule_after, business_rule_async
-- client_script_onload, client_script_onchange, client_script_onsubmit
-- acl_script, scheduled_job
-- error_handling, null_check, logging, transaction_cancel`,
+    description: 'Returns ready-to-use code templates for common SN patterns (GlideRecord CRUD, GlideAjax, REST, Script Include class, BR/CS patterns, ACL, error handling, logging).',
     inputSchema: {
       type: 'object',
       properties: {

@@ -14,14 +14,14 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { buildSystemPrompt } from "./system-prompt";
+import { buildSystemPrompt, buildDynamicContext } from "./system-prompt";
 import { logger } from "./logger";
-import { chatCompletion, OpenRouterRequest, OpenRouterMessage, OpenRouterTool } from "./openrouter";
+import { chatCompletion, OpenRouterRequest, OpenRouterMessage, OpenRouterContentBlock, OpenRouterTool } from "./openrouter";
 
 /* ── Context management constants ─────────────────────────────── */
 
 /** Maximum characters per tool result before truncation */
-const MAX_TOOL_RESULT_CHARS = 15_000;
+const MAX_TOOL_RESULT_CHARS = 8_000;
 /** Estimated tokens per character (conservative) */
 const CHARS_PER_TOKEN = 3.5;
 /** Target max tokens for conversation history (leave room for response) */
@@ -46,7 +46,7 @@ function sleep(ms: number) {
  * Preserves structure for objects/arrays by keeping first/last items.
  */
 function truncateToolResult(result: unknown): string {
-  const jsonStr = JSON.stringify(result, null, 2);
+  const jsonStr = JSON.stringify(result);
 
   if (jsonStr.length <= MAX_TOOL_RESULT_CHARS) {
     return jsonStr;
@@ -60,7 +60,7 @@ function truncateToolResult(result: unknown): string {
       _showing: "first 3 and last 2 items",
       items: [...result.slice(0, 3), { _more: `... ${result.length - 5} more items ...` }, ...result.slice(-2)]
     };
-    return JSON.stringify(truncated, null, 2);
+    return JSON.stringify(truncated);
   }
 
   // For large strings/objects, truncate with indicator
@@ -217,6 +217,10 @@ export interface ChatResponse {
   toolExecutions: ToolExecution[];
 }
 
+/**
+ * Stable system prompt — byte-identical across requests for cache hits.
+ * Dynamic context (date, session) is appended separately at call time.
+ */
 const SYSTEM_PROMPT = buildSystemPrompt();
 
 /**
@@ -305,7 +309,8 @@ export async function chat(
         response = await anthropic.messages.create({
           model,
           max_tokens: 8192,
-          system: SYSTEM_PROMPT,
+          // Stable prefix first (cacheable), then dynamic context.
+          system: SYSTEM_PROMPT + "\n" + buildDynamicContext(),
           tools,
           messages: anthropicMessages,
           // Prompt caching: the SDK automatically places a cache breakpoint
@@ -431,6 +436,25 @@ export async function chat(
 }
 
 /**
+ * Build the system message for OpenRouter.
+ * For Claude models, uses structured content blocks with cache_control
+ * so the stable prefix is cached across requests.
+ */
+function buildOpenRouterSystemMessage(model: string): OpenRouterMessage {
+  const isClaude = model.toLowerCase().includes("claude") || model.toLowerCase().includes("anthropic");
+  if (isClaude) {
+    return {
+      role: "system",
+      content: [
+        { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
+        { type: "text", text: buildDynamicContext() },
+      ],
+    };
+  }
+  return { role: "system", content: SYSTEM_PROMPT + "\n" + buildDynamicContext() };
+}
+
+/**
  * OpenRouter chat implementation with tool-use loop.
  */
 async function chatOpenRouter(
@@ -462,9 +486,9 @@ async function chatOpenRouter(
     },
   }));
 
-  // Build OpenRouter messages with system prompt
+  // Build OpenRouter messages with system prompt + dynamic context (cache_control for Claude)
   const orMessages: OpenRouterMessage[] = [
-    { role: "system", content: SYSTEM_PROMPT },
+    buildOpenRouterSystemMessage(model),
     ...messages.map((m) => {
       if (m.images && m.images.length > 0 && m.role === "user") {
         const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
@@ -734,7 +758,7 @@ export async function* chatStream(
         response = await anthropic.messages.create({
           model,
           max_tokens: 8192,
-          system: SYSTEM_PROMPT,
+          system: SYSTEM_PROMPT + "\n" + buildDynamicContext(),
           tools,
           messages: anthropicMessages,
           cache_control: { type: "ephemeral" },
@@ -878,7 +902,7 @@ async function* chatStreamOpenRouter(
   }));
 
   const orMessages: OpenRouterMessage[] = [
-    { role: "system", content: SYSTEM_PROMPT },
+    buildOpenRouterSystemMessage(model),
     ...messages.map((m) => {
       if (m.images && m.images.length > 0 && m.role === "user") {
         const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
