@@ -141,12 +141,36 @@ SN-AI-Dev-Agent/
 │   ├── tests/                   # Test scripts
 │   └── lib/                     # Helper libraries
 │
+├── webapp/                      # 🌐 NEXT.JS WEB APPLICATION
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── page.tsx         # Main page (state owner, orchestration)
+│   │   │   └── api/             # API routes
+│   │   │       ├── chat/        # POST /api/chat (non-streaming)
+│   │   │       ├── chat-stream/ # POST /api/chat-stream (SSE streaming)
+│   │   │       ├── test-connection/ # POST /api/test-connection
+│   │   │       ├── instance-prompts/ # POST /api/instance-prompts (dynamic starter cards)
+│   │   │       ├── config/      # GET /api/config (public settings)
+│   │   │       └── openrouter-models/ # GET /api/openrouter-models
+│   │   ├── components/
+│   │   │   ├── ChatWindow.tsx   # Message list, input, dynamic prompts
+│   │   │   ├── MessageBubble.tsx # Message rendering, user avatar initial
+│   │   │   ├── SettingsPanel.tsx # Credentials, API key, usage meter
+│   │   │   └── PhaseTracker.tsx # SDLC phase stepper
+│   │   └── lib/
+│   │       ├── sn-engine.ts     # AI orchestrator + instance prompt fetcher
+│   │       ├── system-prompt.ts # SDLC prompt + confidentiality guardrails
+│   │       ├── rate-limiter.ts  # IP-based sliding window limiter
+│   │       └── types.ts         # Shared types (ChatMessage.hidden, etc.)
+│   └── .env                     # API keys, rate limits, feature flags
+│
 ├── src/                         # 🛠️ CLI FRAMEWORK
 │   ├── cli.js
 │   ├── core/
 │   └── utils/
 │
 └── docs/                        # 📚 DOCUMENTATION
+    ├── architecture.md          # Technical architecture (v2.3)
     └── BROWNFIELD-ENHANCEMENT-PLAN.md
 ```
 
@@ -383,28 +407,17 @@ Artifacts created via REST API land in the "Default" update set instead of the i
 |------|---------|
 | `sn_move_to_update_set` | Manual fallback — move a specific artifact to a target update set |
 
-### 14.4 Required Setup (Auto-Deployed)
+### 14.4 Required Setup
 
-> **Auto-Deployment**: Helper APIs are now **automatically deployed** when connecting to a new ServiceNow instance via `sn_test_connection`. No manual setup required!
-
-The following helper APIs are auto-deployed:
-
-| Helper API | Service ID | Purpose |
-|------------|------------|---------|
-| `UIPolicyActionHelper` | `ui_policy_action_helper` | Create UI Policy Actions with proper `ui_policy` reference field |
-| `UpdateSetHelper` | `update_set_helper` | Set current update set for artifact capture via `GlideUpdateSet().set()` |
-
-**How it works:**
-1. When `sn_test_connection` runs successfully, it triggers `HelperApisSetup.initializeHelperApis()`
-2. The system queries `sys_ws_definition` for each helper API by `service_id`
-3. If not found, it creates the API definition and resource/operation
-4. API paths are cached in the client for subsequent tool calls
-
-**Manual verification:**
-```bash
-cd mcp-servicenow
-node test-auto-deploy.cjs
-```
+1. Deploy the UpdateSetHelper Scripted REST API:
+   ```bash
+   cd mcp-servicenow
+   node src/deployer/setup-updateset-api.js
+   ```
+2. Configure in `.env`:
+   ```
+   SN_UPDATE_SET_API_PATH=/api/<namespace>/update_set_helper/set_current
+   ```
 
 ### 14.5 Implementation Workflow (for AI agents)
 

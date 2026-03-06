@@ -269,13 +269,13 @@ export async function createFlow(client: ServiceNowClient, input: z.infer<typeof
     description: input.description || '',
     status: 'draft'
   };
-  if (input.application) data.application = input.application;
+  if (input.application) data.sys_scope = input.application;
   if (input.table) data.table = input.table;
 
   const record = await client.createRecord('sys_hub_flow', data);
   return {
     success: true,
-    message: `Flow "${input.name}" created as draft. Open in Flow Designer UI to add triggers/actions and activate.`,
+    message: `Flow "${input.name}" created as draft in scope ${input.application || 'Global'}. Open in Flow Designer UI to add triggers/actions and activate.`,
     sys_id: record.sys_id,
     name: input.name,
     internal_name: internalName,
@@ -725,12 +725,12 @@ export async function createSubflow(client: ServiceNowClient, input: z.infer<typ
     type: 'subflow',
     status: 'draft'
   };
-  if (input.application) data.application = input.application;
+  if (input.application) data.sys_scope = input.application;
 
   const record = await client.createRecord('sys_hub_flow', data);
   return {
     success: true,
-    message: `Subflow "${input.name}" created as draft. Open in Flow Designer UI to add inputs/outputs, actions, and activate.`,
+    message: `Subflow "${input.name}" created as draft in scope ${input.application || 'Global'}. Open in Flow Designer UI to add inputs/outputs, actions, and activate.`,
     sys_id: record.sys_id,
     name: input.name,
     internal_name: internalName,
@@ -1175,14 +1175,15 @@ export async function createFlowFromTemplate(client: ServiceNowClient, input: z.
 
   const newInternalName = input.new_internal_name || input.new_name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
 
-  // Create new flow
+  // Create new flow — inherit scope from template
   const newFlow = await client.createRecord('sys_hub_flow', {
     name: input.new_name,
     internal_name: newInternalName,
     description: input.description || template.description || '',
     type: template.type,
     table: template.table,
-    status: 'draft'
+    status: 'draft',
+    ...(template.sys_scope ? { sys_scope: template.sys_scope } : {})
   });
 
   const newFlowId = newFlow.sys_id;

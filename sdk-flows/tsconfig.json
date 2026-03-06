@@ -16,10 +16,9 @@
         "paths": {
             "@/*": ["./src/*"]
         },
-        "types": ["@servicenow/sdk", "@servicenow/glide"],
+        "types": ["node"],
         "lib": ["ES2020"]
     },
     "include": ["src/**/*.ts", "src/**/*.now.ts"],
     "exclude": ["node_modules", "dist", ".now-sdk-cache"]
 }
-

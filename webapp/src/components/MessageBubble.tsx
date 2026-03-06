@@ -1,16 +1,20 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { ChatMessage, ToolExecution, SDLCPhase } from "@/lib/types";
-import { stripPhaseGateMarker, SDLC_PHASES } from "@/lib/types";
+import type { ChatMessage, ToolExecution, SDLCPhase, UserChoicesBlock } from "@/lib/types";
+import { stripPhaseGateMarker, SDLC_PHASES, parseUserChoices, stripUserChoicesMarker } from "@/lib/types";
 
 interface Props {
   message: ChatMessage;
   onApprove?: (phase: SDLCPhase) => void;
+  /** Callback to send a choice as user message */
+  onChoiceSelect?: (choiceKey: string) => void;
   /** When false, tool executions show only a compact summary line (no expandable cards) */
   showToolDetails?: boolean;
+  /** Authenticated user's display name (for avatar initial) */
+  userName?: string;
 }
 
 /** Copy-to-clipboard button with brief "Copied!" feedback */
@@ -52,6 +56,81 @@ function CopyButton({ text }: { text: string }) {
         </svg>
       )}
     </button>
+  );
+}
+
+/** Interactive choice buttons rendered from USER_CHOICES markers */
+function InteractiveChoices({
+  block,
+  answered,
+  onSelect,
+}: {
+  block: UserChoicesBlock;
+  answered: boolean;
+  onSelect: (key: string) => void;
+}) {
+  const [focusIdx, setFocusIdx] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!answered && containerRef.current) {
+      containerRef.current.focus();
+    }
+  }, [answered]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (answered) return;
+      const len = block.choices.length;
+      if (e.key === "ArrowDown" || e.key === "ArrowRight") {
+        e.preventDefault();
+        setFocusIdx((prev) => (prev + 1) % len);
+      } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
+        e.preventDefault();
+        setFocusIdx((prev) => (prev - 1 + len) % len);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        onSelect(block.choices[focusIdx].key);
+      }
+    },
+    [answered, block.choices, focusIdx, onSelect]
+  );
+
+  return (
+    <div
+      ref={containerRef}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      className={`mt-3 flex flex-wrap gap-2 outline-none ${answered ? "opacity-50 pointer-events-none" : ""}`}
+      role="listbox"
+      aria-label="Choose an option"
+    >
+      {block.choices.map((choice, idx) => (
+        <button
+          key={choice.key}
+          onClick={() => !answered && onSelect(choice.key)}
+          className={`text-left px-3 py-2 rounded-lg border text-sm transition-all ${
+            answered
+              ? "bg-gray-800/30 border-gray-700/30 text-gray-500"
+              : idx === focusIdx
+              ? "bg-blue-600/20 border-blue-500/60 text-blue-200 ring-1 ring-blue-500/40"
+              : "bg-gray-800/50 border-gray-700/50 text-gray-300 hover:border-gray-500 hover:bg-gray-700/50"
+          }`}
+          role="option"
+          aria-selected={idx === focusIdx}
+        >
+          <span className="font-medium">{choice.label}</span>
+          {choice.description && (
+            <span className="block text-[11px] text-gray-400 mt-0.5">{choice.description}</span>
+          )}
+        </button>
+      ))}
+      {!answered && (
+        <span className="self-center text-[10px] text-gray-600 ml-1">
+          Arrow keys to navigate, Enter to select
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -155,13 +234,15 @@ const MD_COMPONENTS: Record<string, any> = {
 };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-export default function MessageBubble({ message, onApprove, showToolDetails = true }: Props) {
+export default function MessageBubble({ message, onApprove, onChoiceSelect, showToolDetails = true, userName }: Props) {
   const [approving, setApproving] = useState(false);
 
   if (message.role === "system") return <SystemMessage message={message} />;
 
   const isUser = message.role === "user";
-  const displayContent = message.phaseGate ? stripPhaseGateMarker(message.content) : message.content;
+  const choicesBlock: UserChoicesBlock | null = !isUser ? parseUserChoices(message.content) : null;
+  const contentWithoutChoices = choicesBlock ? stripUserChoicesMarker(message.content) : message.content;
+  const displayContent = message.phaseGate ? stripPhaseGateMarker(contentWithoutChoices) : contentWithoutChoices;
   const phaseLabel = message.phaseGate
     ? SDLC_PHASES.find((p) => p.key === message.phaseGate)?.label || message.phaseGate
     : null;
@@ -174,7 +255,7 @@ export default function MessageBubble({ message, onApprove, showToolDetails = tr
           isUser ? "bg-blue-600" : "bg-gradient-to-br from-purple-500 to-blue-600"
         }`}
       >
-        {isUser ? "U" : "AI"}
+        {isUser ? (userName ? userName.charAt(0).toUpperCase() : "U") : "AI"}
       </div>
 
       {/* Content */}
@@ -206,6 +287,15 @@ export default function MessageBubble({ message, onApprove, showToolDetails = tr
               {displayContent}
             </ReactMarkdown>
           </div>
+        )}
+
+        {/* Interactive choices */}
+        {choicesBlock && onChoiceSelect && (
+          <InteractiveChoices
+            block={choicesBlock}
+            answered={!!message.choicesAnswered}
+            onSelect={onChoiceSelect}
+          />
         )}
 
         {/* Tool executions */}

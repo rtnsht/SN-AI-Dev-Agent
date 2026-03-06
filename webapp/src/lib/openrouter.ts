@@ -100,15 +100,45 @@ export async function fetchOpenRouterModels(apiKey?: string): Promise<OpenRouter
 
   const data = await response.json();
   
-  // Filter to models that support tool calling for ServiceNow agent use
+  // Strict filtering for ServiceNow AI Dev Agent use:
+  // Must support tool calling + reasoning, with sufficient context for complex agent workflows
   const models = (data.data as OpenRouterModel[])
     .filter((m) => {
-      // Include models that support tools or are known good models
-      const supportsTools = m.supported_parameters?.includes("tools");
-      const isTextModel = m.architecture?.modality?.includes("text");
-      return supportsTools || isTextModel;
+      const params = m.supported_parameters || [];
+
+      // MUST: tool calling support (non-negotiable for agent use)
+      if (!params.includes("tools")) return false;
+
+      // MUST: reasoning/thinking support
+      if (!params.includes("reasoning") && !params.includes("include_reasoning")) return false;
+
+      // MUST: sufficient context for complex agent work (64K minimum)
+      if (m.context_length < 64000) return false;
+
+      // MUST: accept text input
+      const inputMods = m.architecture?.input_modalities || [];
+      if (!inputMods.includes("text")) return false;
+
+      // EXCLUDE: routers, free routers, image-generation-only models
+      if (m.id.startsWith("openrouter/")) return false;
+
+      // EXCLUDE: models with negative pricing (routers)
+      if (parseFloat(m.pricing.prompt) < 0) return false;
+
+      // EXCLUDE: models whose primary output is images (not text-focused)
+      const outputMods = m.architecture?.output_modalities || [];
+      if (outputMods.length > 0 && !outputMods.includes("text")) return false;
+
+      return true;
     })
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => {
+      // Sort: multimodal input first, then by context length desc, then name
+      const aMulti = (a.architecture?.input_modalities?.length || 0) > 1 ? 1 : 0;
+      const bMulti = (b.architecture?.input_modalities?.length || 0) > 1 ? 1 : 0;
+      if (bMulti !== aMulti) return bMulti - aMulti;
+      if (b.context_length !== a.context_length) return b.context_length - a.context_length;
+      return a.name.localeCompare(b.name);
+    });
 
   return models;
 }
@@ -140,9 +170,37 @@ export async function chatCompletion(
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error?.message || `OpenRouter API error: ${response.status}`);
+    const errMsg = errorData.error?.message || "Unknown error";
+    const errType = errorData.error?.type || errorData.error?.code || "";
+    const errMeta = errorData.error?.metadata ? JSON.stringify(errorData.error.metadata) : "";
+    const detail = [
+      `OpenRouter ${response.status}`,
+      `model=${request.model}`,
+      errType ? `type=${errType}` : "",
+      errMsg,
+      errMeta ? `meta=${errMeta}` : "",
+    ].filter(Boolean).join(" | ");
+    // Log the full error for debugging (server-side only)
+    console.error("[OpenRouter API Error]", { status: response.status, model: request.model, error: errorData.error });
+    throw new Error(detail);
   }
 
-  return response.json();
+  const data = await response.json();
+
+  // Some models/providers return 200 but with an error object or missing choices
+  if (data.error) {
+    const errMsg = data.error?.message || "Unknown error";
+    const errType = data.error?.type || data.error?.code || "";
+    const detail = [`OpenRouter 200 (error in body)`, `model=${request.model}`, errType ? `type=${errType}` : "", errMsg].filter(Boolean).join(" | ");
+    console.error("[OpenRouter API Error in 200]", { model: request.model, error: data.error });
+    throw new Error(detail);
+  }
+
+  if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
+    console.error("[OpenRouter API] No choices in response", { model: request.model, keys: Object.keys(data) });
+    throw new Error(`OpenRouter returned no choices | model=${request.model} | response keys: ${Object.keys(data).join(",")}`);
+  }
+
+  return data as OpenRouterResponse;
 }
 

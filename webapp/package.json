@@ -11,16 +11,20 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
     "axios": "^1.13.5",
+    "mammoth": "^1.11.0",
     "mcp-servicenow": "file:../mcp-servicenow",
     "next": "16.1.6",
+    "pdf-parse": "^2.4.5",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pdf-parse": "^1.1.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

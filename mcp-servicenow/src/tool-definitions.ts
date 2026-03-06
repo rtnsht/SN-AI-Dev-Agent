@@ -2011,17 +2011,13 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
     'sn_create_fix_script', 'sn_run_fix_script',
     // Update set management
     'sn_create_update_set', 'sn_set_current_update_set', 'sn_move_to_update_set',
-    // Flow Designer creation
-    'sn_list_flows', 'sn_get_flow', 'sn_create_flow',
-    'sn_create_flow_trigger', 'sn_create_flow_action_instance',
-    'sn_create_flow_stage', 'sn_list_flow_stages', 'sn_list_flow_action_instances',
+    // Flow Designer — READ-ONLY (flow creation requires SDK fluent code, not REST)
+    'sn_list_flows', 'sn_get_flow', 'sn_analyze_flow',
+    'sn_list_flow_stages', 'sn_list_flow_action_instances',
     'sn_list_action_types', 'sn_list_trigger_definitions', 'sn_get_action_type_schema',
-    'sn_list_subflows', 'sn_create_subflow',
-    'sn_list_custom_actions', 'sn_create_custom_action',
-    'sn_call_subflow_in_flow',
-    'sn_list_flow_variables', 'sn_create_flow_variable',
-    'sn_list_action_inputs', 'sn_create_action_input',
-    'sn_export_flow_as_template', 'sn_list_flow_templates', 'sn_create_flow_from_template',
+    'sn_list_subflows', 'sn_list_custom_actions',
+    'sn_list_flow_variables', 'sn_list_action_inputs',
+    'sn_list_flow_templates',
     // Scope management
     'sn_get_custom_apps', 'sn_get_scope_selection_options', 'sn_create_custom_app',
     // Best practices & templates for implementation guidance

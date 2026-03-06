@@ -1,6 +1,6 @@
 # SN AI Dev Agent — Technical Architecture
 
-> **Version:** 1.1 | **Date:** 2026-02-22 | **Branch:** `v1-as-webapp`
+> **Version:** 2.3 | **Date:** 2026-03-05 | **Branch:** `sndevaiagentwebapp-refactor-06march-testing`
 
 ---
 
@@ -17,22 +17,26 @@ graph TB
         API_CHAT["POST /api/chat"]
         API_CONN["POST /api/test-connection"]
         API_CFG["GET /api/config"]
+        API_MODELS["GET /api/openrouter-models"]
+        API_PROMPTS["POST /api/instance-prompts"]
         ENGINE["sn-engine.ts<br/>Orchestration Layer<br/>(Prompt Caching + Retry w/ Backoff)"]
         PROMPT["system-prompt.ts<br/>XML-Structured SDLC Prompt"]
         RATE["rate-limiter.ts<br/>Sliding Window IP Limiter"]
+        FPARSE["file-parser.ts<br/>PDF/Word/Excel Text Extraction"]
     end
 
     subgraph MCP["📦 mcp-servicenow Package"]
-        DEFS["tool-definitions.ts<br/>50+ Tool Schemas"]
+        DEFS["tool-definitions.ts<br/>115 Tool Schemas"]
         REG["tool-registry.ts<br/>Tool Dispatch Table"]
         CLIENT["ServiceNowClient<br/>(Axios HTTP Client)"]
         TOOLS["30+ Tool Modules<br/>connection, records, scripts,<br/>update-sets, catalog, ACLs,<br/>instance-analyzer, etc."]
     end
 
     ANTHROPIC["🤖 Anthropic API<br/>Claude Sonnet 4 / Opus 4"]
+    OPENROUTER["🔀 OpenRouter API<br/>Dynamic Model Selection"]
     SN["🔧 ServiceNow Instance<br/>REST API (Table, Scripted)"]
 
-    UI -- "HTTPS POST (credentials + messages + images)" --> API_CHAT
+    UI -- "HTTPS POST (credentials + messages + images + files)" --> API_CHAT
     UI -- "HTTPS POST (SN credentials)" --> API_CONN
     UI -- "HTTPS GET" --> API_CFG
 
@@ -43,8 +47,12 @@ graph TB
 
     ENGINE --> PROMPT
     ENGINE -- "tool schemas" --> DEFS
+    API_MODELS --> OPENROUTER
+    ENGINE --> FPARSE
     ENGINE -- "messages + tools (cache_control: ephemeral)" --> ANTHROPIC
+    ENGINE -- "messages + tools (OpenRouter format)" --> OPENROUTER
     ANTHROPIC -- "tool_use blocks / 429 rate limit" --> ENGINE
+    OPENROUTER -- "tool_use blocks" --> ENGINE
     ENGINE -- "executeToolCall()" --> REG
     REG --> TOOLS
     TOOLS --> CLIENT
@@ -76,9 +84,9 @@ graph TB
 
     subgraph SIDEBAR["SettingsPanel.tsx"]
         CREDS["Credential Inputs<br/>(Instance URL, Username, Password)"]
-        APIKEY["Claude API Key<br/>(or 'Provided by server' badge)<br/>Highlights amber on rate limit"]
+        APIKEY["Claude API Key / OpenRouter Key<br/>(or 'Provided by server' badge)<br/>Highlights amber on rate limit"]
         USAGE["Usage Progress Bar<br/>(X/10 requests used)"]
-        MODEL["Model Selector<br/>(Sonnet 4 / Opus 4, locks after 1st msg)"]
+        MODEL["Model Selector<br/>(Anthropic: Sonnet/Opus | OpenRouter: dynamic filtered list)<br/>Locks after 1st msg"]
         CONN_BTN["Connect Button"]
         CONN_STATUS["Connection Status<br/>(User info, roles)"]
     end
@@ -92,15 +100,17 @@ graph TB
     end
 
     subgraph CHAT["ChatWindow.tsx"]
-        EXAMPLES["Example Prompt Cards<br/>(SDLC requirements + quick queries)"]
+        EXAMPLES["Dynamic Example Prompt Cards<br/>(instance-aware, randomized from SN data)"]
         MSGLIST["Message List (scrollable)"]
         INPUT["Chat Input (textarea)<br/>Shift+Enter to send · Enter for new line"]
         CANCEL["■ Stop Button (cancels in-flight request)"]
         IMAGES["Image Paste/Upload/Drag-Drop"]
+        DOCS["Document Upload (PDF/Word/Excel)<br/>Paperclip icon · 10MB/5-file limit"]
+        MIC["Voice Input (Web Speech API)<br/>Mic button (right of textarea) · real-time transcript"]
     end
 
     subgraph MSG["MessageBubble.tsx"]
-        USER_MSG["User Message (blue)"]
+        USER_MSG["User Message (blue)<br/>Avatar: first initial of authenticated user"]
         AI_MSG["AI Message (markdown)"]
         SYS_MSG["System Message (colored banner)"]
         TOOL_CARD["Tool Execution Cards<br/>(collapsible, with timing)"]
@@ -144,11 +154,11 @@ sequenceDiagram
         API-->>U: 429 {error: "rate_limit_exceeded", usage}
     end
 
-    API->>ENG: chat(credentials, messages, model)
-    ENG->>ENG: Create ServiceNowClient per request
-    ENG->>ENG: Load tool definitions (50+ schemas)
+    API->>ENG: chat(credentials, messages, model, phase)
+    ENG->>ENG: createSnClient() per request
+    ENG->>ENG: getFilteredTools(phase) — 36-115 tools
 
-    loop Tool-Use Loop (max 15 rounds)
+    loop Tool-Use Loop (max 30 rounds)
         rect rgb(30, 41, 59)
         Note over ENG,CL: Retry loop (max 3 attempts, exponential backoff)
         ENG->>CL: messages.create({system, tools, messages, cache_control})
@@ -214,21 +224,24 @@ stateDiagram-v2
         [*] --> CreateUpdateSet
         CreateUpdateSet --> DeployArtifacts: Business rules, scripts, etc.
         DeployArtifacts --> ImplGate: &lt;!-- PHASE_GATE:implementation --&gt;
+        ImplGate --> ImplApproved: User clicks "Approve Implementation"
     }
 
-    ImplPhase --> TestPhase: Auto-proceed
+    ImplPhase --> TestPhase: "approved" sent to Claude
 
     state TestPhase {
         [*] --> CreateTestPlan
         CreateTestPlan --> ExecuteTests: Query/verify via SN tools
         ExecuteTests --> TestGate: &lt;!-- PHASE_GATE:testing --&gt;
+        TestGate --> TestApproved: User clicks "Approve Testing"
     }
 
-    TestPhase --> DeployPhase: Auto-proceed
+    TestPhase --> DeployPhase: "approved" sent to Claude
 
     state DeployPhase {
         [*] --> DeployRecord
         DeployRecord --> DeployGate: &lt;!-- PHASE_GATE:deployment --&gt;
+        DeployGate --> DeployApproved: User clicks "Approve Deployment"
     }
 
     DeployPhase --> [*]: Requirement Complete ✅
@@ -286,70 +299,95 @@ flowchart TD
 
 ---
 
-## 6. MCP Tool Categories (50+ Tools)
+## 6. MCP Tool Categories (115 Tools)
 
 ```mermaid
 graph LR
-    subgraph CORE["Core Tools"]
-        C1["connection<br/>(test, info, tables, schema)"]
-        C2["records<br/>(query, get, create, update, delete)"]
+    subgraph CORE["Core Tools (14)"]
+        C1["connection<br/>(test, info, initialize, tables, schema)"]
+        C2["records<br/>(query, get, create, update)"]
         C3["scripts<br/>(business rules, script includes,<br/>client scripts)"]
     end
 
-    subgraph CONFIG["Configuration Tools"]
-        CF1["update-sets<br/>(create, list, set current)"]
-        CF2["ui-policies<br/>(create, list, manage)"]
-        CF3["notifications<br/>(create, list, manage)"]
-        CF4["acls<br/>(create, list, manage)"]
-        CF5["scheduled-jobs<br/>(create, list, manage)"]
+    subgraph CONFIG["Configuration Tools (22)"]
+        CF1["update-sets<br/>(list, get, create, set, complete,<br/>contents, move)"]
+        CF2["ui-policies<br/>(get, create, actions)"]
+        CF3["ui-actions<br/>(get, create)"]
+        CF4["notifications<br/>(get, create, events)"]
+        CF5["acls<br/>(get, create, roles)"]
+        CF6["scheduled-jobs<br/>(get, create)"]
+        CF7["fix-scripts<br/>(get, create, run)"]
     end
 
-    subgraph CATALOG["Service Catalog"]
-        CA1["catalog<br/>(items, categories,<br/>variables, requests)"]
+    subgraph CATALOG["Service Catalog (5)"]
+        CA1["catalog-items<br/>(list, get)"]
+        CA2["catalog-variables"]
+        CA3["requests"]
     end
 
-    subgraph ANALYSIS["Analysis & Quality"]
+    subgraph FLOWS["Flow Designer (27)"]
+        F1["flows<br/>(list, get, create, analyze, execute)"]
+        F2["triggers<br/>(create, list definitions)"]
+        F3["actions<br/>(instances, types, schemas)"]
+        F4["stages<br/>(list, create)"]
+        F5["subflows<br/>(list, create, call)"]
+        F6["custom-actions<br/>(list, create)"]
+        F7["variables<br/>(list, create, inputs)"]
+        F8["templates<br/>(export, list, create from)"]
+        F9["executions<br/>(execute, status, history)"]
+    end
+
+    subgraph ANALYSIS["Analysis & Quality (17)"]
         A1["instance-analyzer"]
         A2["ootb-override-detector"]
         A3["dependency-graph"]
         A4["code-quality-analyzer"]
         A5["dead-code-finder"]
         A6["anti-pattern-detector"]
+        A7["change-impact-preview"]
+        A8["conflict-detector"]
+        A9["conflict-predictor"]
+        A10["guardrail-validator"]
+        A11["breaking-change-detector"]
+        A12["compare-to-ootb"]
+        A13["upgrade-readiness"]
     end
 
-    subgraph GOVERNANCE["Governance & Safety"]
-        G1["change-impact-analyzer"]
-        G2["conflict-detector"]
-        G3["conflict-predictor"]
-        G4["guardrail-validator"]
-        G5["breaking-change-detector"]
-        G6["approval-gate"]
-        G7["audit-logger"]
+    subgraph GOVERNANCE["Governance (9)"]
+        G1["approval-gate<br/>(request, process, status)"]
+        G2["audit-logger<br/>(log, history)"]
+        G3["persona-detector"]
+        G4["4g-framework"]
     end
 
-    subgraph ADVANCED["Advanced / Multi-Instance"]
-        AD1["instance-registry"]
+    subgraph ADVANCED["Advanced / Multi-Instance (18)"]
+        AD1["instance-registry<br/>(register, list, v2)"]
         AD2["instance-compare"]
-        AD3["multi-instance-manager"]
-        AD4["promotion-workflow"]
-        AD5["upgrade-readiness"]
-        AD6["ootb-baseline-comparator"]
-        AD7["recommendation-engine"]
-        AD8["dashboard-reporter"]
+        AD3["switch-instance"]
+        AD4["active-instance"]
+        AD5["diff-artifact"]
+        AD6["promotion<br/>(package, preview, validate,<br/>execute, rollback, history)"]
+        AD7["fix-recommendations"]
+        AD8["best-practices"]
+        AD9["code-templates"]
+        AD10["report-generator"]
+        AD11["dashboard-data"]
     end
 
-    subgraph SPECIAL["Specialized"]
-        S1["persona-engine"]
-        S2["four-g-framework"]
+    subgraph SCOPED["Scoped Apps (3)"]
+        S1["get-custom-apps"]
+        S2["scope-selection-options"]
+        S3["create-custom-app"]
     end
 
     style CORE fill:#1e293b,stroke:#3b82f6,color:#e2e8f0
     style CONFIG fill:#1e293b,stroke:#8b5cf6,color:#e2e8f0
     style CATALOG fill:#1e293b,stroke:#f59e0b,color:#e2e8f0
+    style FLOWS fill:#1e293b,stroke:#06b6d4,color:#e2e8f0
     style ANALYSIS fill:#1e293b,stroke:#10b981,color:#e2e8f0
     style GOVERNANCE fill:#1e293b,stroke:#ef4444,color:#e2e8f0
-    style ADVANCED fill:#1e293b,stroke:#06b6d4,color:#e2e8f0
-    style SPECIAL fill:#1e293b,stroke:#ec4899,color:#e2e8f0
+    style ADVANCED fill:#1e293b,stroke:#ec4899,color:#e2e8f0
+    style SCOPED fill:#1e293b,stroke:#84cc16,color:#e2e8f0
 ```
 
 ---
@@ -367,17 +405,23 @@ SN-AI-Dev-Agent/
 │   │   │   ├── globals.css          ← Tailwind CSS + custom styles
 │   │   │   └── api/
 │   │   │       ├── chat/route.ts    ← POST /api/chat (main AI endpoint)
+│   │   │       ├── chat-stream/     ← POST /api/chat-stream (SSE streaming)
 │   │   │       ├── test-connection/ ← POST /api/test-connection
-│   │   │       └── config/route.ts  ← GET /api/config (public settings)
+│   │   │       ├── config/route.ts  ← GET /api/config (public settings)
+│   │   │       ├── instance-prompts/ ← POST /api/instance-prompts (dynamic starter cards)
+│   │   │       └── openrouter-models/ ← GET /api/openrouter-models (filtered)
 │   │   ├── components/
 │   │   │   ├── SettingsPanel.tsx     ← Credentials, API key, usage meter
-│   │   │   ├── ChatWindow.tsx       ← Message list, input, example prompts
-│   │   │   ├── MessageBubble.tsx    ← Message rendering, tool cards, approve btn
+│   │   │   ├── ChatWindow.tsx       ← Message list, input, dynamic prompts, hidden msg filter
+│   │   │   ├── MessageBubble.tsx    ← Message rendering, tool cards, approve btn, user initial avatar
 │   │   │   └── PhaseTracker.tsx     ← SDLC phase stepper in header
 │   │   └── lib/
-│   │       ├── sn-engine.ts         ← Anthropic tool-use loop orchestrator
-│   │       ├── system-prompt.ts     ← SDLC methodology system prompt
+│   │       ├── sn-engine.ts         ← Orchestrator (6 shared helpers + 4 LLM callers)
+│   │       ├── system-prompt.ts     ← Stable prefix + dynamic context (cache-split) + confidentiality guardrails
+│   │       ├── openrouter.ts        ← OpenRouter API client (dynamic model filtering)
+│   │       ├── file-parser.ts       ← PDF/Word/Excel text extraction
 │   │       ├── rate-limiter.ts      ← IP-based sliding window rate limiter
+│   │       ├── logger.ts            ← Structured session logging
 │   │       └── types.ts             ← Shared types, phase gate parser
 │   ├── package.json
 │   └── .env.example                 ← CLAUDE_API_KEY, RATE_LIMIT_MAX, etc.
@@ -385,7 +429,7 @@ SN-AI-Dev-Agent/
 ├── mcp-servicenow/                  ← ServiceNow Tool Engine (npm package)
 │   ├── src/
 │   │   ├── index.ts                 ← MCP server entry point (stdio transport)
-│   │   ├── tool-definitions.ts      ← 50+ tool JSON schemas (single source of truth)
+│   │   ├── tool-definitions.ts      ← 115 tool JSON schemas (single source of truth)
 │   │   ├── tool-registry.ts         ← Tool dispatch table + executeToolCall()
 │   │   ├── client/
 │   │   │   └── sn-client.ts         ← ServiceNowClient (Axios HTTP wrapper)
@@ -400,6 +444,9 @@ SN-AI-Dev-Agent/
 │   │   │   ├── conflict-detector.ts      ├── guardrail-validator.ts
 │   │   │   └── ... (16 more)
 │   │   ├── deployer/                ← Deployment automation
+│   │   │   ├── HelperApisSetup.ts   ← Auto-detect/deploy helper Scripted REST APIs
+│   │   │   ├── UpdateSetHelperSetup.js ← Standalone update set API deployer
+│   │   │   └── DeploymentHelper.js  ← Reusable artifact deployment utility
 │   │   └── types/                   ← TypeScript type definitions
 │   └── package.json
 │
@@ -422,16 +469,508 @@ SN-AI-Dev-Agent/
 |----------|--------|-----------|
 | **Stateless API** | Credentials sent per-request | No server-side sessions = simpler, no auth infrastructure needed |
 | **Per-request SN client** | New `ServiceNowClient` per chat | Supports multiple users simultaneously, no credential mixing |
-| **Tool-use loop** | Up to 15 rounds | Claude can chain multiple tool calls to complete complex tasks |
-| **System prompt injection** | XML-tagged SDLC prompt (117 lines) | Web app can't read filesystem; XML tags = native Claude parsing, 50% token reduction |
+| **Tool-use loop** | Up to 30 rounds | Claude can chain multiple tool calls to complete complex tasks |
+| **System prompt injection** | XML-tagged SDLC prompt + `<confidentiality>` guardrails | Web app can't read filesystem; XML tags = native Claude parsing; guardrails prevent AI from revealing architecture/model identity |
 | **Phase gate markers** | HTML comments `<!-- PHASE_GATE:xxx -->` | Invisible in rendered markdown, parseable by frontend |
+| **Interactive choice markers** | HTML comments `<!-- USER_CHOICES:json -->` | Same pattern as phase gates; UI renders clickable buttons for multi-option questions |
 | **Rate limiting** | In-memory sliding window | Simple, no Redis needed for MVP; resets on server restart |
 | **createRequire** | Runtime module loading | Bypasses Turbopack static analysis for mcp-servicenow ESM modules |
 | **Single tool registry** | Shared between MCP server & web app | Tool definitions and handlers defined once, consumed by both transports |
-| **Prompt caching** | `cache_control: { type: "ephemeral" }` | 90% token cost reduction on cache hits (rounds 2-15, valid 5 min) |
+| **Prompt caching** | Stable prefix + `cache_control: { type: "ephemeral" }` | 90% token cost reduction on cache hits; stable/dynamic split preserves cache across requests |
+| **Phase-based tool subsetting** | 36-115 tools per SDLC phase | Testing/deployment phases see 69% fewer tools; reduces per-request token overhead |
+| **SN metadata stripping** | `stripSnMetadata()` removes 15+ noise fields | 30-50% smaller tool results for record queries |
 | **Retry with backoff** | 3 retries: 5s → 10s → 20s | Handles transient Anthropic 429 errors; respects `retry-after` header |
 | **Model selection** | Sonnet 4 (fast) / Opus 4 (capable) | User choice, locked after first message to avoid mid-conversation confusion |
 | **Pending retry pattern** | `pendingRetry` state stores failed msg | On Anthropic 429 exhaustion: user provides API key → auto-retry with full history |
 | **AbortController** | Cancel in-flight requests | User can stop long-running requests; send button toggles to stop button |
 | **Shift+Enter to send** | Enter = new line, Shift+Enter = send | Better UX for multi-line prompts (ServiceNow code snippets) |
 
+---
+
+## 9. Token & Cache Optimization Architecture
+
+> **Added:** 2026-03-04 | **Implemented:** 2026-03-05 | **Status:** Complete (Phases 1-4)
+
+### 9.1 Problem Statement (Pre-Optimization)
+
+The original implementation sent all 115 tools (~20K tokens) on every API request. Combined with the system prompt and conversation history, this created significant token overhead:
+
+| Component | Pre-Optimization | Post-Optimization | Reduction |
+|-----------|------------------|-------------------|-----------|
+| Tool definitions | ~20,000 tokens (115 tools) | ~3-10K tokens (36-115 phase-filtered) | 50-82% |
+| Tool descriptions | ~8,000 tokens (verbose) | ~5,500 tokens (compressed) | 18% |
+| System prompt | ~1,500 tokens (dynamic date broke cache) | ~1,500 tokens (stable prefix + dynamic suffix) | Cache-friendly |
+| Tool results | Variable (full SN metadata) | Variable (metadata stripped) | ~30-50% per result |
+| Conversation history | Lossy trimming (messages dropped) | Progressive compression + extractive summary | Context preserved |
+| Engine code duplication | 4 duplicated LLM callers (~1006 lines) | 6 shared helpers (~744 lines) | 26% fewer lines |
+
+### 9.2 Optimization Strategy (Implemented)
+
+```mermaid
+graph TB
+    subgraph BEFORE["Before (4 Problems)"]
+        C1["115 tools every request<br/>~20K tokens"]
+        C2["Verbose descriptions<br/>~8K tokens"]
+        C3["Lossy trimming<br/>Drops messages blindly"]
+        C4["4 duplicated LLM callers<br/>~1006 lines"]
+    end
+
+    subgraph AFTER["After (4 Solutions)"]
+        O1["Phase-filtered tools<br/>36-115 per phase"]
+        O2["Compressed descriptions<br/>95KB → 78KB"]
+        O3["Progressive compression<br/>+ extractive summary"]
+        O4["6 shared helpers<br/>~744 lines"]
+    end
+
+    C1 -->|"Phase 2: SDLC subsetting"| O1
+    C2 -->|"Phase 1: Description compression"| O2
+    C3 -->|"Phase 4: Smart context mgmt"| O3
+    C4 -->|"Phase 3: Unified LLM caller"| O4
+
+    style BEFORE fill:#7f1d1d,stroke:#ef4444,color:#e2e8f0
+    style AFTER fill:#065f46,stroke:#10b981,color:#e2e8f0
+```
+
+### 9.3 SDLC Phase-Based Tool Subsetting
+
+Tools are filtered by the current SDLC phase. A `PHASE_MAPPING` in `tool-definitions.ts` defines which tools are available in each phase. Core tools (connection, records, scripts, update sets) are included in every phase.
+
+| Phase | Tool Count | Reduction vs. All |
+|-------|-----------|-------------------|
+| `spec` | 42 | 63% fewer |
+| `design` | 55 | 52% fewer |
+| `implementation` | 76 | 34% fewer |
+| `testing` | 36 | 69% fewer |
+| `deployment` | 36 | 69% fewer |
+| No phase (ad-hoc) | 115 | 0% (all tools) |
+
+**Flow:** Frontend tracks `currentPhase` via phase gate markers. The phase is sent in the request body to `/api/chat` and `/api/chat-stream`. The engine calls `getAnthropicToolDefinitionsForPhase(phase)` to filter tools before sending to the LLM.
+
+### 9.4 Compact Tool Descriptions (Phase 1c)
+
+All 85 tool descriptions in `tool-definitions.ts` were compressed from verbose multi-line markdown to concise one-liners. File size reduced from 95KB to 78KB (18%).
+
+```
+BEFORE (sn_analyze_instance): 875 tokens
+"COMPREHENSIVE ServiceNow instance analyzer covering 150+ artifact types.
+Returns: Health score, customization count, recommendations..."
+
+AFTER: ~20 tokens
+"Analyze instance artifacts and customizations. Params: scope, categories[], limit"
+```
+
+### 9.5 Smart Context Management (Phase 4)
+
+Context management uses a two-stage strategy — no secondary LLM call needed:
+
+```mermaid
+sequenceDiagram
+    participant ENG as sn-engine.ts
+    participant LLM as Claude API
+
+    ENG->>ENG: estimateConversationTokens(messages)
+
+    alt tokens > 120K (CONTEXT_WARNING_TOKENS)
+        ENG->>ENG: Stage 1: compressOldToolResults()
+        Note over ENG: Shrink old tool_result blocks to<br/>[OK/ERROR] + 200-char preview.<br/>Keep recent 12 messages intact.
+        ENG->>ENG: Re-estimate tokens
+
+        alt still > 120K
+            ENG->>ENG: Stage 2: summarizeDroppedMessages()
+            Note over ENG: Extract key facts from dropped messages:<br/>- User intents (first 120 chars)<br/>- Assistant decisions (first 120 chars)<br/>- Tool calls made (tool name only)<br/>- Errors encountered
+            ENG->>ENG: Keep first 2 + summary + last 14 messages
+        end
+    end
+
+    ENG->>LLM: Compressed messages + tools
+    LLM-->>ENG: Response
+```
+
+**Extractive summary format (injected as a user message):**
+```
+[Context summary of 28 earlier messages]
+- User: Build a business rule for incident validation...
+- Called tool: sn_get_table_schema
+- Called tool: sn_create_business_rule
+- Assistant: Created ValidateHighImpact BR on incident table...
+- Called tool: sn_get_update_set_contents
+[End summary -- recent messages follow]
+```
+
+### 9.6 ServiceNow Metadata Stripping (Phase 4a)
+
+Tool results from ServiceNow queries carry 15+ metadata fields that waste tokens. `stripSnMetadata()` recursively removes these before serialization:
+
+**Stripped fields:** `sys_mod_count`, `sys_created_on`, `sys_created_by`, `sys_updated_on`, `sys_updated_by`, `sys_tags`, `sys_domain`, `sys_domain_path`, `sys_policy`, `sys_replace_on_upgrade`, `sys_customer_update`, `sys_update_name`, `sys_package`, `sys_scope`, `sys_class_name`, `sys_overrides`
+
+Typical savings: 30-50% per tool result for record queries.
+
+### 9.7 Cache-Optimized Request Structure (Phase 1a, 1d)
+
+Anthropic prompt caching works on prefix matching. The system prompt is split into a stable prefix (byte-identical across requests) and a dynamic suffix (date, session info):
+
+**Anthropic (direct):**
+- System string = `buildSystemPrompt() + "\n" + buildDynamicContext()`
+- `cache_control: { type: "ephemeral" }` on the request
+
+**OpenRouter (Claude models):**
+- System sent as structured content blocks:
+  - Block 1: stable prompt with `cache_control: { type: "ephemeral" }`
+  - Block 2: dynamic context (no cache control)
+- Non-Claude models get plain string format
+
+```mermaid
+graph TB
+    subgraph REQUEST["API Request Structure"]
+        direction TB
+        SYS["System Prompt<br/>(stable, byte-identical)"]
+        TOOLS["Tool Definitions<br/>(phase-filtered)"]
+        CACHE["cache_control: ephemeral"]
+        DYNAMIC["Dynamic Context<br/>(date only)"]
+        MSGS["Messages"]
+    end
+
+    SYS --> TOOLS
+    TOOLS --> CACHE
+    CACHE --> DYNAMIC
+    DYNAMIC --> MSGS
+
+    CACHED["Cached prefix<br/>(90% cost reduction)"]
+    SYS -.-> CACHED
+    TOOLS -.-> CACHED
+
+    style SYS fill:#065f46,stroke:#10b981,color:#e2e8f0
+    style TOOLS fill:#065f46,stroke:#10b981,color:#e2e8f0
+    style CACHE fill:#7c3aed,stroke:#a78bfa,color:#fff
+    style CACHED fill:#1e3a5f,stroke:#3b82f6,color:#e2e8f0
+```
+
+### 9.8 Unified LLM Caller (Phase 3)
+
+Consolidated 4 duplicated LLM caller functions (`chat`, `chatOpenRouter`, `chatStream`, `chatStreamOpenRouter`) by extracting 6 shared helpers in `sn-engine.ts`:
+
+| Helper | Purpose |
+|--------|---------|
+| `createSnClient()` | ServiceNow client instantiation from credentials |
+| `getFilteredTools()` | Phase-aware tool filtering via `getAnthropicToolDefinitionsForPhase()` |
+| `toAnthropicMessages()` | Convert chat messages to Anthropic format (with image base64 support) |
+| `toOpenRouterMessages()` | Convert chat messages to OpenRouter format (with image URL support) |
+| `toOpenRouterTools()` | Convert Anthropic tool schemas to OpenRouter function-calling format |
+| `executeAndLogTool()` | Unified tool execution with error handling, timing, and logging |
+
+Result: 1006 lines reduced to 744 lines (26% reduction), zero code duplication across the 4 callers.
+
+### 9.9 Tool Result Truncation
+
+All tool results go through `truncateToolResult()` which applies three layers:
+
+| Layer | Strategy | Trigger |
+|-------|----------|---------|
+| 1. Metadata stripping | `stripSnMetadata()` removes 15+ SN noise fields | Always |
+| 2. Array sampling | Keep first 3 + last 2 items | Array length > 5 and result > 8K chars |
+| 3. Character truncation | Keep first/last halves with `[TRUNCATED]` marker | Result > 8K chars |
+
+### 9.10 Implementation Summary (Completed 2026-03-05)
+
+| Phase | What | Key Changes |
+|-------|------|-------------|
+| **Phase 1: Quick Wins** | Prompt splitting, compact JSON, description compression, OpenRouter cache support | `system-prompt.ts` split into `buildSystemPrompt()` + `buildDynamicContext()`; `tool-definitions.ts` 95KB to 78KB; `openrouter.ts` `cache_control` blocks |
+| **Phase 2: Tool Subsetting** | SDLC phase-based tool filtering | `PHASE_MAPPING` in `tool-definitions.ts`; `getAnthropicToolDefinitionsForPhase()`; phase passed from frontend through API routes |
+| **Phase 3: Unified LLM Caller** | DRY refactor of 4 duplicated callers | 6 extracted helpers in `sn-engine.ts`; 1006 to 744 lines |
+| **Phase 4: Smart Context** | Metadata stripping, progressive compression, extractive summarization | `stripSnMetadata()`, `compressOldToolResults()`, `summarizeDroppedMessages()` in `sn-engine.ts` |
+
+---
+
+## 10. File Attachment Processing
+
+```mermaid
+sequenceDiagram
+    participant U as Browser
+    participant CW as ChatWindow.tsx
+    participant P as page.tsx
+    participant API as /api/chat
+    participant FP as file-parser.ts
+    participant ENG as sn-engine.ts
+    participant LLM as LLM API
+
+    U->>CW: Drop/paste/upload files (PDF, Word, Excel)
+    CW->>CW: Read as base64, validate (10MB, 5 files max)
+    CW->>P: onSend(text, images?, files?)
+    P->>API: POST {messages with file attachments}
+    API->>ENG: chat(credentials, messages)
+    ENG->>FP: extractText(base64, mimeType)
+    FP-->>ENG: Plain text content
+    ENG->>ENG: Prepend "[Attached documents]" to user message
+    ENG->>LLM: Messages with document text as context
+    LLM-->>ENG: Response
+```
+
+**Supported formats:** PDF (`pdf-parse`), Word/DOCX (`mammoth`), Excel/XLSX (`xlsx` — sheet-by-sheet CSV).
+
+---
+
+## 11. OpenRouter Dynamic Model Filtering
+
+```mermaid
+flowchart TD
+    REQ["GET /api/openrouter-models"] --> FETCH["Fetch openrouter.ai/api/v1/models"]
+    FETCH --> FILTER["Apply 7-criteria filter"]
+
+    FILTER --> F1{"supports tools?"}
+    F1 -->|No| REJECT["Excluded"]
+    F1 -->|Yes| F2{"supports reasoning?"}
+    F2 -->|No| REJECT
+    F2 -->|Yes| F3{"context >= 64K?"}
+    F3 -->|No| REJECT
+    F3 -->|Yes| F4{"text input?"}
+    F4 -->|No| REJECT
+    F4 -->|Yes| F5{"not a router?"}
+    F5 -->|No| REJECT
+    F5 -->|Yes| F6{"text output?"}
+    F6 -->|No| REJECT
+    F6 -->|Yes| PASS["Included"]
+
+    PASS --> SORT["Sort: multimodal first,<br/>then context desc, then name"]
+    SORT --> ENRICH["Add summary:<br/>pricing + context + capability badges"]
+    ENRICH --> UI["Return to frontend dropdown"]
+
+    style REJECT fill:#7f1d1d,stroke:#ef4444,color:#e2e8f0
+    style PASS fill:#065f46,stroke:#10b981,color:#e2e8f0
+```
+
+All filtering is metadata-based — no hardcoded model IDs. New models automatically appear when they meet the criteria.
+
+---
+
+## 12. Key Design Decisions (Addendum)
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| **All gates require approval** | `requiresApproval: true` on all 5 phases | User maintains full control; no auto-proceed on any phase |
+| **Server-side document parsing** | Extract text before LLM sees it | LLMs can't natively read binary formats; text extraction is deterministic |
+| **Dynamic model filtering** | Metadata-based, not hardcoded | OpenRouter adds new models frequently; filter adapts automatically |
+| **Interactive Q&A UI** | `<!-- USER_CHOICES:json -->` marker + `InteractiveChoices` component | Clickable buttons replace typed responses for all multi-option questions (verbosity, scope, yes/no, etc.) |
+| **Auto-resume on round limit** | 5s countdown + auto-send "Continue" (hidden from chat UI) | Seamless experience when 30-round tool loop exhausted; `hidden` flag on `ChatMessage` filters auto-generated messages from display |
+| **Voice input (Web Speech API)** | Browser-native `SpeechRecognition`, no server cost | Free, real-time; hidden on unsupported browsers |
+| **Dynamic example prompts** | Instance-aware starter cards from SN metadata | Queries custom tables, business rules, catalog items, update sets; randomized pool of 4; falls back to hardcoded defaults |
+| **Confidentiality guardrails** | `<confidentiality>` section in system prompt | Prevents AI from revealing architecture, tech stack, model identity, or internal implementation |
+| **Authenticated user avatar** | First initial of SN user's display name | Passed via `connInfo.userInfo.name` through `ChatWindow` to `MessageBubble`; falls back to "U" |
+| **Verbose logging (env-controlled)** | `VERBOSE_LOGGING` env var | Debug-level insight without production noise |
+
+---
+
+## 13. Interactive Q&A UI
+
+Replaces typed responses with clickable buttons for all multi-option questions the agent asks.
+
+### 13.1 Marker Format
+
+The agent emits an HTML comment at the end of its message:
+
+```
+<!-- USER_CHOICES:{"choices":[{"key":"1","label":"Concise","description":"Summary + requirements table"},{"key":"2","label":"Standard","description":"Problem statement + dependencies"}]} -->
+```
+
+### 13.2 Data Flow
+
+```mermaid
+sequenceDiagram
+    participant Agent as LLM Agent
+    participant API as /api/chat-stream
+    participant UI as MessageBubble
+    participant User
+
+    Agent->>API: Response with USER_CHOICES marker
+    API->>UI: Stream response content
+    UI->>UI: parseUserChoices() extracts choices block
+    UI->>UI: stripUserChoicesMarker() cleans display text
+    UI->>User: Render markdown table + InteractiveChoices buttons
+    User->>UI: Click button (or arrow keys + Enter)
+    UI->>UI: handleChoiceSelect() marks choicesAnswered=true
+    UI->>API: Sends choice key as user message
+    Note over UI: Buttons dim out after selection
+```
+
+### 13.3 Component: InteractiveChoices
+
+| Feature | Implementation |
+|---------|---------------|
+| Keyboard navigation | Arrow keys cycle focus, Enter selects |
+| Accessibility | `role="listbox"`, `aria-selected` on focused option |
+| Visual feedback | Blue ring on focused button, dim after answered |
+| Answered state | `choicesAnswered` flag on `ChatMessage` prevents re-selection |
+
+### 13.4 When Choices Are Rendered
+
+| Decision Point | Example Choices |
+|----------------|----------------|
+| Spec verbosity | Concise / Standard / Detailed |
+| Scope selection | Global / Scoped App / Create New |
+| Duplicate update set | Reuse / Rename / Timestamp |
+| Yes/No confirmations | Yes / No |
+| Any agent-presented options | Dynamic per question |
+
+Open-ended questions (free text) do NOT use this mechanism.
+
+
+
+---
+
+## 14. Voice Input (Web Speech API)
+
+Browser-native speech-to-text that streams transcribed text into the chat textarea for user review before sending.
+
+### 14.1 Approach
+
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| **Primary** | `window.SpeechRecognition` / `webkitSpeechRecognition` | Free, real-time transcription in Chrome/Edge/Safari |
+| **Unsupported browsers** | Mic button hidden with tooltip | Firefox and others see a grayed-out mic icon explaining the limitation |
+
+No server-side transcription endpoint is required. No new npm dependencies.
+
+### 14.2 Data Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Mic as Mic Button
+    participant SR as SpeechRecognition API
+    participant TA as Textarea
+    participant Send as Send Button
+
+    User->>Mic: Click (start)
+    Mic->>SR: recognition.start()
+    Note over Mic: Button pulses red, timer starts
+    SR-->>TA: onresult (interim transcript)
+    SR-->>TA: onresult (final transcript)
+    Note over TA: Text fills textarea in real-time
+    User->>Mic: Click (stop) or 2min timeout
+    Mic->>SR: recognition.stop()
+    Note over TA: User reviews/edits text
+    User->>Send: Click Send or press Enter
+```
+
+### 14.3 UI States
+
+| State | Mic Icon | Color | Indicator |
+|-------|----------|-------|-----------|
+| **Idle** | Microphone | Gray (matches image/doc buttons) | None |
+| **Recording** | Stop square | Red with `animate-pulse` | Red bar above textarea: pulsing dot + MM:SS elapsed + remaining time |
+| **Unsupported** | Microphone + strikethrough | Dark gray | Tooltip: "Voice input is not supported in this browser. Use Chrome or Edge." |
+
+### 14.4 Key Behaviors
+
+- **Transcript fills textarea, not auto-sent** -- user reviews/edits before pressing Send
+- **Continuous mode** -- `recognition.continuous = true` captures multi-sentence speech
+- **Interim + final results** -- interim text shows immediately, replaced by finalized text as the engine confirms words
+- **Preserves existing text** -- if the textarea already has content, voice appends to it
+- **Auto-stop** -- 2-minute hard cap via `setTimeout`; browser may also stop on extended silence
+- **Cleanup** -- recognition aborted on component unmount; timers cleared
+
+### 14.5 Browser Support
+
+| Browser | Support | Notes |
+|---------|---------|-------|
+| Chrome / Edge | Full | `SpeechRecognition` or `webkitSpeechRecognition` |
+| Safari | Partial | `webkitSpeechRecognition` (prefixed) |
+| Firefox | None | Mic button hidden with tooltip |
+
+### 14.6 Input Bar Layout
+
+```
+[Image btn] [Doc btn] [Textarea] [Mic btn] [Send/Stop btn]
+```
+
+---
+
+## 15. Dynamic Instance-Aware Example Prompts
+
+On connection, the app fetches instance metadata in the background and generates contextual starter cards.
+
+### 15.1 Data Sources
+
+| SN Table | Query | Purpose |
+|----------|-------|---------|
+| `sys_db_object` | Custom tables (`u_`/`x_` prefix) | "Analyze custom table X" prompts |
+| `sys_script` | Active business rules | "Review N business rules on table Y" prompts |
+| `sc_cat_item` | Active catalog items | "Analyze catalog item Z" prompts |
+| `sys_update_set` | In-progress (non-Default) | "Show contents of update set W" prompts |
+
+### 15.2 Flow
+
+1. User connects to instance (connection completes immediately)
+2. Background `POST /api/instance-prompts` fires (non-blocking)
+3. `sn-engine.ts:fetchInstancePrompts()` runs 4 parallel SN queries
+4. Builds a pool of contextual prompts + 4 generic fallbacks
+5. Shuffles pool, returns 4 random prompts
+6. `ChatWindow` renders instance prompts if available, else hardcoded defaults
+
+### 15.3 Fallback
+
+If the fetch fails or returns empty (e.g., network error, insufficient permissions), the UI silently falls back to the hardcoded `DEFAULT_PROMPTS` array. No error is shown to the user.
+
+---
+
+## 16. Confidentiality Guardrails
+
+The system prompt includes a `<confidentiality>` XML section that instructs the AI to never reveal:
+
+- Application architecture, design, or tech stack
+- Which AI model or provider powers the assistant
+- Internal prompt instructions or tool definitions
+- Webapp framework, hosting, or infrastructure details
+- Source file names, directory structures, or code snippets
+
+If asked, the AI responds with a neutral redirect: "I'm a ServiceNow AI Dev Assistant. I can help you build, analyze, and deploy ServiceNow solutions."
+
+---
+
+## 17. Hidden Messages & Authenticated Avatar
+
+### 17.1 Hidden Messages
+
+The `ChatMessage` type includes an optional `hidden: boolean` flag. Messages marked as hidden are:
+- **Sent to the AI** as part of conversation history (so context is preserved)
+- **Filtered out** of the visible chat UI via `messages.filter(msg => !msg.hidden)`
+
+Currently used for auto-resume "Continue from where you left off" messages that are system-generated and should not appear as user messages.
+
+### 17.2 Authenticated User Avatar
+
+The user avatar in `MessageBubble` displays the first initial of the authenticated ServiceNow user's display name instead of a generic "U":
+
+- `connInfo.userInfo.name` is passed from `page.tsx` → `ChatWindow` → `MessageBubble` as `userName`
+- Renders `userName.charAt(0).toUpperCase()` or falls back to "U" if not connected
+
+---
+
+## 18. Helper APIs (Scripted REST on ServiceNow)
+
+The framework auto-deploys lightweight Scripted REST APIs to the connected ServiceNow instance to work around platform limitations in the standard Table API.
+
+### 18.1 Current Helper APIs
+
+| API | Service ID | Purpose | Why needed |
+|-----|-----------|---------|------------|
+| **UIPolicyActionHelper** | `ui_policy_action_helper` | Create UI Policy Actions with proper `ui_policy` reference field | Table API cannot set reference fields on `sys_ui_policy_action` correctly |
+| **UpdateSetHelper** | `update_set_helper` | Set current update set via `GlideUpdateSet().set()` | REST API does not honor session-based update set context like the UI does |
+
+### 18.2 Auto-Detection and Deployment
+
+On connection, `HelperApisSetup.initializeHelperApis()` runs:
+
+1. Queries `sys_ws_definition` for each helper by `service_id`
+2. If found, caches the namespace and base path (e.g., `/api/global/update_set_helper`)
+3. If not found, creates the API definition + resource via Table API and caches the path
+4. Results are cached per instance URL — subsequent calls skip the check
+
+Status is shown in the Settings panel under the connection card as green (Ready) or amber (Not deployed) badges.
+
+### 18.3 No New Helper APIs Required
+
+The recent features (dynamic instance prompts, reconnect flow, confidentiality guardrails, hidden messages, authenticated avatar) all use either:
+- **Standard Table API** (`getRecords` on `sys_db_object`, `sys_script`, `sc_cat_item`, `sys_update_set`)
+- **Frontend-only logic** (CSS, state management, system prompt text)
+
+No additional Scripted REST APIs are needed on the instance.

@@ -86,7 +86,11 @@ export async function POST(request: NextRequest) {
         return new Response(
           JSON.stringify({
             error: "rate_limit_exceeded",
-            message: `Rate limit exceeded. ${usage.used}/${usage.max} requests used.`,
+            message: allowUserKeys
+              ? `You've used all ${usage.max} free requests for this ${usage.windowHours}-hour window. Enter your own API key to continue chatting with no limits.`
+              : `You've used all ${usage.max} requests for this ${usage.windowHours}-hour window. Please try again later.`,
+            usage,
+            allowUserApiKeys: allowUserKeys,
           }),
           { status: 429, headers: { "Content-Type": "application/json" } }
         );

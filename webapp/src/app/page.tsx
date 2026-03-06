@@ -6,8 +6,8 @@ import SettingsPanel from "@/components/SettingsPanel";
 import ChatWindow from "@/components/ChatWindow";
 import PhaseTracker from "@/components/PhaseTracker";
 import InfoModal from "@/components/InfoModal";
-import type { ChatMessage, ConnectionResult, UsageInfo, SDLCPhase, LiveStatus, AIProvider, ModelOption } from "@/lib/types";
-import { parsePhaseGate, ANTHROPIC_MODELS, SDLC_PHASES, openRouterModelToOption } from "@/lib/types";
+import type { ChatMessage, ConnectionResult, UsageInfo, SDLCPhase, LiveStatus, AIProvider, ModelOption, FileAttachment } from "@/lib/types";
+import { parsePhaseGate, parseUserChoices, ANTHROPIC_MODELS, SDLC_PHASES, openRouterModelToOption } from "@/lib/types";
 
 export default function Home() {
   const [credentials, setCredentials] = useState({
@@ -29,7 +29,7 @@ export default function Home() {
   const [usage, setUsage] = useState<UsageInfo | null>(null);
   const [rateLimitHit, setRateLimitHit] = useState(false);
   // Pending retry — stores the failed message so it can be auto-retried after user provides an API key
-  const [pendingRetry, setPendingRetry] = useState<{ text: string; images?: string[] } | null>(null);
+  const [pendingRetry, setPendingRetry] = useState<{ text: string; images?: string[]; files?: FileAttachment[] } | null>(null);
   // AI Provider selection
   const [aiProvider, setAiProvider] = useState<AIProvider>("anthropic");
   // Model selection — locked after first message sent
@@ -51,12 +51,14 @@ export default function Home() {
   // Live status streaming (controlled via NEXT_PUBLIC_SHOW_LIVE_STATUS env)
   const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
   const [streamingEnabled, setStreamingEnabled] = useState(true);
+  // Dynamic example prompts from instance data
+  const [instancePrompts, setInstancePrompts] = useState<{ icon: string; text: string; desc: string }[] | null>(null);
   // Persistent session ID for logging - generated once per page load
   const [clientSessionId] = useState(() => `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   // Ref to always access the latest handleSend (avoids stale closure in handleApprove setTimeout)
-  const handleSendRef = useRef<(text: string, images?: string[]) => void>(() => {});
+  const handleSendRef = useRef<(text: string, images?: string[], files?: FileAttachment[], hidden?: boolean) => void>(() => {});
   // Ref to always have access to the latest messages (avoids race conditions with React batching)
   const messagesRef = useRef<ChatMessage[]>([]);
 
@@ -111,11 +113,11 @@ export default function Home() {
         if (res.ok) {
           const data = await res.json();
           // Convert to ModelOption format
-          const models: ModelOption[] = data.models.map((m: { id: string; name: string; description?: string; contextLength?: number; pricing?: { prompt: number; completion: number }; supportsTools?: boolean }) => ({
+          const models: ModelOption[] = data.models.map((m: { id: string; name: string; summary?: string; contextLength?: number }) => ({
             key: m.id,
             label: m.name,
             modelId: m.id,
-            description: m.description || `${Math.round((m.contextLength || 0) / 1000)}K context`,
+            description: m.summary || `${Math.round((m.contextLength || 0) / 1000)}K context`,
             provider: "openrouter" as const,
           }));
           setOpenRouterModels(models);
@@ -205,6 +207,20 @@ export default function Home() {
         messagesRef.current = newMsgs;
         setMessages(newMsgs);
         setTimeout(() => inputRef.current?.focus(), 100);
+
+        // Fetch instance-specific example prompts in background (non-blocking)
+        fetch("/api/instance-prompts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            instanceUrl: credentials.instanceUrl,
+            username: credentials.username,
+            password: credentials.password,
+          }),
+        })
+          .then((r) => r.json())
+          .then((d) => { if (d.prompts?.length) setInstancePrompts(d.prompts); })
+          .catch(() => { /* non-critical — defaults will be used */ });
       } else {
         const errMsgs = [...messagesRef.current, { role: "system" as const, type: "error" as const, content: `Connection failed: ${data.message || "Unknown error"}` }];
         messagesRef.current = errMsgs;
@@ -220,13 +236,19 @@ export default function Home() {
   }, [credentials]);
 
   const handleSend = useCallback(
-    async (text: string, images?: string[]) => {
-      if ((!text.trim() && (!images || images.length === 0)) || isLoading) return;
+    async (text: string, images?: string[], files?: FileAttachment[], hidden?: boolean) => {
+      if ((!text.trim() && (!images || images.length === 0) && (!files || files.length === 0)) || isLoading) return;
 
       // Clear any pending retry — user is sending a new/retried message
       if (pendingRetry) setPendingRetry(null);
 
-      const userMsg: ChatMessage = { role: "user", content: text, ...(images?.length ? { images } : {}) };
+      const userMsg: ChatMessage = {
+        role: "user",
+        content: text,
+        ...(images?.length ? { images } : {}),
+        ...(files?.length ? { files } : {}),
+        ...(hidden ? { hidden: true } : {}),
+      };
 
       // Build new messages array from the ref (always has latest due to useEffect sync)
       // This avoids race conditions with React's state batching
@@ -244,7 +266,12 @@ export default function Home() {
         // Only send user/assistant messages to the API (not system messages)
         const apiMessages = newMessages
           .filter((m) => m.role === "user" || m.role === "assistant")
-          .map((m) => ({ role: m.role, content: m.content, ...(m.images?.length ? { images: m.images } : {}) }));
+          .map((m) => ({
+            role: m.role,
+            content: m.content,
+            ...(m.images?.length ? { images: m.images } : {}),
+            ...(m.files?.length ? { files: m.files } : {}),
+          }));
 
         // Safety check: ensure we have messages to send
         if (apiMessages.length === 0) {
@@ -276,7 +303,46 @@ export default function Home() {
           if (!res.ok) {
             const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
             setLiveStatus(null);
-            setMessages((prev) => [...prev, { role: "system", type: "error", content: `Error: ${errorData.error || errorData.message || "Request failed"}` }]);
+
+            if (res.status === 429) {
+              if (errorData.error === "anthropic_rate_limit") {
+                if (allowUserApiKeys) {
+                  setPendingRetry({ text, images, files });
+                  setRateLimitHit(true);
+                  setShowSettings(true);
+                }
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    role: "system",
+                    type: "error",
+                    content: allowUserApiKeys
+                      ? `**API rate limit hit** -- The server's Claude API key hit its token limit. Enter your own API key in Settings to continue. Your conversation is preserved and will auto-retry.`
+                      : `**API rate limit hit** -- The server's Claude API key hit its token limit. Please try again later.`,
+                  },
+                ]);
+              } else {
+                // App-level rate limit (request count)
+                setUsage(errorData.usage);
+                if (allowUserApiKeys) {
+                  setRateLimitHit(true);
+                  setShowSettings(true);
+                }
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    role: "system",
+                    type: "error",
+                    content: allowUserApiKeys
+                      ? `**Rate limit reached** -- You've used all ${errorData.usage?.max ?? 10} free requests for this ${errorData.usage?.windowHours ?? 4}-hour window.\n\nTo continue chatting, **enter your own API key** in the Settings panel on the left. Your key is sent per-request over HTTPS and never stored.`
+                      : `**Rate limit reached** -- You've used all ${errorData.usage?.max ?? 10} requests for this ${errorData.usage?.windowHours ?? 4}-hour window. Please try again later.`,
+                  },
+                ]);
+              }
+            } else {
+              setMessages((prev) => [...prev, { role: "system", type: "error", content: `Error: ${errorData.error || errorData.message || "Request failed"}` }]);
+            }
+
             setIsLoading(false);
             return;
           }
@@ -315,9 +381,39 @@ export default function Home() {
                       setLiveStatus({ message: `${event.toolName} completed (${event.durationMs}ms)`, phase: "tool", toolName: event.toolName });
                     } else if (event.type === "done") {
                       finalData = { reply: event.reply, toolExecutions: event.toolExecutions };
+                    } else if (event.type === "max_rounds_reached") {
+                      // Auto-resume: add partial reply as assistant msg, then schedule continuation
+                      const partialMsg: ChatMessage = {
+                        role: "assistant",
+                        content: event.reply,
+                        toolExecutions: event.toolExecutions,
+                      };
+                      const updatedMsgs = [...messagesRef.current, partialMsg];
+                      messagesRef.current = updatedMsgs;
+                      setMessages(updatedMsgs);
+
+                      // Show countdown timer
+                      const delayMs = event.resumeAfterMs || 5000;
+                      const steps = Math.ceil(delayMs / 1000);
+                      for (let s = steps; s > 0; s--) {
+                        setLiveStatus({ message: `Round limit reached. Resuming in ${s}s...`, phase: "thinking" });
+                        await new Promise((r) => setTimeout(r, 1000));
+                      }
+                      setLiveStatus({ message: "Resuming...", phase: "thinking" });
+
+                      // Auto-send a "continue" message to resume from the same point (hidden from chat UI)
+                      setTimeout(() => handleSendRef.current("Continue from where you left off. Complete the remaining work.", undefined, undefined, true), 200);
+                      return; // Exit the current stream processing
                     } else if (event.type === "error") {
                       setLiveStatus(null);
-                      setMessages((prev) => [...prev, { role: "system", type: "error", content: `Error: ${event.message}` }]);
+                      let errorContent = `Error: ${event.message}`;
+                      // OpenRouter rate limit -- provide actionable guidance
+                      if (typeof event.message === "string" && event.message.startsWith("openrouter_rate_limit|")) {
+                        const parts = event.message.split("|");
+                        const rateLimitedModel = parts[1] || "the selected model";
+                        errorContent = `**Rate limited** -- The model \`${rateLimitedModel}\` is temporarily rate-limited by its upstream provider after multiple retry attempts.\n\n**What you can do:**\n- **Switch to a different model** from the model selector\n- **Wait a few minutes** and try again\n- **Add your own API key** on [OpenRouter](https://openrouter.ai/settings/integrations) for higher limits`;
+                      }
+                      setMessages((prev) => [...prev, { role: "system", type: "error", content: errorContent }]);
                       setIsLoading(false);
                       return;
                     }
@@ -475,7 +571,7 @@ export default function Home() {
           if (data.error === "anthropic_rate_limit") {
             // Anthropic token limit
             if (allowUserApiKeys) {
-              setPendingRetry({ text, images });
+              setPendingRetry({ text, images, files });
               setRateLimitHit(true);
               setShowSettings(true);
             }
@@ -583,6 +679,26 @@ export default function Home() {
     [] // No dependencies needed - we use handleSendRef which always has the latest
   );
 
+  /** Handle interactive choice selection — mark the message as answered and send the choice */
+  const handleChoiceSelect = useCallback(
+    (choiceKey: string) => {
+      // Find the last assistant message with unanswered choices and mark it
+      const updated = [...messagesRef.current];
+      for (let i = updated.length - 1; i >= 0; i--) {
+        if (updated[i].role === "assistant" && parseUserChoices(updated[i].content) && !updated[i].choicesAnswered) {
+          updated[i] = { ...updated[i], choicesAnswered: true };
+          break;
+        }
+      }
+      messagesRef.current = updated;
+      setMessages(updated);
+
+      // Send the choice as a user message
+      setTimeout(() => handleSendRef.current(choiceKey), 50);
+    },
+    [] // Uses refs — no stale closure risk
+  );
+
   const handleNewChat = useCallback(() => {
     messagesRef.current = [];
     setMessages([]);
@@ -591,6 +707,15 @@ export default function Home() {
     setCompletedPhases([]);
     setModelLocked(false);
     setPendingRetry(null);
+  }, []);
+
+  /** Disconnect and unlock fields so user can edit before reconnecting */
+  const handleReconnect = useCallback(() => {
+    setConnected(false);
+    setConnInfo(null);
+    setModelLocked(false);
+    setInstancePrompts(null);
+    // Keep credentials, messages, and chat state intact so user can modify fields and reconnect
   }, []);
 
   /** Download entire conversation as a markdown file with embedded images */
@@ -688,6 +813,7 @@ export default function Home() {
           connInfo={connInfo}
           isConnecting={isConnecting}
           onConnect={handleConnect}
+          onReconnect={handleReconnect}
           serverApiKeyConfigured={serverApiKeyConfigured}
           serverOpenRouterKeyConfigured={serverOpenRouterKeyConfigured}
           serverSnCredsConfigured={serverSnCredsConfigured}
@@ -699,7 +825,7 @@ export default function Home() {
               const retry = pendingRetry;
               setPendingRetry(null);
               // Auto-retry the failed message with the new API key (use ref to avoid stale closure)
-              setTimeout(() => handleSendRef.current(retry.text, retry.images), 150);
+              setTimeout(() => handleSendRef.current(retry.text, retry.images, retry.files), 150);
             }
           }}
           aiProvider={aiProvider}
@@ -775,10 +901,13 @@ export default function Home() {
           onSend={handleSend}
           onCancel={handleCancel}
           onApprove={handleApprove}
+          onChoiceSelect={handleChoiceSelect}
           connected={connected}
           inputRef={inputRef}
           showToolDetails={showToolDetails}
           liveStatus={liveStatus}
+          userName={connInfo?.userInfo?.name}
+          instancePrompts={instancePrompts ?? undefined}
         />
       </main>
 

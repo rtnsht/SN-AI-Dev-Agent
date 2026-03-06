@@ -13,6 +13,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { createRequire } from "node:module";
+import { processFileAttachments } from "./file-parser";
 import path from "node:path";
 import { buildSystemPrompt, buildDynamicContext } from "./system-prompt";
 import { logger } from "./logger";
@@ -222,12 +223,16 @@ function trimConversationHistory(messages: Anthropic.MessageParam[]): Anthropic.
     return messages;
   }
 
-  console.log(`  [context] Estimated ${estimatedTokens} tokens, applying progressive compression...`);
+  logger.info("system", "context_mgmt", "Context budget exceeded, applying progressive compression", {
+    estimatedTokens,
+    warningThreshold: CONTEXT_WARNING_TOKENS,
+    messageCount: messages.length,
+  });
 
   // Step 1: Compress old tool results (keeps all messages, just shrinks content)
   let compressed = compressOldToolResults(messages);
   let compressedTokens = estimateConversationTokens(compressed);
-  console.log(`  [context] After tool-result compression: ~${compressedTokens} tokens`);
+  logger.info("system", "context_mgmt", "After tool-result compression", { tokensAfter: compressedTokens, tokensBefore: estimatedTokens });
 
   if (compressedTokens < CONTEXT_WARNING_TOKENS) {
     return compressed;
@@ -259,7 +264,13 @@ function trimConversationHistory(messages: Anthropic.MessageParam[]): Anthropic.
   result.push(...compressed.slice(-recentCount));
 
   const newTokens = estimateConversationTokens(result);
-  console.log(`  [context] Trimmed from ${estimatedTokens} to ~${newTokens} tokens (${messages.length} → ${result.length} messages)`);
+  logger.info("system", "context_mgmt", "Dropped middle messages with extractive summary", {
+    tokensBefore: estimatedTokens,
+    tokensAfter: newTokens,
+    messagesBefore: messages.length,
+    messagesAfter: result.length,
+    droppedCount: droppedSlice.length,
+  });
 
   return result;
 }
@@ -324,11 +335,21 @@ export interface UserCredentials {
   aiProvider?: "anthropic" | "openrouter";
 }
 
+/** A non-image file attachment (PDF, Word, Excel) */
+export interface FileAttachment {
+  name: string;
+  mimeType: string;
+  data: string; // base64-encoded
+  size: number;
+}
+
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   /** Base64 data-URI images attached to this message */
   images?: string[];
+  /** Non-image file attachments (PDF, Word, Excel) */
+  files?: FileAttachment[];
 }
 
 export interface ToolExecution {
@@ -366,6 +387,27 @@ function getFilteredTools(phase: string | null | undefined, defs: any) {
   return (phase
     ? defs.getAnthropicToolDefinitionsForPhase(phase)
     : defs.getAnthropicToolDefinitions()) as Anthropic.Tool[];
+}
+
+/**
+ * Preprocess messages: extract text from file attachments and prepend to user message content.
+ * This runs once before messages are converted to API format, so both Anthropic and OpenRouter
+ * paths benefit from file content extraction.
+ */
+async function preprocessFileAttachments(messages: ChatMessage[]): Promise<ChatMessage[]> {
+  const result: ChatMessage[] = [];
+  for (const msg of messages) {
+    if (msg.role === "user" && msg.files && msg.files.length > 0) {
+      const fileText = await processFileAttachments(msg.files);
+      const augmentedContent = fileText
+        ? `[Attached documents]\n\n${fileText}\n\n---\n\n${msg.content}`
+        : msg.content;
+      result.push({ ...msg, content: augmentedContent, files: undefined });
+    } else {
+      result.push(msg);
+    }
+  }
+  return result;
 }
 
 function toAnthropicMessages(messages: ChatMessage[]): Anthropic.MessageParam[] {
@@ -424,6 +466,26 @@ function toOpenRouterTools(anthropicTools: Anthropic.Tool[]): OpenRouterTool[] {
   }));
 }
 
+/**
+ * Truncate tool input for logging (avoids dumping huge scripts into logs).
+ * Keeps full keys but truncates long string values.
+ */
+function summarizeToolInput(input: unknown): Record<string, unknown> {
+  if (input === null || input === undefined || typeof input !== "object") {
+    return { _raw: typeof input === "string" && input.length > 200 ? input.slice(0, 200) + "..." : input };
+  }
+  const obj = input as Record<string, unknown>;
+  const summary: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (typeof v === "string" && v.length > 200) {
+      summary[k] = v.slice(0, 200) + `... [${v.length} chars]`;
+    } else {
+      summary[k] = v;
+    }
+  }
+  return summary;
+}
+
 /** Execute a single tool call, log it, and return the ToolExecution record. */
 async function executeAndLogTool(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -445,12 +507,15 @@ async function executeAndLogTool(
   }
   const durationMs = Date.now() - start;
 
+  const inputSummary = summarizeToolInput(input);
+
   if (success) {
-    logger.info(sessionId, "mcp_tool", `Tool executed: ${toolName}`, { toolName, durationMs, success: true });
+    logger.info(sessionId, "mcp_tool", `Tool executed: ${toolName}`, { toolName, durationMs, success: true, input: inputSummary });
   } else {
     logger.error(sessionId, "mcp_tool", `Tool failed: ${toolName}`, {
       toolName,
       durationMs,
+      input: inputSummary,
       error: typeof output === "object" && output !== null ? (output as Record<string, unknown>).error : output,
     });
   }
@@ -481,22 +546,40 @@ export async function chat(
   const registry = getToolRegistry();
   const snClient = createSnClient(credentials, registry);
   const tools = getFilteredTools(phase, getToolDefs());
+  const allToolCount = getToolDefs().getAnthropicToolDefinitions().length;
   const anthropic = new Anthropic({ apiKey: credentials.claudeApiKey });
-  const anthropicMessages = toAnthropicMessages(messages);
+  const processedMessages = await preprocessFileAttachments(messages);
+  const anthropicMessages = toAnthropicMessages(processedMessages);
   const toolExecutions: ToolExecution[] = [];
   let rounds = 0;
+
+  // Log initial request context
+  const userIntent = messages.filter(m => m.role === "user").slice(-1)[0]?.content?.slice(0, 200) || "";
+  logger.info(sessionId, "chat_init", "Chat session initialized", {
+    phase: phase || "none",
+    toolsFiltered: tools.length,
+    toolsTotal: allToolCount,
+    model,
+    userIntent,
+  });
 
   while (rounds < maxToolRounds) {
     rounds++;
 
     const trimmedMessages = trimConversationHistory(anthropicMessages);
     if (trimmedMessages.length !== anthropicMessages.length) {
+      const beforeCount = anthropicMessages.length;
       anthropicMessages.length = 0;
       anthropicMessages.push(...trimmedMessages);
+      logger.info(sessionId, "context_mgmt", "Conversation history trimmed", {
+        beforeMessages: beforeCount,
+        afterMessages: trimmedMessages.length,
+        reason: "token budget exceeded",
+      });
     }
 
-    logger.info(sessionId, "claude_api", `Round ${rounds}: Calling Anthropic API`, {
-      messageCount: anthropicMessages.length, model,
+    logger.info(sessionId, "claude_api", `Round ${rounds}/${maxToolRounds}: Calling Anthropic API`, {
+      messageCount: anthropicMessages.length, model, remainingRounds: maxToolRounds - rounds,
     });
 
     // Call Anthropic with prompt caching + retry logic
@@ -514,14 +597,13 @@ export async function chat(
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const usage = response.usage as any;
-        if (usage) {
-          logger.info(sessionId, "claude_api", "API response received", {
-            inputTokens: usage.input_tokens ?? 0,
-            cacheReadTokens: usage.cache_read_input_tokens ?? 0,
-            cacheCreationTokens: usage.cache_creation_input_tokens ?? 0,
-            outputTokens: usage.output_tokens ?? 0,
-          });
-        }
+        logger.info(sessionId, "claude_api", "API response received", {
+          stopReason: response.stop_reason,
+          inputTokens: usage?.input_tokens ?? 0,
+          cacheReadTokens: usage?.cache_read_input_tokens ?? 0,
+          cacheCreationTokens: usage?.cache_creation_input_tokens ?? 0,
+          outputTokens: usage?.output_tokens ?? 0,
+        });
         break;
       } catch (err) {
         const isRateLimit =
@@ -546,6 +628,12 @@ export async function chat(
     }
 
     if (response.stop_reason === "tool_use") {
+      const toolUseBlocks = response.content.filter((b) => b.type === "tool_use");
+      logger.info(sessionId, "claude_api", `Claude requesting ${toolUseBlocks.length} tool call(s)`, {
+        tools: toolUseBlocks.map((b) => b.type === "tool_use" ? b.name : "").filter(Boolean),
+        round: rounds,
+      });
+
       anthropicMessages.push({ role: "assistant", content: response.content });
       const toolResults: Anthropic.ToolResultBlockParam[] = [];
 
@@ -559,12 +647,16 @@ export async function chat(
       anthropicMessages.push({ role: "user", content: toolResults });
     } else {
       const textParts = response.content.filter((b): b is Anthropic.TextBlock => b.type === "text").map((b) => b.text);
-      logger.info(sessionId, "chat", "Chat completed", { toolCount: toolExecutions.length });
+      logger.info(sessionId, "chat", "Chat completed", {
+        toolCount: toolExecutions.length,
+        totalRounds: rounds,
+        stopReason: response.stop_reason,
+      });
       return { reply: textParts.join("\n"), toolExecutions };
     }
   }
 
-  logger.warn(sessionId, "chat", "Max tool rounds reached", { rounds: maxToolRounds });
+  logger.warn(sessionId, "chat", "Max tool rounds reached", { rounds: maxToolRounds, toolCount: toolExecutions.length });
   return { reply: "I reached the maximum number of tool execution rounds. Please try a more specific request.", toolExecutions };
 }
 
@@ -601,7 +693,8 @@ async function chatOpenRouter(
   const registry = getToolRegistry();
   const snClient = createSnClient(credentials, registry);
   const tools = toOpenRouterTools(getFilteredTools(phase, getToolDefs()));
-  const orMessages = toOpenRouterMessages(messages, model);
+  const processedMessages = await preprocessFileAttachments(messages);
+  const orMessages = toOpenRouterMessages(processedMessages, model);
   const toolExecutions: ToolExecution[] = [];
   let rounds = 0;
 
@@ -619,7 +712,11 @@ async function chatOpenRouter(
     const message = choice.message;
 
     if (message.tool_calls && message.tool_calls.length > 0) {
-      orMessages.push({ role: "assistant", content: message.content || "" });
+      orMessages.push({
+        role: "assistant",
+        content: message.content || "",
+        tool_calls: message.tool_calls,
+      } as OpenRouterMessage & { tool_calls: typeof message.tool_calls });
 
       for (const toolCall of message.tool_calls) {
         const args = JSON.parse(toolCall.function.arguments);
@@ -700,6 +797,104 @@ export async function testConnection(credentials: Omit<UserCredentials, "claudeA
   };
 }
 
+/* ── Instance-based Example Prompts ───────────────────────────── */
+
+export interface ExamplePrompt {
+  icon: string;
+  text: string;
+  desc: string;
+}
+
+/**
+ * Fetch lightweight instance metadata and generate contextual example prompts.
+ * Queries: custom tables, business rules, catalog items, update sets.
+ * Returns 4 randomized prompts relevant to what exists on the instance.
+ */
+export async function fetchInstancePrompts(
+  credentials: Omit<UserCredentials, "claudeApiKey">
+): Promise<ExamplePrompt[]> {
+  const registry = getToolRegistry();
+  const snClient = createSnClient(credentials as UserCredentials, registry);
+
+  // Run all queries in parallel for speed
+  const [customTables, businessRules, catalogItems, updateSets] = await Promise.allSettled([
+    // Custom tables (u_ prefix or scoped)
+    snClient.getRecords("sys_db_object", {
+      sysparm_query: "nameSTARTSWITHu_^ORnameSTARTSWITHx_^super_class!=NULL",
+      sysparm_fields: "name,label",
+      sysparm_limit: 20,
+    }),
+    // Recent business rules on common tables
+    snClient.getRecords("sys_script", {
+      sysparm_query: "active=true^collectionISNOTEMPTY^ORDERBYDESCsys_updated_on",
+      sysparm_fields: "name,collection,when",
+      sysparm_limit: 20,
+    }),
+    // Service catalog items
+    snClient.getRecords("sc_cat_item", {
+      sysparm_query: "active=true^ORDERBYDESCsys_updated_on",
+      sysparm_fields: "name,short_description,category",
+      sysparm_limit: 15,
+    }),
+    // In-progress update sets
+    snClient.getRecords("sys_update_set", {
+      sysparm_query: "state=in progress^nameNOT LIKEDefault",
+      sysparm_fields: "name,description",
+      sysparm_limit: 10,
+    }),
+  ]);
+
+  const tables = customTables.status === "fulfilled" ? customTables.value : [];
+  const rules = businessRules.status === "fulfilled" ? businessRules.value : [];
+  const catItems = catalogItems.status === "fulfilled" ? catalogItems.value : [];
+  const updSets = updateSets.status === "fulfilled" ? updateSets.value : [];
+
+  // Build a pool of contextual prompts
+  const pool: ExamplePrompt[] = [];
+
+  // Prompts based on custom tables
+  for (const t of tables.slice(0, 8)) {
+    const label = (t.label as string) || (t.name as string);
+    const name = t.name as string;
+    pool.push({ icon: "🔍", text: `Analyze the custom table "${label}" (${name}) — show its fields, business rules, and ACLs`, desc: "Instance analysis" });
+    pool.push({ icon: "📊", text: `List all records in ${name} and summarize the data patterns`, desc: "Quick query" });
+  }
+
+  // Prompts based on business rules — group by table
+  const rulesByTable = new Map<string, string[]>();
+  for (const r of rules) {
+    const col = r.collection as string;
+    if (!col) continue;
+    if (!rulesByTable.has(col)) rulesByTable.set(col, []);
+    rulesByTable.get(col)!.push(r.name as string);
+  }
+  for (const [table, names] of rulesByTable) {
+    pool.push({ icon: "⚙️", text: `Review the ${names.length} active business rule(s) on "${table}" and check for conflicts or performance issues`, desc: "Code review" });
+  }
+
+  // Prompts based on catalog items
+  for (const item of catItems.slice(0, 6)) {
+    const name = (item.name as string) || (item.short_description as string);
+    pool.push({ icon: "📦", text: `Analyze the catalog item "${name}" — review its variables, workflow, and suggest improvements`, desc: "Catalog review" });
+  }
+
+  // Prompts based on update sets
+  for (const us of updSets.slice(0, 4)) {
+    const name = us.name as string;
+    pool.push({ icon: "🔄", text: `Show the contents of update set "${name}" and summarize what it changes`, desc: "Update set review" });
+  }
+
+  // Always include a few generic but useful prompts
+  pool.push({ icon: "🏗️", text: "Build a new feature on my instance following the full SDLC process", desc: "Full SDLC requirement" });
+  pool.push({ icon: "🔍", text: "Analyze my instance health — find anti-patterns, unused scripts, and performance issues", desc: "Instance analysis" });
+  pool.push({ icon: "📋", text: "List all custom applications and scoped apps on this instance", desc: "Quick query" });
+  pool.push({ icon: "🛡️", text: "Audit the ACL rules on my instance and identify security gaps", desc: "Security audit" });
+
+  // Shuffle and pick 4
+  const shuffled = pool.sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, 4);
+}
+
 /* ── Streaming Chat Types ─────────────────────────────────────── */
 
 export type StreamEvent =
@@ -708,6 +903,7 @@ export type StreamEvent =
   | { type: "tool_end"; toolName: string; durationMs: number; success: boolean }
   | { type: "text_delta"; text: string }
   | { type: "done"; reply: string; toolExecutions: ToolExecution[] }
+  | { type: "max_rounds_reached"; reply: string; toolExecutions: ToolExecution[]; resumeAfterMs: number }
   | { type: "error"; message: string };
 
 /**
@@ -730,22 +926,57 @@ export async function* chatStream(
   const registry = getToolRegistry();
   const snClient = createSnClient(credentials, registry);
   const tools = getFilteredTools(phase, getToolDefs());
+  const allToolCount = getToolDefs().getAnthropicToolDefinitions().length;
   const anthropic = new Anthropic({ apiKey: credentials.claudeApiKey });
-  const anthropicMessages = toAnthropicMessages(messages);
+  const processedMessages = await preprocessFileAttachments(messages);
+  const anthropicMessages = toAnthropicMessages(processedMessages);
   const toolExecutions: ToolExecution[] = [];
   let rounds = 0;
+
+  // Log initial request context
+  const userIntent = processedMessages.filter(m => m.role === "user").slice(-1)[0]?.content?.slice(0, 200) || "";
+  logger.info(sessionId, "chat_init", "Stream session initialized", {
+    phase: phase || "none",
+    toolsFiltered: tools.length,
+    toolsTotal: allToolCount,
+    model,
+    maxToolRounds,
+    userIntent,
+  });
+
+  const ROUNDS_WARNING_THRESHOLD = 3; // Warn Claude when this many rounds remain
 
   while (rounds < maxToolRounds) {
     rounds++;
 
     const trimmedMessages = trimConversationHistory(anthropicMessages);
     if (trimmedMessages.length !== anthropicMessages.length) {
+      const beforeCount = anthropicMessages.length;
       anthropicMessages.length = 0;
       anthropicMessages.push(...trimmedMessages);
+      logger.info(sessionId, "context_mgmt", "Stream: conversation history trimmed", {
+        beforeMessages: beforeCount,
+        afterMessages: trimmedMessages.length,
+      });
       yield { type: "status", message: "Trimmed conversation history to manage context size", phase: "thinking" };
     }
 
-    logger.info(sessionId, "claude_api", `Stream round ${rounds}: Calling Anthropic API`, { messageCount: anthropicMessages.length, model });
+    // Inject a warning when approaching the round limit so Claude can wrap up gracefully
+    const remainingRounds = maxToolRounds - rounds;
+    if (remainingRounds === ROUNDS_WARNING_THRESHOLD - 1 && rounds > 1) {
+      anthropicMessages.push({
+        role: "user",
+        content: [{
+          type: "text",
+          text: `[SYSTEM NOTE: You have ${remainingRounds + 1} tool rounds remaining. Prioritize completing the most critical remaining work. Summarize what you have completed and what still needs to be done so work can be resumed if needed.]`,
+        }],
+      });
+      logger.info(sessionId, "round_limit", `Injected round-limit warning at round ${rounds}`, { remainingRounds: remainingRounds + 1 });
+    }
+
+    logger.info(sessionId, "claude_api", `Stream round ${rounds}/${maxToolRounds}: Calling Anthropic API`, {
+      messageCount: anthropicMessages.length, model, remainingRounds,
+    });
     yield { type: "status", message: `Round ${rounds}: Analyzing request...`, phase: "thinking" };
 
     let response: Anthropic.Message;
@@ -778,7 +1009,25 @@ export async function* chatStream(
       }
     }
 
+    // Log stop reason
+    logger.info(sessionId, "claude_api", `Stream response received`, {
+      stopReason: response.stop_reason,
+      round: rounds,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      inputTokens: (response.usage as any)?.input_tokens ?? 0,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      outputTokens: (response.usage as any)?.output_tokens ?? 0,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      cacheReadTokens: (response.usage as any)?.cache_read_input_tokens ?? 0,
+    });
+
     if (response.stop_reason === "tool_use") {
+      const toolUseBlocks = response.content.filter((b) => b.type === "tool_use");
+      logger.info(sessionId, "claude_api", `Claude requesting ${toolUseBlocks.length} tool call(s)`, {
+        tools: toolUseBlocks.map((b) => b.type === "tool_use" ? b.name : "").filter(Boolean),
+        round: rounds,
+      });
+
       anthropicMessages.push({ role: "assistant", content: response.content });
       const toolResults: Anthropic.ToolResultBlockParam[] = [];
 
@@ -797,14 +1046,29 @@ export async function* chatStream(
     } else {
       yield { type: "status", message: "Generating response...", phase: "responding" };
       const reply = response.content.filter((b): b is Anthropic.TextBlock => b.type === "text").map((b) => b.text).join("\n");
-      logger.info(sessionId, "chat_stream", "Stream completed", { toolCount: toolExecutions.length });
+      logger.info(sessionId, "chat_stream", "Stream completed", {
+        toolCount: toolExecutions.length,
+        totalRounds: rounds,
+        stopReason: response.stop_reason,
+      });
       yield { type: "done", reply, toolExecutions };
       return;
     }
   }
 
-  logger.warn(sessionId, "chat_stream", "Stream max tool rounds reached", { rounds: maxToolRounds });
-  yield { type: "done", reply: "I reached the maximum number of tool execution rounds. Please try a more specific request.", toolExecutions };
+  // Extract any partial text from the last response to include context for resume
+  const RESUME_DELAY_MS = 5000;
+  logger.warn(sessionId, "chat_stream", "Stream max tool rounds reached -- signaling auto-resume", {
+    rounds: maxToolRounds,
+    toolCount: toolExecutions.length,
+    resumeAfterMs: RESUME_DELAY_MS,
+  });
+  yield {
+    type: "max_rounds_reached",
+    reply: `[Reached ${maxToolRounds} tool rounds. Resuming automatically to continue work...]`,
+    toolExecutions,
+    resumeAfterMs: RESUME_DELAY_MS,
+  };
 }
 
 /**
@@ -821,7 +1085,8 @@ async function* chatStreamOpenRouter(
   const registry = getToolRegistry();
   const snClient = createSnClient(credentials, registry);
   const tools = toOpenRouterTools(getFilteredTools(phase, getToolDefs()));
-  const orMessages = toOpenRouterMessages(messages, model);
+  const processedMessages = await preprocessFileAttachments(messages);
+  const orMessages = toOpenRouterMessages(processedMessages, model);
   const toolExecutions: ToolExecution[] = [];
   let rounds = 0;
 
@@ -829,42 +1094,80 @@ async function* chatStreamOpenRouter(
     rounds++;
     yield { type: "status", message: `Round ${rounds}: Analyzing request...`, phase: "thinking" };
 
-    try {
-      const response = await chatCompletion(
-        { apiKey: credentials.openRouterApiKey!, siteName: "Yantra AI Dev Agent" },
-        { model, messages: orMessages, tools, tool_choice: "auto", max_tokens: 8192 }
-      );
+    // Retry loop for rate limits (mirrors Anthropic retry logic)
+    let response: Awaited<ReturnType<typeof chatCompletion>>;
+    let rateLimitExhausted = false;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        response = await chatCompletion(
+          { apiKey: credentials.openRouterApiKey!, siteName: "Yantra AI Dev Agent" },
+          { model, messages: orMessages, tools, tool_choice: "auto", max_tokens: 8192 }
+        );
+        break;
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        const isRateLimit = errorMsg.includes("429");
 
-      const choice = response.choices[0];
-      if (!choice?.message) {
-        yield { type: "error", message: "No response from OpenRouter" };
-        return;
-      }
-      const message = choice.message;
-
-      if (message.tool_calls && message.tool_calls.length > 0) {
-        orMessages.push({ role: "assistant", content: message.content || "" });
-
-        for (const toolCall of message.tool_calls) {
-          yield { type: "tool_start", toolName: toolCall.function.name, input: toolCall.function.arguments };
-          yield { type: "status", message: `Executing: ${toolCall.function.name}`, phase: "tool" };
-
-          const args = JSON.parse(toolCall.function.arguments);
-          const { execution, resultJson, success } = await executeAndLogTool(registry, snClient, toolCall.function.name, args, sessionId);
-          yield { type: "tool_end", toolName: toolCall.function.name, durationMs: execution.durationMs, success };
-          toolExecutions.push(execution);
-          orMessages.push({ role: "tool", tool_call_id: toolCall.id, content: resultJson });
+        if (isRateLimit && attempt < MAX_RETRIES) {
+          const delay = BASE_BACKOFF_MS * Math.pow(2, attempt);
+          logger.warn(sessionId, "openrouter_api", "OpenRouter rate limit hit, retrying", { attempt: attempt + 1, delayMs: delay, model });
+          yield { type: "status", message: `Rate limited by provider, retrying in ${(delay / 1000).toFixed(0)}s...`, phase: "thinking" };
+          await sleep(delay);
+          continue;
         }
-      } else {
-        yield { type: "status", message: "Generating response...", phase: "responding" };
-        yield { type: "done", reply: message.content || "", toolExecutions };
+        if (isRateLimit) {
+          rateLimitExhausted = true;
+          logger.error(sessionId, "openrouter_api", "OpenRouter rate limit exceeded after all retries", { model, attempts: attempt + 1 });
+          yield { type: "error", message: `openrouter_rate_limit|${model}|${errorMsg}` };
+          return;
+        }
+        logger.error(sessionId, "openrouter_api", "OpenRouter streaming error", { error: errorMsg, model, round: rounds });
+        yield { type: "error", message: errorMsg };
         return;
       }
-    } catch (err) {
-      yield { type: "error", message: err instanceof Error ? err.message : String(err) };
+    }
+    if (rateLimitExhausted) return;
+
+    const choice = response!.choices[0];
+    if (!choice?.message) {
+      yield { type: "error", message: "No response from OpenRouter" };
+      return;
+    }
+    const message = choice.message;
+
+    if (message.tool_calls && message.tool_calls.length > 0) {
+      // Push assistant message WITH tool_calls -- many models require this for valid conversation
+      orMessages.push({
+        role: "assistant",
+        content: message.content || "",
+        tool_calls: message.tool_calls,
+      } as OpenRouterMessage & { tool_calls: typeof message.tool_calls });
+
+      for (const toolCall of message.tool_calls) {
+        yield { type: "tool_start", toolName: toolCall.function.name, input: toolCall.function.arguments };
+        yield { type: "status", message: `Executing: ${toolCall.function.name}`, phase: "tool" };
+
+        const args = JSON.parse(toolCall.function.arguments);
+        const { execution, resultJson, success } = await executeAndLogTool(registry, snClient, toolCall.function.name, args, sessionId);
+        yield { type: "tool_end", toolName: toolCall.function.name, durationMs: execution.durationMs, success };
+        toolExecutions.push(execution);
+        orMessages.push({ role: "tool", tool_call_id: toolCall.id, content: resultJson });
+      }
+    } else {
+      yield { type: "status", message: "Generating response...", phase: "responding" };
+      yield { type: "done", reply: message.content || "", toolExecutions };
       return;
     }
   }
 
-  yield { type: "done", reply: "I reached the maximum number of tool execution rounds. Please try a more specific request.", toolExecutions };
+  const RESUME_DELAY_MS = 5000;
+  logger.warn(sessionId, "chat_stream", "Stream max tool rounds reached (OpenRouter) -- signaling auto-resume", {
+    rounds: maxToolRounds, toolCount: toolExecutions.length,
+  });
+  yield {
+    type: "max_rounds_reached",
+    reply: `[Reached ${maxToolRounds} tool rounds. Resuming automatically to continue work...]`,
+    toolExecutions,
+    resumeAfterMs: RESUME_DELAY_MS,
+  };
 }
