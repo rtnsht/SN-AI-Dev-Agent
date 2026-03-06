@@ -1912,7 +1912,26 @@ export const SCOPED_APP_TOOLS: ToolDefinition[] = [
   }
 ];
 
-export const ALL_TOOLS = [...TOOLS, ...MORE_TOOLS, ...ADDITIONAL_TOOLS, ...BROWNFIELD_TOOLS, ...FLOW_DESIGNER_TOOLS, ...SCOPED_APP_TOOLS];
+// SDK Fluent Deployment Tool — deploys .now.ts flows via NOW SDK CI mode
+export const SDK_DEPLOY_TOOLS: ToolDefinition[] = [
+  {
+    name: 'sn_deploy_sdk_flow',
+    description: 'Deploy a Flow Designer flow using NOW SDK fluent code. Writes the .now.ts file to the sdk-flows project, runs `now-sdk build` and `now-sdk install` using CI mode for non-interactive auth. Use this instead of REST API for creating flows — REST-created flows lack required snapshots.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        code: { type: 'string', description: 'Complete SDK fluent .now.ts code for the flow' },
+        fileName: { type: 'string', description: 'Filename for the .now.ts file (e.g. "scheduled-cleanup.now.ts")' },
+        scope: { type: 'string', description: 'Scoped app scope string (e.g. "x_snc_yantra")' },
+        scopeId: { type: 'string', description: 'sys_id of the scoped application record' },
+        reinstall: { type: 'boolean', description: 'Use --reinstall for first-time deployments (default: false)' },
+      },
+      required: ['code', 'fileName', 'scope', 'scopeId'],
+    },
+  },
+];
+
+export const ALL_TOOLS = [...TOOLS, ...MORE_TOOLS, ...ADDITIONAL_TOOLS, ...BROWNFIELD_TOOLS, ...FLOW_DESIGNER_TOOLS, ...SCOPED_APP_TOOLS, ...SDK_DEPLOY_TOOLS];
 
 /**
  * Convert tool definitions to Anthropic Messages API format.
@@ -1933,7 +1952,7 @@ export function getAnthropicToolDefinitions() {
 // When a phase is active, only core + that phase's tools are sent to the LLM,
 // dramatically reducing the tool-definition token footprint.
 
-export type SDLCToolPhase = 'spec' | 'design' | 'implementation' | 'testing' | 'deployment';
+export type SDLCToolPhase = 'spec' | 'design' | 'scope_selection' | 'implementation' | 'testing' | 'deployment';
 
 /** Core tools included in every phase */
 const CORE_TOOL_NAMES = new Set([
@@ -1968,6 +1987,13 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
     'sn_list_subflows', 'sn_list_custom_actions',
     // Scope read
     'sn_get_custom_apps', 'sn_get_scope_selection_options',
+  ]),
+
+  scope_selection: new Set([
+    // Scope selection tools
+    'sn_get_custom_apps', 'sn_get_scope_selection_options', 'sn_create_custom_app',
+    // Flow read (to verify what exists)
+    'sn_list_flows', 'sn_get_flow', 'sn_list_subflows', 'sn_list_custom_actions',
   ]),
 
   design: new Set([
@@ -2018,6 +2044,8 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
     'sn_list_subflows', 'sn_list_custom_actions',
     'sn_list_flow_variables', 'sn_list_action_inputs',
     'sn_list_flow_templates',
+    // SDK Fluent Deployment (builds & installs flows via NOW SDK CI mode)
+    'sn_deploy_sdk_flow',
     // Scope management
     'sn_get_custom_apps', 'sn_get_scope_selection_options', 'sn_create_custom_app',
     // Best practices & templates for implementation guidance

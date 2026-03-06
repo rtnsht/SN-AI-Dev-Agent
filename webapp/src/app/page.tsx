@@ -208,6 +208,23 @@ export default function Home() {
         setMessages(newMsgs);
         setTimeout(() => inputRef.current?.focus(), 100);
 
+        // Log session start with connect metadata (non-blocking, fire-and-forget)
+        fetch("/api/session-start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: clientSessionId,
+            instanceUrl: credentials.instanceUrl,
+            username: credentials.username,
+            userFullName: data.userInfo?.name || "",
+            model: selectedModel,
+            aiProvider,
+            hasAdmin: data.hasAdmin,
+            hasSecurityAdmin: data.hasSecurityAdmin,
+            nodeVersion: data.nodeVersion,
+          }),
+        }).catch(() => { /* non-critical */ });
+
         // Fetch instance-specific example prompts in background (non-blocking)
         fetch("/api/instance-prompts", {
           method: "POST",
@@ -450,7 +467,7 @@ export default function Home() {
           const isAutoApprove = phaseInfo ? !phaseInfo.requiresApproval : false;
 
           if (phaseGate) {
-            const nextPhaseMap: Record<string, SDLCPhase> = { spec: "design", design: "implementation", implementation: "testing", testing: "deployment" };
+            const nextPhaseMap: Record<string, SDLCPhase> = { spec: "design", design: "scope_selection", scope_selection: "implementation", implementation: "testing", testing: "deployment" };
             if (isAutoApprove) {
               setCompletedPhases((prev) => (prev.includes(phaseGate) ? prev : [...prev, phaseGate]));
               const next = nextPhaseMap[phaseGate];
@@ -511,7 +528,8 @@ export default function Home() {
           if (phaseGate) {
             const nextPhaseMap: Record<string, SDLCPhase> = {
               spec: "design",
-              design: "implementation",
+              design: "scope_selection",
+              scope_selection: "implementation",
               implementation: "testing",
               testing: "deployment",
             };
@@ -656,7 +674,8 @@ export default function Home() {
       setCompletedPhases((prev) => (prev.includes(phase) ? prev : [...prev, phase]));
       const nextPhaseMap: Record<string, SDLCPhase> = {
         spec: "design",
-        design: "implementation",
+        design: "scope_selection",
+        scope_selection: "implementation",
         implementation: "testing",
         testing: "deployment",
       };

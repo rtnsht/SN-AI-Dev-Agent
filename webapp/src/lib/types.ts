@@ -1,4 +1,4 @@
-export type SDLCPhase = "spec" | "design" | "implementation" | "testing" | "deployment";
+export type SDLCPhase = "spec" | "design" | "scope_selection" | "implementation" | "testing" | "deployment";
 
 export interface SDLCPhaseInfo {
   key: SDLCPhase;
@@ -11,8 +11,9 @@ export interface SDLCPhaseInfo {
 
 export const SDLC_PHASES: SDLCPhaseInfo[] = [
   { key: "spec", label: "Spec", requiresApproval: true, tooltip: "Requires user approval before proceeding to Design" },
-  { key: "design", label: "Design", requiresApproval: true, tooltip: "Requires user approval before proceeding to Implementation" },
-  { key: "implementation", label: "Implementation", requiresApproval: true, tooltip: "Requires user approval before proceeding to Testing" },
+  { key: "design", label: "Design", requiresApproval: true, tooltip: "Requires user approval before proceeding to Scope Selection" },
+  { key: "scope_selection", label: "Scope", requiresApproval: false, tooltip: "Auto-proceeds after scope choice — no separate approval needed" },
+  { key: "implementation", label: "Impl", requiresApproval: true, tooltip: "Requires user approval before proceeding to Testing" },
   { key: "testing", label: "Testing", requiresApproval: true, tooltip: "Requires user approval before proceeding to Deployment" },
   { key: "deployment", label: "Deployment", requiresApproval: true, tooltip: "Final phase — requires user approval to mark complete" },
 ];

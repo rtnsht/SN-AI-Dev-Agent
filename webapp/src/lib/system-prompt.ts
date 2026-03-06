@@ -132,7 +132,8 @@ MANDATORY after design approval, BEFORE implementation.
 8. For requirements with flows: "REST artifacts deploy via API. Flow artifacts are generated as SDK fluent code (.now.ts) and deployed via the SDK to the scoped application."
 
 End with: <!-- PHASE_GATE:scope_selection -->
-STOP: "Scope confirmed as [name]. Type 'approved' to proceed to implementation."
+"Scope confirmed as [name]. Proceeding to implementation."
+Note: This gate auto-proceeds — do NOT ask user to type "approved" here. The scope choice itself is the approval.
 </scope_selection>
 
 <implementation>
@@ -146,11 +147,13 @@ STOP: "Scope confirmed as [name]. Type 'approved' to proceed to implementation."
    - Verify with sn_get_update_set_contents
 4. Flow Designer artifacts (flows, subflows, flow actions) — SDK FLUENT CODE:
    - [CRITICAL] Do NOT create flows via REST API tools (sn_create_flow). REST-created flows lack required internal snapshots and land in wrong scope.
-   - INSTEAD: Generate SDK fluent code as .now.ts files for the sdk-flows/src/fluent/ directory
-   - Use the established pattern: import { action, Flow, wfa, trigger } from '@servicenow/sdk/automation'
-   - The scoped app from scope_selection determines the target in now.config.json (scope + scopeId)
-   - Present the generated .now.ts code to the user in a code block
-   - Note: "Flow code generated. Deploy via SDK build and install to the scoped application."
+   - INSTEAD: Generate SDK fluent code and deploy it using the sn_deploy_sdk_flow tool:
+     - Use the established pattern: import { action, Flow, wfa, trigger } from '@servicenow/sdk/automation'
+     - Call sn_deploy_sdk_flow with { code, fileName, scope, scopeId } from the scope_selection phase
+     - The tool writes the .now.ts file, runs SDK build + install using CI mode (non-interactive)
+     - Set reinstall: true for first-time deployments to a scope
+   - If sn_deploy_sdk_flow fails, present the generated code to the user with manual deployment instructions — do NOT create a Business Rule or other artifact as a substitute
+   - [CRITICAL] NEVER create duplicate logic: if the design calls for a Flow, deploy ONLY a Flow. Do NOT also create a Business Rule, Scheduled Job, or Script Include that duplicates the same logic "as a fallback." One artifact per piece of logic — no hedging.
 5. If artifacts missing from update set: use sn_move_to_update_set
 6. For every created/updated artifact, provide a clickable instance URL so the user can verify directly:
    - Format: \`https://<instance>/nav_to.do?uri=<table>.do?sys_id=<sys_id>\`
@@ -175,15 +178,135 @@ Generate deployment summary:
 1. Deployed Artifacts:
    | Name | Type | sys_id | Update Set | Link |
    - For each artifact, include a clickable URL: \`https://<instance>/nav_to.do?uri=<table>.do?sys_id=<sys_id>\`
-2. SDK Artifacts (flows — deployed via SDK fluent code):
+2. SDK Artifacts (flows — deployed via sn_deploy_sdk_flow):
    | Name | Type | Scoped App | .now.ts File | Status |
-   - Reference the generated .now.ts file(s) and confirm the scoped app target
+   - Reference the sn_deploy_sdk_flow tool result (success/failure + build/install output)
 3. Verification results
 4. Rollback: delete artifacts or revert update set
 
 End with: <!-- PHASE_GATE:deployment -->
 STOP: "Requirement complete! REST artifacts deployed. SDK flow artifacts ready for deployment. Type 'approved' to finalize."
 </deployment>
+
+<sdk_flow_syntax>
+[CRITICAL] ServiceNow SDK Fluent API v4.3.0 Reference — Use this EXACT syntax when generating .now.ts flow files.
+Source: Official ServiceNow/sdk-examples repository on GitHub.
+
+STRUCTURE RULES:
+1. Use NAMED EXPORTS (not default): export const myFlow = Flow(...)
+2. ALL $id values MUST use Now.ID['key_name'] from generated/keys.ts
+3. Triggers MUST be wrapped in wfa.trigger(triggerType, config, inputs)
+4. Actions MUST be wrapped in wfa.action(actionType, config, inputs)
+5. Field values for updateRecord/createRecord use TemplateValue({...}) wrapper
+6. DataPills use wfa.dataPill(sourceValue, typeHint) — types: 'string', 'reference', 'array.string', 'array.object'
+
+FLOW SIGNATURE:
+\`\`\`typescript
+import { Flow, trigger, action, wfa } from '@servicenow/sdk/automation'
+
+export const myFlow = Flow(
+    {
+        $id: Now.ID['my_flow_key'],
+        name: 'My Flow Name',
+        description: 'Description',
+    },
+    wfa.trigger(trigger.record.created, { $id: Now.ID['my_trigger_key'] }, {
+        table: 'incident',
+        condition: 'active=true',
+        run_flow_in: 'background',
+        run_on_extended: 'false',
+        run_when_setting: 'both',
+        run_when_user_setting: 'any',
+        run_when_user_list: [],
+    }),
+    (params) => {
+        // Flow body — use wfa.action() and wfa.flowLogic.*
+        wfa.action(action.core.log, { $id: Now.ID['log_action_key'] }, {
+            log_level: 'info',
+            log_message: \`Record: \${wfa.dataPill(params.trigger.current.sys_id, 'string')}\`,
+        })
+    }
+)
+\`\`\`
+
+TRIGGERS — All use wfa.trigger(triggerType, { $id }, inputs):
+- wfa.trigger(trigger.record.created, { $id: Now.ID['x'] }, { table: 'incident', condition: '...', run_flow_in: 'background' })
+- wfa.trigger(trigger.record.updated, { $id: Now.ID['x'] }, { table: 'change_request', condition: '...', trigger_strategy: 'unique_changes' })
+- wfa.trigger(trigger.record.createdOrUpdated, { $id: Now.ID['x'] }, { table: 'task', condition: '...' })
+- wfa.trigger(trigger.scheduled.daily, { $id: Now.ID['x'] }, { time: '00:00:00' })
+- wfa.trigger(trigger.scheduled.repeat, { $id: Now.ID['x'] }, { repeat: '0 00:05:00' })
+- wfa.trigger(trigger.application.inboundEmail, { $id: Now.ID['x'] }, { email_conditions: '...', target_table: 'incident' })
+
+ACTIONS — All use wfa.action(actionType, { $id }, inputs):
+- const result = wfa.action(action.core.lookUpRecords, { $id: Now.ID['x'] }, { table: 'incident', conditions: '...', sort_type: 'sort_asc', max_results: 500 })
+- const result = wfa.action(action.core.lookUpRecord, { $id: Now.ID['x'] }, { table: 'sys_user', conditions: '...', sort_type: 'sort_asc', if_multiple_records_are_found_action: 'use_first_record' })
+- wfa.action(action.core.createRecord, { $id: Now.ID['x'] }, { table_name: 'incident', values: TemplateValue({ short_description: 'New' }) })
+- wfa.action(action.core.updateRecord, { $id: Now.ID['x'] }, { table_name: 'incident', record: wfa.dataPill(someRef, 'reference'), values: TemplateValue({ state: '7' }) })
+- wfa.action(action.core.updateMultipleRecords, { $id: Now.ID['x'] }, { table_name: 'incident', conditions: '...', field_values: TemplateValue({ state: '7' }) })
+- wfa.action(action.core.log, { $id: Now.ID['x'] }, { log_level: 'info', log_message: '...' })
+- wfa.action(action.core.sendEmail, { $id: Now.ID['x'] }, { table_name: '...', ah_to: '...', ah_subject: '...', ah_body: '...', record: wfa.dataPill(...) })
+
+NOTE: lookUpRecord uses 'table' (not 'table_name'), updateRecord uses 'table_name'. This is an SDK inconsistency.
+
+FLOW LOGIC:
+- wfa.flowLogic.if({ $id: Now.ID['x'], condition: \`\${wfa.dataPill(val, 'string')}=1\`, annotation: 'Label' }, () => { ... })
+- wfa.flowLogic.elseIf({ $id: Now.ID['x'], condition: '...', annotation: '...' }, () => { ... })
+- wfa.flowLogic.else({ $id: Now.ID['x'] }, () => { ... })
+- wfa.flowLogic.forEach(wfa.dataPill(arraySource, 'array.string'), { $id: Now.ID['x'] }, () => { ... })
+
+GENERATED KEYS — Every flow requires a generated/keys.ts file declaring all Now.ID keys:
+\`\`\`typescript
+import '@servicenow/sdk/global'
+declare global {
+    namespace Now {
+        namespace Internal {
+            interface Keys extends KeysRegistry {
+                explicit: {
+                    my_flow_key: { table: 'sys_hub_flow'; id: '<32-char-hex-guid>' }
+                    my_trigger_key: { table: 'sys_hub_trigger_instance_v2'; id: '<guid>' }
+                    my_action_key: { table: 'sys_hub_action_instance_v2'; id: '<guid>' }
+                    my_logic_key: { table: 'sys_hub_flow_logic_instance_v2'; id: '<guid>' }
+                }
+            }
+        }
+    }
+}
+\`\`\`
+
+COMPLETE EXAMPLE — Daily scheduled flow using updateMultipleRecords:
+\`\`\`typescript
+import { Flow, trigger, action, wfa } from '@servicenow/sdk/automation'
+
+export const autoCloseStaleIncidents = Flow(
+    {
+        $id: Now.ID['auto_close_flow'],
+        name: 'Auto Close Stale Resolved Incidents',
+        description: 'Runs daily to close Resolved incidents with no updates for 7+ days',
+    },
+    wfa.trigger(trigger.scheduled.daily, { $id: Now.ID['daily_trigger'] }, { time: '00:00:00' }),
+    (_params) => {
+        wfa.action(action.core.updateMultipleRecords, { $id: Now.ID['close_incidents'] }, {
+            table_name: 'incident',
+            conditions: 'incident_state=6^sys_updated_onRELATIVELT@dayofweek@ago@7',
+            sort_type: 'sort_asc',
+            field_values: TemplateValue({
+                work_notes: 'Auto-closed: Resolved with no updates for 7+ days.',
+                incident_state: '7', state: '7', active: 'false',
+                close_code: 'Closed/Resolved by Caller',
+            }),
+        })
+    }
+)
+\`\`\`
+
+WRONG PATTERNS — DO NOT USE:
+- export default Flow(...) — WRONG: Use export const myFlow = Flow(...)
+- $id: 'string-id' — WRONG: Use $id: Now.ID['key_name'] from generated/keys.ts
+- trigger.scheduled.daily (bare, no wrapper) — WRONG: Use wfa.trigger(trigger.scheduled.daily, { $id }, { time: '...' })
+- action.core.lookUpRecords('id', {...}) — WRONG: Use wfa.action(action.core.lookUpRecords, { $id }, {...})
+- values: { field: 'val' } — WRONG: Use values: TemplateValue({ field: 'val' })
+- record: someVar — WRONG: Use record: wfa.dataPill(someRef, 'reference')
+</sdk_flow_syntax>
 
 <naming>
 Script Include: PascalCase → HighImpactJustificationUtil

@@ -16,7 +16,15 @@
  */
 
 import { z } from 'zod';
+import { execSync } from 'child_process';
+import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { ServiceNowClient } from '../client/sn-client.js';
+
+// ESM-compatible __dirname
+const __filename_esm = fileURLToPath(import.meta.url);
+const __dirname_esm = path.dirname(__filename_esm);
 
 // Helper to extract value from ServiceNow reference fields (can be string or {link, value} object)
 function extractRefValue(field: unknown): string {
@@ -1419,6 +1427,174 @@ export async function listFlowExecutions(client: ServiceNowClient, input: z.infe
       updated: r.sys_updated_on,
       has_error: !!r.error_message
     }))
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SDK Fluent Deployment Tool
+// ═══════════════════════════════════════════════════════════════
+
+export const deploySDKFlowSchema = z.object({
+  /** The complete .now.ts fluent code */
+  code: z.string().describe('The complete SDK fluent .now.ts code for the flow'),
+  /** Filename (e.g. "scheduled-cleanup.now.ts") */
+  fileName: z.string().describe('Filename for the .now.ts file (e.g. "my-flow.now.ts")'),
+  /** ServiceNow scope (e.g. "x_snc_yantra") */
+  scope: z.string().describe('Scoped app scope string (e.g. "x_snc_yantra")'),
+  /** sys_id of the scoped application */
+  scopeId: z.string().describe('sys_id of the scoped application record'),
+  /** Whether to use --reinstall flag (first-time deploy) */
+  reinstall: z.preprocess(
+    (val) => val === 'true' || val === true,
+    z.boolean()
+  ).optional().default(false).describe('Use --reinstall for first-time deployments'),
+});
+
+/**
+ * Deploy SDK fluent code (.now.ts) to a ServiceNow instance.
+ *
+ * Uses the NOW SDK CI mode (SN_SDK_NODE_ENV=SN_SDK_CI_INSTALL) for
+ * non-interactive authentication. Writes the flow code to the sdk-flows
+ * project, runs build, then install.
+ */
+export async function deploySDKFlow(client: ServiceNowClient, input: z.infer<typeof deploySDKFlowSchema>) {
+  const creds = client.credentials;
+
+  // Resolve sdk-flows directory (sibling to mcp-servicenow)
+  // From mcp-servicenow/src/tools/ → ../../.. → repo root → sdk-flows
+  const repoRoot = path.resolve(__dirname_esm, '..', '..', '..');
+  const sdkFlowsDir = path.join(repoRoot, 'sdk-flows');
+
+  if (!existsSync(sdkFlowsDir)) {
+    return {
+      success: false,
+      error: `sdk-flows directory not found at ${sdkFlowsDir}. Ensure the SDK project is set up.`,
+    };
+  }
+
+  // Ensure filename ends with .now.ts
+  const safeFileName = input.fileName.endsWith('.now.ts')
+    ? input.fileName
+    : `${input.fileName.replace(/\.ts$/, '')}.now.ts`;
+
+  // Step 1: Write .now.ts file
+  const fluentDir = path.join(sdkFlowsDir, 'src', 'fluent');
+  mkdirSync(fluentDir, { recursive: true });
+  const filePath = path.join(fluentDir, safeFileName);
+  writeFileSync(filePath, input.code, 'utf-8');
+
+  // Step 2: Update now.config.json with scope
+  const configPath = path.join(sdkFlowsDir, 'now.config.json');
+  writeFileSync(configPath, JSON.stringify({ scope: input.scope, scopeId: input.scopeId }, null, 4) + '\n', 'utf-8');
+
+  // Normalize instance URL
+  const instanceUrl = creds.instanceUrl.startsWith('https://')
+    ? creds.instanceUrl
+    : `https://${creds.instanceUrl}`;
+
+  // CI env vars for non-interactive auth
+  const ciEnv = {
+    ...process.env,
+    SN_SDK_NODE_ENV: 'SN_SDK_CI_INSTALL',
+    SN_SDK_INSTANCE_URL: instanceUrl,
+    SN_SDK_USER: creds.username,
+    SN_SDK_USER_PWD: creds.password,
+  };
+
+  const execOpts = { cwd: sdkFlowsDir, env: ciEnv, timeout: 90_000, encoding: 'utf-8' as const };
+
+  // Step 3: Build
+  let buildOutput: string;
+  try {
+    buildOutput = execSync('npx now-sdk build 2>&1', execOpts);
+  } catch (err: unknown) {
+    const e = err as { stdout?: string; stderr?: string; message?: string };
+    return {
+      success: false,
+      error: 'SDK build failed',
+      phase: 'build',
+      details: e.stdout || e.stderr || e.message || String(err),
+      filePath,
+    };
+  }
+
+  // Step 4: Validate build output — check dist/ for flow artifacts with INSERT_OR_UPDATE
+  const distUpdateDir = path.join(sdkFlowsDir, 'dist', 'app', 'update');
+  const validationErrors: string[] = [];
+  let flowArtifactFound = false;
+
+  if (!existsSync(distUpdateDir)) {
+    validationErrors.push('dist/app/update/ directory not found after build — build may have produced no artifacts.');
+  } else {
+    const xmlFiles = readdirSync(distUpdateDir).filter(f => f.endsWith('.xml'));
+    const flowXmlFiles = xmlFiles.filter(f => f.startsWith('sys_hub_flow_'));
+
+    if (flowXmlFiles.length === 0) {
+      validationErrors.push('No sys_hub_flow XML files found in build output. The .now.ts code may be invalid.');
+    }
+
+    for (const xmlFile of flowXmlFiles) {
+      const xmlContent = readFileSync(path.join(distUpdateDir, xmlFile), 'utf-8');
+      if (xmlContent.includes('action="DELETE"')) {
+        validationErrors.push(`CRITICAL: ${xmlFile} contains action="DELETE" — this will DESTROY the flow on the instance, not create it. The .now.ts code is structurally invalid.`);
+      } else if (xmlContent.includes('action="INSERT_OR_UPDATE"')) {
+        flowArtifactFound = true;
+      }
+    }
+  }
+
+  if (validationErrors.length > 0) {
+    return {
+      success: false,
+      error: 'Build output validation failed',
+      phase: 'validation',
+      validationErrors,
+      buildOutput,
+      filePath,
+      hint: 'The .now.ts code compiled but produced invalid/destructive artifacts. Check the flow syntax — use wfa.trigger(), wfa.action(), Now.ID[], TemplateValue().',
+    };
+  }
+
+  if (!flowArtifactFound) {
+    return {
+      success: false,
+      error: 'No valid flow artifacts in build output',
+      phase: 'validation',
+      buildOutput,
+      filePath,
+      hint: 'Build succeeded but no sys_hub_flow records with INSERT_OR_UPDATE were found.',
+    };
+  }
+
+  // Step 5: Install
+  let installOutput: string;
+  const installCmd = input.reinstall
+    ? 'npx now-sdk install --reinstall 2>&1'
+    : 'npx now-sdk install 2>&1';
+  try {
+    installOutput = execSync(installCmd, execOpts);
+  } catch (err: unknown) {
+    const e = err as { stdout?: string; stderr?: string; message?: string };
+    return {
+      success: false,
+      error: 'SDK install failed',
+      phase: 'install',
+      details: e.stdout || e.stderr || e.message || String(err),
+      buildOutput,
+      filePath,
+    };
+  }
+
+  return {
+    success: true,
+    message: `Flow deployed to ${input.scope} on ${instanceUrl}`,
+    fileName: safeFileName,
+    scope: input.scope,
+    scopeId: input.scopeId,
+    buildOutput,
+    installOutput,
+    filePath,
+    artifactValidation: 'PASSED — sys_hub_flow with INSERT_OR_UPDATE confirmed in build output',
   };
 }
 

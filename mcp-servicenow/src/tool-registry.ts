@@ -210,6 +210,9 @@ const TOOL_HANDLERS: Record<string, (snClient: ServiceNowClient, args: unknown) 
   sn_get_flow_execution_status: async (c, a) => flowDesigner.getFlowExecutionStatus(c, flowDesigner.getFlowExecutionStatusSchema.parse(a)),
   sn_list_flow_executions: async (c, a) => flowDesigner.listFlowExecutions(c, flowDesigner.listFlowExecutionsSchema.parse(a)),
 
+  // Flow Designer - SDK Fluent Deployment
+  sn_deploy_sdk_flow: async (c, a) => flowDesigner.deploySDKFlow(c, flowDesigner.deploySDKFlowSchema.parse(a)),
+
   // Scoped Applications - CRITICAL for Flow Designer deployment
   sn_get_custom_apps: async (c, a) => scopedApps.getCustomApps(c, scopedApps.getCustomAppsSchema.parse(a)),
   sn_get_scope_selection_options: async (c, a) => scopedApps.getScopeSelectionOptions(c, scopedApps.getScopeSelectionOptionsSchema.parse(a)),

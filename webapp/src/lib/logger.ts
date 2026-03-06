@@ -5,6 +5,7 @@
 
 import fs from "fs";
 import path from "path";
+import { updateTelemetry } from "./telemetry-generator";
 
 // Log levels
 export type LogLevel = "info" | "warn" | "error" | "debug";
@@ -160,6 +161,11 @@ export function log(
   const filename = getLogFilename(sessionId);
   const filepath = path.join(LOGS_DIR, filename);
   fs.appendFileSync(filepath, logLine);
+
+  // Trigger telemetry update (throttled to every 15s internally)
+  if (sessionId.startsWith("sess_")) {
+    try { updateTelemetry(sessionId); } catch { /* ignore telemetry errors */ }
+  }
 
   // Also output to console for dev visibility
   const consoleMsg = `[${entry.level.toUpperCase()}] [${sessionId}] [${category}] ${message}`;

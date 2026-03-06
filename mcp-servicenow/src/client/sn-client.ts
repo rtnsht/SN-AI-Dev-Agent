@@ -358,6 +358,15 @@ export class ServiceNowClient {
     return this.config.instanceUrl;
   }
 
+  /** Expose credentials for SDK CI mode (used by sn_deploy_sdk_flow tool) */
+  get credentials(): { instanceUrl: string; username: string; password: string } {
+    return {
+      instanceUrl: this.config.instanceUrl,
+      username: this.config.username,
+      password: this.config.password,
+    };
+  }
+
   /**
    * Call a custom Scripted REST API endpoint
    * @param path API path (e.g., '/api/37610/ui_policy_action_helper/create')
