@@ -325,7 +325,7 @@ graph LR
         CA3["requests"]
     end
 
-    subgraph FLOWS["Flow Designer (27)"]
+    subgraph FLOWS["Flow Designer (30)"]
         F1["flows<br/>(list, get, create, analyze, execute)"]
         F2["triggers<br/>(create, list definitions)"]
         F3["actions<br/>(instances, types, schemas)"]
@@ -335,6 +335,7 @@ graph LR
         F7["variables<br/>(list, create, inputs)"]
         F8["templates<br/>(export, list, create from)"]
         F9["executions<br/>(execute, status, history)"]
+        F10["SDK deploy<br/>(deploy, undeploy, list)"]
     end
 
     subgraph ANALYSIS["Analysis & Quality (17)"]
@@ -421,7 +422,8 @@ SN-AI-Dev-Agent/
 │   │       ├── openrouter.ts        ← OpenRouter API client (dynamic model filtering)
 │   │       ├── file-parser.ts       ← PDF/Word/Excel text extraction
 │   │       ├── rate-limiter.ts      ← IP-based sliding window rate limiter
-│   │       ├── logger.ts            ← Structured session logging
+│   │       ├── logger.ts            ← Structured session logging (JSONL)
+│   │       ├── telemetry-generator.ts ← Live telemetry dashboard (parses JSONL → markdown)
 │   │       └── types.ts             ← Shared types, phase gate parser
 │   ├── package.json
 │   └── .env.example                 ← CLAUDE_API_KEY, RATE_LIMIT_MAX, etc.
@@ -449,6 +451,24 @@ SN-AI-Dev-Agent/
 │   │   │   └── DeploymentHelper.js  ← Reusable artifact deployment utility
 │   │   └── types/                   ← TypeScript type definitions
 │   └── package.json
+│
+├── sdk-flows/                       ← NOW SDK App-Scoped Workspaces
+│   ├── node_modules/                ← Shared @servicenow/sdk (326MB, installed once)
+│   ├── package.json                 ← Shared SDK dependencies
+│   ├── registry.json                ← Tracks all deployed flows (for safe cleanup)
+│   ├── _template/                   ← Skeleton files for new flow workspaces
+│   │   ├── package.json.tmpl
+│   │   └── now.config.json.tmpl
+│   └── apps/                        ← Persistent workspace per scoped app
+│       └── {scope}/                 ← Created on first deploy for that app
+│           ├── node_modules → ../../node_modules  (symlink)
+│           ├── package.json
+│           ├── now.config.json
+│           ├── keys/                ← Per-flow keys.ts fragments
+│           ├── src/fluent/
+│           │   ├── generated/keys.ts  ← Merged keys for all local flows in the app
+│           │   └── {FlowName}.now.ts  ← Flow source files for the app
+│           └── dist/                  ← App build output
 │
 ├── specs/                           ← Requirement specifications (SDLC artifacts)
 │   ├── config.properties            ← Phase gate settings
@@ -974,3 +994,313 @@ The recent features (dynamic instance prompts, reconnect flow, confidentiality g
 - **Frontend-only logic** (CSS, state management, system prompt text)
 
 No additional Scripted REST APIs are needed on the instance.
+
+
+---
+
+## 19. SDK Flow App-Scoped Workspace Architecture
+
+### Problem Solved
+The NOW SDK (`now-sdk build`) compiles **all** `.now.ts` files in a workspace as a single unit, and the application package is the deployment unit. Per-flow workspaces plus `--reinstall` caused later installs to replace earlier SDK-managed flows in the same app.
+
+### Solution: Persistent App Workspaces + Normal Install
+Each scoped app gets its own directory under `sdk-flows/apps/{scope}/` with:
+- **Symlinked `node_modules`** → `../../node_modules` (shared SDK install)
+- **One `now.config.json`** — app scope binding
+- **Per-flow source files** under `src/fluent/`
+- **Per-flow keys fragments** under `keys/`
+- **Merged `generated/keys.ts`** regenerated from all fragments before every build
+- **Normal `now-sdk install` only** — no `--reinstall`
+
+### Deploy Pipeline
+```
+sn_deploy_sdk_flow({ code, keysTs, fileName, scope, scopeId })
+│
+├── 1. Create/update sdk-flows/apps/{scope}/
+├── 2. Symlink node_modules → ../../node_modules
+├── 3. Write package.json, now.config.json
+├── 4. Write src/fluent/{FlowName}.now.ts (code)
+├── 5. Write keys/{FlowName}.keys.ts (raw keys fragment)
+├── 6. Regenerate src/fluent/generated/keys.ts from all fragments
+├── 7. Clean: rm -rf dist/ .now-sdk-cache/
+├── 8. npx now-sdk build
+├── 9. Validate: reject DELETE artifacts, confirm target flow artifact exists
+├── 10. npx now-sdk install
+└── 11. Update registry.json with artifact IDs
+```
+
+### Safe Cleanup Pipeline
+```
+sn_undeploy_sdk_flow({ flowName })
+│
+├── 1. Check registry.json (refuse if not SDK-deployed)
+├── 2. Verify generation_source=fluent on instance
+├── 3. DELETE action instances → trigger instances → flow
+├── 4. Remove src/fluent/{FlowName}.now.ts and keys/{FlowName}.keys.ts
+├── 5. Regenerate merged generated/keys.ts
+└── 6. Update registry.json: status = "undeployed"
+```
+
+### Registry (`sdk-flows/registry.json`)
+Tracks all SDK-deployed flows with:
+- `flowSysId` — the flow's sys_id on the instance
+- `artifactIds` — flow, trigger, and action instance sys_ids
+- `scope`, `scopeId`, `instanceUrl`
+- `flowDisplayName` — display name extracted from code when available
+- `status` — "deployed" or "undeployed"
+- `deployedAt` — ISO timestamp
+
+### Tools
+| Tool | Purpose |
+|------|---------|
+| `sn_deploy_sdk_flow` | Deploy flow into the persistent app workspace, merge keys, validate build output, and perform normal incremental install |
+| `sn_undeploy_sdk_flow` | Safe removal — only SDK-deployed flows, verifies generation_source=fluent, removes local flow source, regenerates keys |
+| `sn_list_sdk_flows` | List all tracked flows with deployment status and local source presence |
+
+### Key Design Decisions
+1. **App-scoped workspace** — matches the SDK application-package deployment model.
+2. **No `--reinstall`** — prevents one flow deploy from deleting another flow in the same app.
+3. **Per-flow keys fragments + merged `keys.ts`** — preserves local source per flow while giving the SDK one valid generated keys file.
+4. **Build rollback on source errors** — invalid flow code does not poison the persistent app workspace.
+5. **Registry-gated cleanup** — `sn_undeploy_sdk_flow` refuses to delete flows not in the registry.
+
+### `--reinstall` Postmortem
+
+> **Status:** Fixed — deploy path now rejects `reinstall=true`
+
+**Root cause:** The NOW SDK treats one workspace as one application. `now-sdk install --reinstall` uninstalls the app's SDK-managed artifacts before reinstalling from the current build package.
+
+With per-flow workspaces, two different flows in the same scoped app produced two different one-flow packages with the same app name. Reinstalling the second package removed the first flow from the instance.
+
+**Current policy:**
+| Behavior | Detail |
+|----------|--------|
+| `now-sdk install` | Allowed — normal incremental path |
+| `now-sdk install --reinstall` | Rejected by `sn_deploy_sdk_flow` and `/api/deploy-sdk` |
+| Existing app baseline | Recommended via `now-sdk init --from <scopeId>` when needed |
+| Local source model | Persistent app workspace under `sdk-flows/apps/{scope}/` |
+
+---
+
+## 20. Live Session Telemetry
+
+### Overview
+Every AI agent session produces a **live-updating telemetry dashboard** as a markdown file (`webapp/logs/telemetry-session-{suffix}.md`). The file is regenerated every 15 seconds from the session's JSONL log, providing real-time visibility into what the AI agent is doing.
+
+### Architecture
+
+```
+User clicks Connect
+       │
+       ▼
+POST /api/session-start ──► logger.log("session_connect", { instanceUrl, username, model, ... })
+       │                          │
+       │                          ▼
+       │                    startTelemetryStream(sessionId)
+       │                          │
+       │                    ┌─────▼──────────────────────────────┐
+       │                    │  setInterval (every 15 seconds)     │
+       │                    │                                     │
+       │                    │  1. Read session-*.txt (JSONL)      │
+       │                    │  2. Parse all log entries            │
+       │                    │  3. Generate markdown dashboard      │
+       │                    │  4. Write telemetry-session-*.md    │
+       │                    └─────────────────────────────────────┘
+       │
+       ▼
+AI agent chat loop
+       │
+       ├── logger.log() on every event ──► updateTelemetry() (throttled to 15s)
+       │     • chat_init (phase, model, tools)
+       │     • claude_api (round, tokens, stop_reason)
+       │     • mcp_tool (toolName, duration, success/error)
+       │     • chat_stream (completion)
+       │
+       ▼
+Session ends ──► Final telemetry update
+```
+
+### Data Flow
+
+| Source | Log Category | Data Captured |
+|--------|-------------|---------------|
+| `/api/session-start` | `session_connect` | Instance URL, username, full name, model, AI provider, connect time |
+| `sn-engine.ts` | `chat_init` | Phase, tools filtered, model, max rounds |
+| `sn-engine.ts` | `claude_api` | Round number, input/output/cache tokens, stop reason, duration |
+| `sn-engine.ts` | `mcp_tool` | Tool name, duration, success/failure, input summary, error details |
+| `sn-engine.ts` | `chat_stream` | Completion status, final stop reason |
+
+### Telemetry Dashboard Contents
+
+The generated markdown file contains:
+
+| Section | Content |
+|---------|---------|
+| **Summary** | Session ID, instance, user, model, elapsed time, current phase, rounds used, total tool calls, token counts, deploy attempts |
+| **Phase Timeline** | Each phase transition with timestamp and tools available |
+| **Round-by-Round Activity** | Every API round: tools called (✅/❌), duration, tokens in/out, stop reason |
+| **Tool Usage Distribution** | Per-tool stats: call count, successes, failures, average duration |
+| **SDK Deploy Attempts** | Code size, reinstall flag, duration, success/failure per deploy |
+| **Errors** | Timestamped error log with tool name and message |
+| **🔴 Session Updates** | Conversational narration of session progress (see below) |
+
+### Session Updates (Conversational Narration)
+
+The telemetry dashboard includes a **Session Updates** section that provides a human-readable, chronological narration of what the AI agent is doing. This is generated by `generateSessionUpdates()` using delta tracking between 15-second polls.
+
+**Delta State Tracking** (`DeltaState`):
+- `lastRoundCount`, `lastPhaseCount`, `lastToolCalls` — detect new activity
+- `lastDeployCount`, `lastErrorCount` — detect new deploys/errors
+- `updates[]` — accumulated narration paragraphs (append-only)
+
+**Narration Events:**
+
+| Event | Example Output |
+|-------|---------------|
+| Connect | 🔌 Session started. Connected to `dev181312.service-now.com` as `admin`. Model: claude-opus-4-6. |
+| Phase transition | 🔄 Phase transition → **implementation** (52 tools available). |
+| Research round | 🔍 Round 3/30: Researching action types — `sn_list_action_types`, `sn_get_action_type`. |
+| Instance discovery | 🔍 Round 2/30: Instance discovery — ✅ `sn_get_table_schema`, ✅ `sn_query_records` (2 tools, 2.4s) |
+| Deploy attempt | 🚀 **Deploy #1**: `sn_deploy_sdk_flow` (2588 chars) — 5.6s ✅ |
+| Deploy loop warning | ⚠️ 4 deploy attempts so far — Claude may be stuck in a deploy loop. |
+| Tool error | ❌ Tool error: `sn_query_records` — Request failed with status code 400 |
+| Round limit warning | ⚠️ 3 rounds remaining. Claude needs to wrap up. |
+| Waiting for user | ⏳ Waiting for user input... (Claude stopped with `end_turn`, no tools) |
+| Session complete | 🏁 **Session complete.** 11/30 rounds, 12 tool calls, 2m 5s elapsed. 1 deploy attempts (1 successful). |
+
+**Tool Categorization** — Rounds are narrated with context-aware descriptions:
+- `sn_list_action_types` / `sn_get_action_type` → "Researching action types"
+- `sn_analyze_flow` → "Analyzing existing flows to learn patterns"
+- `sn_query_records` / `sn_get_table_schema` → "Instance discovery"
+- `sn_list_flows` → "Checking flows on instance"
+- Pure deploy rounds → handled by deploy tracking (no duplicate narration)
+
+### Components
+
+| File | Role |
+|------|------|
+| `webapp/src/lib/telemetry-generator.ts` | Core engine: JSONL parser → markdown generator, throttled to 15s |
+| `webapp/src/lib/logger.ts` | Hook: calls `updateTelemetry()` on every `log()` write |
+| `webapp/src/app/api/session-start/route.ts` | Logs `session_connect` event, starts telemetry interval |
+| `webapp/src/app/page.tsx` | Fires POST to `/api/session-start` after successful Connect |
+
+### File Lifecycle
+
+- **One file per session**: `telemetry-session-{suffix}.md`
+- **Created** when user clicks Connect (via `startTelemetryStream`)
+- **Overwritten in place** every 15 seconds with latest parsed state
+- **Final update** when session ends or stream is stopped
+- **Location**: `webapp/logs/`
+
+### Key Functions
+
+| Function | Purpose |
+|----------|---------|
+| `parseSessionLog(logFile)` | Reads JSONL, extracts connect metadata, phases, rounds, tools, tokens, errors, deploy attempts |
+| `generateMarkdown(telemetry)` | Renders parsed data into a formatted markdown dashboard (summary tables) |
+| `generateSessionUpdates(telemetry, sessionId)` | Delta-tracked conversational narration — appended after summary |
+| `groupRoundsForNarration(rounds, telemetry)` | Categorizes tool calls into context-aware narration blocks |
+| `updateTelemetry(sessionId)` | Throttled (15s) — parses log, generates summary + narration, writes markdown |
+| `startTelemetryStream(sessionId)` | Starts `setInterval` for continuous updates. Returns cleanup function |
+| `stopAllTelemetryStreams()` | Stops all active intervals, does final update on each |
+
+---
+
+## 21. AI Agent Type Coercion (Schema Hardening)
+
+### Problem
+AI agents (Claude, GPT, etc.) frequently send **string values** where Zod schemas expect `boolean`, `number`, or `object`. For example:
+- `active: "true"` instead of `active: true`
+- `order: "100"` instead of `order: 100`
+- `data: '{"name":"x"}'` instead of `data: {"name":"x"}`
+
+This causes Zod validation errors that waste tool rounds — in one observed session, **22 out of 30 rounds** were wasted on type errors.
+
+### Solution: `z.preprocess()` Coercion
+
+All tool schemas now use `z.preprocess()` to transparently coerce string inputs:
+
+```typescript
+// Boolean coercion: "true"/"false" → true/false
+const coerceOptBool = (def: boolean) =>
+  z.preprocess(
+    (v) => (v === 'true' ? true : v === 'false' ? false : v),
+    z.boolean().optional().default(def)
+  );
+
+// Number coercion: "100" → 100
+const coerceOptNum = (def: number) =>
+  z.preprocess(
+    (v) => (typeof v === 'string' && /^\d+$/.test(v) ? parseInt(v, 10) : v),
+    z.number().optional().default(def)
+  );
+
+// JSON string coercion: '{"name":"x"}' → {name:"x"}
+const coerceJsonObject = z.preprocess(
+  (v) => {
+    if (typeof v === 'string') {
+      try { return JSON.parse(v); } catch { return v; }
+    }
+    return v;
+  },
+  z.record(z.unknown())
+);
+```
+
+### Files Updated
+
+| File | Coerced Fields |
+|------|---------------|
+| `tools/scripts.ts` | `active`, `insert`, `update`, `delete`, `query`, `order`, `clientCallable`, `activeOnly`, `limit` |
+| `tools/records.ts` | `data` (JSON string → object) |
+| `tools/ui-policies.ts` | `active`, `onLoad`, `reverseIfFalse`, `formButton`, `formLink`, `formContextMenu`, `listButton`, `listContextMenu` |
+| `tools/notifications.ts` | `active`, `sendSelf`, `insertAction`, `updateAction` |
+| `tools/update-sets.ts` | `force`, `autoTimestamp` |
+| `tools/scheduled-jobs.ts` | `active` |
+| `tools/acls.ts` | `active`, `elevated` |
+| `tools/flow-designer.ts` | `reinstall` |
+
+### Design Principle
+- Coercion is **transparent** — correct types still pass through unchanged
+- Applied at the **schema level** — no changes needed in handler logic
+- Covers the three most common AI agent mistakes: string→boolean, string→number, string→object
+
+---
+
+## 22. Bug Fixes from Session Analysis (j5cohoy)
+
+### 22.1 `now.config.json` Format — SDK Build Failure
+
+**Bug:** `deploySDKFlow()` wrote `now.config.json` with `{ host: { url }, auth: { username }, deploy: { scopeId } }`. The ServiceNow SDK expects `{ scope, scopeId }` at the top level. This caused every SDK build to fail with a config validation error in ~1 second.
+
+**Impact:** All 3 deploy attempts in session `j5cohoy` silently failed. The flow was never deployed to the instance.
+
+**Fix:** Both `mcp-servicenow/src/tools/flow-designer.ts` and `webapp/src/app/api/deploy-sdk/route.ts` now write:
+```json
+{ "scope": "x_snc_yantra", "scopeId": "..." }
+```
+
+### 22.2 `executeAndLogTool` Success Detection
+
+**Bug:** `sn-engine.ts` `executeAndLogTool()` only set `success = false` when the tool **threw an exception**. Many tools (including `deploySDKFlow`) return `{ success: false, error: "..." }` without throwing. The logger recorded these as `success: true`, corrupting telemetry data.
+
+**Impact:** Session logs showed 3 "successful" deploys when all 3 actually failed. Telemetry narration was misleading.
+
+**Fix:** Added a check after tool execution:
+```typescript
+if (typeof output === "object" && output !== null && (output as Record<string, unknown>).success === false) {
+  success = false;
+}
+```
+
+### 22.3 Session Updates Narration Rewrite
+
+**Problem:** The original narration was mechanical — it listed rounds and tool names without context. Example: `🔍 Round 3/30: Instance discovery — ✅ sn_query_records (1 tools, 1.4s)`.
+
+**Fix:** Complete rewrite of `generateSessionUpdates()` with:
+- **Intent-based tool descriptions** — `describeToolIntent()` maps tool names to plain English (e.g., "surveying the instance — checking existing business rules, flows, and related records")
+- **Phase-aware context** — `narrativeContext()` adds opening phrases based on the current phase (e.g., "Before writing the spec, Claude is doing its homework —")
+- **Work block grouping** — consecutive tool rounds are grouped into a single narration block instead of one line per round
+- **Deploy storytelling** — deploy attempts are narrated with context (first attempt, reinstall retry, loop warning)
+- **Error categorization** — type mismatches, unknown tools, and generic errors get different narration styles
+- **Completion assessment** — session end includes efficiency rating and deploy success summary

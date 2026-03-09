@@ -1916,17 +1916,37 @@ export const SCOPED_APP_TOOLS: ToolDefinition[] = [
 export const SDK_DEPLOY_TOOLS: ToolDefinition[] = [
   {
     name: 'sn_deploy_sdk_flow',
-    description: 'Deploy a Flow Designer flow using NOW SDK fluent code. Writes the .now.ts file to the sdk-flows project, runs `now-sdk build` and `now-sdk install` using CI mode for non-interactive auth. Use this instead of REST API for creating flows — REST-created flows lack required snapshots.',
+    description: 'Deploy a Flow Designer flow using NOW SDK fluent code. Source is stored in a persistent app workspace under sdk-flows/apps/{scope}/ so all locally managed flows for the scoped app build together. Builds, validates (rejects DELETE artifacts), and installs using normal incremental install only. Tracks deployments in registry.json for safe cleanup.',
     inputSchema: {
       type: 'object',
       properties: {
         code: { type: 'string', description: 'Complete SDK fluent .now.ts code for the flow' },
-        fileName: { type: 'string', description: 'Filename for the .now.ts file (e.g. "scheduled-cleanup.now.ts")' },
+        keysTs: { type: 'string', description: 'Complete generated/keys.ts content declaring Now.ID keys for this flow. Must include bom_json and package_json entries.' },
+        fileName: { type: 'string', description: 'Filename for the .now.ts file (e.g. "AutoCloseStaleIncidents.now.ts")' },
         scope: { type: 'string', description: 'Scoped app scope string (e.g. "x_snc_yantra")' },
         scopeId: { type: 'string', description: 'sys_id of the scoped application record' },
-        reinstall: { type: 'boolean', description: 'Use --reinstall for first-time deployments (default: false)' },
+        reinstall: { type: 'boolean', description: 'Deprecated/unsupported. Must be omitted or false. This deploy path rejects reinstall=true because it can overwrite other SDK-managed flows in the same scoped app.' },
       },
-      required: ['code', 'fileName', 'scope', 'scopeId'],
+      required: ['code', 'keysTs', 'fileName', 'scope', 'scopeId'],
+    },
+  },
+  {
+    name: 'sn_undeploy_sdk_flow',
+    description: 'Safely remove an SDK-deployed flow from the instance. Only removes flows tracked in registry.json with generation_source=fluent. Deletes trigger instances, action instances, and the flow record. Removes the flow source from the app workspace, regenerates merged keys.ts, and updates registry.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        flowName: { type: 'string', description: 'Name of the flow to remove (as shown in registry, e.g. "AutoEscalateP1")' },
+      },
+      required: ['flowName'],
+    },
+  },
+  {
+    name: 'sn_list_sdk_flows',
+    description: 'List all flows tracked in the SDK registry with deployment status, sys_ids, scope, and whether local workspace exists.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
     },
   },
 ];
@@ -2045,7 +2065,7 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
     'sn_list_flow_variables', 'sn_list_action_inputs',
     'sn_list_flow_templates',
     // SDK Fluent Deployment (builds & installs flows via NOW SDK CI mode)
-    'sn_deploy_sdk_flow',
+    'sn_deploy_sdk_flow', 'sn_undeploy_sdk_flow', 'sn_list_sdk_flows',
     // Scope management
     'sn_get_custom_apps', 'sn_get_scope_selection_options', 'sn_create_custom_app',
     // Best practices & templates for implementation guidance

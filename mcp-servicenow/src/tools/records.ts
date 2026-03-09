@@ -21,15 +21,26 @@ export const getRecordSchema = z.object({
   fields: z.array(z.string()).optional().describe('List of fields to return')
 });
 
+// Coerce JSON string → object (AI agents sometimes send data as a stringified JSON)
+const coerceJsonObject = z.preprocess(
+  (v) => {
+    if (typeof v === 'string') {
+      try { return JSON.parse(v); } catch { return v; }
+    }
+    return v;
+  },
+  z.record(z.unknown())
+);
+
 export const createRecordSchema = z.object({
   table: z.string().describe('The table name to create record in'),
-  data: z.record(z.unknown()).describe('Field values for the new record')
+  data: coerceJsonObject.describe('Field values for the new record')
 });
 
 export const updateRecordSchema = z.object({
   table: z.string().describe('The table name'),
   sys_id: z.string().describe('The sys_id of the record to update'),
-  data: z.record(z.unknown()).describe('Field values to update')
+  data: coerceJsonObject.describe('Field values to update')
 });
 
 export const deleteRecordSchema = z.object({

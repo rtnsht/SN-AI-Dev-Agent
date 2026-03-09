@@ -6,11 +6,23 @@
 import { z } from 'zod';
 import { ServiceNowClient } from '../client/sn-client.js';
 
+// ── Type coercion helpers ──
+const coerceOptBool = (def: boolean) =>
+  z.preprocess(
+    (v) => (v === 'true' ? true : v === 'false' ? false : v === undefined ? undefined : v),
+    z.boolean().optional().default(def)
+  );
+const coerceOptNum = (def: number) =>
+  z.preprocess(
+    (v) => (typeof v === 'string' && /^\d+$/.test(v) ? parseInt(v, 10) : v),
+    z.number().optional().default(def)
+  );
+
 // ============ SCHEDULED JOBS ============
 
 export const getScheduledJobsSchema = z.object({
-  activeOnly: z.boolean().optional().default(true),
-  limit: z.number().optional().default(50)
+  activeOnly: coerceOptBool(true),
+  limit: coerceOptNum(50)
 });
 
 export const createScheduledJobSchema = z.object({
@@ -21,7 +33,7 @@ export const createScheduledJobSchema = z.object({
   runDayOfWeek: z.number().optional().describe('Day of week (1-7, for weekly)'),
   runDayOfMonth: z.number().optional().describe('Day of month (1-31, for monthly)'),
   repeatInterval: z.string().optional().describe('Repeat interval (for periodically, e.g., "00:30:00")'),
-  active: z.boolean().optional().default(true)
+  active: coerceOptBool(true)
 });
 
 // ============ FIX SCRIPTS ============

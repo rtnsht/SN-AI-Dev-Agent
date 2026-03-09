@@ -350,8 +350,377 @@ function generateMarkdown(t: SessionTelemetry): string {
     }
   }
 
+  return md;
+}
+
+// ── Delta State & Session Updates (Conversational Narration) ───────────────
+
+interface DeltaState {
+  lastRoundCount: number;
+  lastPhaseCount: number;
+  lastToolCalls: number;
+  lastDeployCount: number;
+  lastErrorCount: number;
+  lastPhase: string;
+  lastChatIndex: number;       // tracks which chat request we're in
+  consecutiveErrors: number;   // tracks error streaks for commentary
+  wasComplete: boolean;
+  updates: string[];           // accumulated narration paragraphs
+}
+
+const deltaStates = new Map<string, DeltaState>();
+
+function getDelta(sessionId: string): DeltaState {
+  if (!deltaStates.has(sessionId)) {
+    deltaStates.set(sessionId, {
+      lastRoundCount: 0, lastPhaseCount: 0, lastToolCalls: 0,
+      lastDeployCount: 0, lastErrorCount: 0, lastPhase: "",
+      lastChatIndex: 0, consecutiveErrors: 0,
+      wasComplete: false, updates: [],
+    });
+  }
+  return deltaStates.get(sessionId)!;
+}
+
+/** Describe what a set of tools were doing in plain English */
+function describeToolIntent(tools: { name: string; durationMs: number; success: boolean }[]): string {
+  const names = tools.map(t => t.name);
+
+  // Schema / table exploration
+  if (names.some(n => n === "sn_get_table_schema")) {
+    const tables = tools.filter(t => t.name === "sn_get_table_schema");
+    return `studying the data model (${tables.length} table schema${tables.length > 1 ? "s" : ""})`;
+  }
+
+  // Querying for existing artifacts
+  if (names.includes("sn_query_records") && names.includes("sn_list_flows")) {
+    return "surveying the instance — checking existing business rules, flows, and related records to understand what's already in place";
+  }
+  if (names.includes("sn_list_flows")) return "checking what flows already exist on the instance";
+  if (names.includes("sn_list_custom_actions")) return "looking up available custom actions for the flow";
+
+  // Scope / app discovery
+  if (names.includes("sn_get_scope_selection_options") || names.includes("sn_get_custom_apps")) {
+    const both = names.includes("sn_get_scope_selection_options") && names.includes("sn_get_custom_apps");
+    return both ? "evaluating available application scopes and custom apps to determine where to deploy" : "looking up available application scopes";
+  }
+
+  // Update set management
+  if (names.includes("sn_create_update_set")) return "creating an update set to track all changes";
+  if (names.includes("sn_set_current_update_set")) return "setting the active update set for artifact capture";
+  if (names.includes("sn_list_update_sets")) return "checking existing update sets";
+  if (names.includes("sn_get_update_set_contents")) return "verifying what artifacts landed in the update set";
+
+  // Creating artifacts
+  if (names.includes("sn_create_script_include")) return "deploying a Script Include to the instance";
+  if (names.includes("sn_create_business_rule")) return "creating a Business Rule";
+  if (names.includes("sn_create_client_script")) return "creating a Client Script";
+
+  // Instance info
+  if (names.includes("sn_get_instance_info")) return "gathering instance metadata (version, plugins, capabilities)";
+
+  // Action type research
+  if (names.some(n => n.includes("list_action_types") || n.includes("get_action_type"))) {
+    return "researching available Flow Designer action types";
+  }
+
+  // Flow analysis
+  if (names.some(n => n.includes("analyze"))) return "analyzing existing flows to learn implementation patterns";
+
+  // Record queries (generic)
+  if (names.every(n => n === "sn_query_records")) {
+    return `querying the instance (${names.length} record lookup${names.length > 1 ? "s" : ""})`;
+  }
+  if (names.includes("sn_get_record")) {
+    return `retrieving specific records for inspection`;
+  }
+
+  // Fallback
+  return tools.map(t => `\`${t.name}\``).join(", ");
+}
+
+/** Build a narrative phrase for why Claude might be doing something based on context */
+function narrativeContext(tools: { name: string; durationMs: number; success: boolean }[], phase: string, roundNum: number): string {
+  const names = tools.map(t => t.name);
+
+  // First round in spec phase — Claude is doing discovery
+  if (phase === "spec" && roundNum <= 2 && names.includes("sn_query_records")) {
+    return "Before writing the spec, Claude is doing its homework — ";
+  }
+  if (phase === "design" && names.includes("sn_get_scope_selection_options")) {
+    return "With the design approved, Claude is now figuring out where to put things — ";
+  }
+  if (phase === "scope_selection" && names.includes("sn_query_records")) {
+    return "Claude is validating the deployment target — ";
+  }
+  if (phase === "implementation" && names.includes("sn_create_script_include")) {
+    return "Now building the actual artifacts — ";
+  }
+  return "";
+}
+
+function generateSessionUpdates(t: SessionTelemetry, sessionId: string): string {
+  const delta = getDelta(sessionId);
+  const newUpdates: string[] = [];
+
+  // ── Opening narration ────────────────────────────────────────────
+  if (delta.updates.length === 0) {
+    if (t.connectTime && t.instanceUrl) {
+      const instance = t.instanceUrl.replace("https://", "");
+      const user = t.userFullName || t.username || "user";
+      newUpdates.push(
+        `🔌 **Session opened** at ${timeOnly(t.connectTime)} — ${user} connected to \`${instance}\` using **${t.model || "unknown model"}**. Let's see what Claude does with this one.`
+      );
+    } else if (t.phases.length > 0) {
+      newUpdates.push(
+        `📋 Session started at ${timeOnly(t.sessionStartTime)}. Model: **${t.model || "unknown"}**.`
+      );
+    }
+  }
+
+  // ── Phase transitions (the story arc) ────────────────────────────
+  if (t.phases.length > delta.lastPhaseCount) {
+    const newPhases = t.phases.slice(delta.lastPhaseCount);
+    for (const p of newPhases) {
+      if (delta.lastPhase && delta.lastPhase !== p.phase) {
+        const phaseNarrative: Record<string, string> = {
+          "spec": `📝 **Spec phase** begins (${timeOnly(p.enteredAt)}). Claude now has access to ${p.toolsFiltered} tools and will start investigating the instance to understand the landscape before writing the specification.`,
+          "design": `📐 **Design phase** begins (${timeOnly(p.enteredAt)}). The spec was approved — Claude is now working out the technical design: which artifacts to create, what scope to use, and how the pieces fit together. ${p.toolsFiltered} tools available.`,
+          "scope_selection": `🎯 **Scope selection** (${timeOnly(p.enteredAt)}). Claude needs to decide where to deploy — which application scope and update set. Only ${p.toolsFiltered} tools available in this focused phase.`,
+          "implementation": `🔨 **Implementation phase** begins (${timeOnly(p.enteredAt)}). This is where the real work happens — Claude will create Script Includes, Business Rules, Flows, and deploy them to the instance. Full toolkit unlocked: ${p.toolsFiltered} tools.`,
+        };
+        newUpdates.push(
+          phaseNarrative[p.phase] || `🔄 Moved to **${p.phase}** phase at ${timeOnly(p.enteredAt)} (${p.toolsFiltered} tools).`
+        );
+      }
+      delta.lastPhase = p.phase;
+    }
+    delta.lastPhaseCount = t.phases.length;
+  }
+
+  // ── Narrate rounds as a story ────────────────────────────────────
+  if (t.rounds.length > delta.lastRoundCount) {
+    const newRounds = t.rounds.slice(delta.lastRoundCount);
+    const narration = narrateRounds(newRounds, t, delta);
+    newUpdates.push(...narration);
+    delta.lastRoundCount = t.rounds.length;
+  }
+
+  // ── Deploy attempts (the climax) ─────────────────────────────────
+  if (t.deployAttempts.length > delta.lastDeployCount) {
+    const newDeploys = t.deployAttempts.slice(delta.lastDeployCount);
+    for (let i = 0; i < newDeploys.length; i++) {
+      const dep = newDeploys[i];
+      const attemptNum = delta.lastDeployCount + i + 1;
+      const dur = (dep.durationMs / 1000).toFixed(1);
+
+      if (dep.success && attemptNum === 1 && !dep.reinstall) {
+        newUpdates.push(
+          `🚀 **First deploy attempt** — Claude pushed ${dep.codeSize} chars of flow code to the instance (${dur}s). The SDK build and install both succeeded.`
+        );
+      } else if (dep.success && dep.reinstall && attemptNum === 2) {
+        newUpdates.push(
+          `🔄 **Deploy #${attemptNum}** — Claude is retrying with \`--reinstall\` flag, which forces the SDK to overwrite any existing flow with the same ID. This usually means the first deploy created the flow but Claude wants to ensure it's the latest version. (${dur}s, ✅)`
+        );
+      } else if (dep.success && dep.reinstall && attemptNum >= 3) {
+        newUpdates.push(
+          `⚠️ **Deploy #${attemptNum}** — Another reinstall attempt (${dur}s, ✅). ${attemptNum >= 4 ? "Claude appears to be stuck in a deploy loop — the tool reports success but something in the response is making Claude think it needs to try again." : "Claude may be unsatisfied with the previous result or is seeing an unexpected response from the install command."}`
+        );
+      } else if (!dep.success) {
+        newUpdates.push(
+          `❌ **Deploy #${attemptNum} failed** — The SDK ${dep.reinstall ? "reinstall" : "install"} did not succeed (${dur}s). Claude will likely inspect the error and adjust the flow code.`
+        );
+      } else {
+        newUpdates.push(
+          `🚀 **Deploy #${attemptNum}** — ${dep.codeSize} chars, ${dep.reinstall ? "reinstall" : "fresh install"}, ${dur}s ${dep.success ? "✅" : "❌"}`
+        );
+      }
+    }
+    delta.lastDeployCount = t.deployAttempts.length;
+  }
+
+  // ── Errors (the complications) ───────────────────────────────────
+  if (t.errors.length > delta.lastErrorCount) {
+    const newErrors = t.errors.slice(delta.lastErrorCount);
+    const errorsByTool = new Map<string, typeof newErrors>();
+    for (const err of newErrors) {
+      const list = errorsByTool.get(err.tool) || [];
+      list.push(err);
+      errorsByTool.set(err.tool, list);
+    }
+
+    for (const [tool, errs] of errorsByTool) {
+      if (errs.length === 1) {
+        const err = errs[0];
+        const isTypeError = err.message.includes("Expected boolean") || err.message.includes("Expected object") || err.message.includes("Expected number");
+        if (isTypeError) {
+          newUpdates.push(
+            `⚡ **Type mismatch** on \`${tool}\` at ${timeOnly(err.time)} — Claude sent a string where the schema expected a different type. This is a known AI agent quirk; the coercion layer should catch most of these, but this one slipped through.`
+          );
+        } else if (err.message.includes("Unknown tool")) {
+          newUpdates.push(
+            `🚫 Claude tried to call \`${tool}\` at ${timeOnly(err.time)}, but that tool doesn't exist (or isn't available in the current phase). This costs a round.`
+          );
+        } else {
+          newUpdates.push(
+            `❌ \`${tool}\` failed at ${timeOnly(err.time)} — ${err.message.slice(0, 150)}`
+          );
+        }
+      } else {
+        const isTypeError = errs.every(e => e.message.includes("Expected boolean") || e.message.includes("Expected object") || e.message.includes("Expected number") || e.message.includes("Expected string"));
+        if (isTypeError) {
+          newUpdates.push(
+            `⚡ \`${tool}\` hit **${errs.length} consecutive type errors** (${timeOnly(errs[0].time)}–${timeOnly(errs[errs.length - 1].time)}). Claude keeps sending the wrong types — this is burning through rounds. The schema coercion fix should prevent this in future sessions.`
+          );
+        } else {
+          newUpdates.push(
+            `❌ \`${tool}\` failed **${errs.length} times** between ${timeOnly(errs[0].time)} and ${timeOnly(errs[errs.length - 1].time)}. Claude is struggling with this tool.`
+          );
+        }
+      }
+    }
+    delta.lastErrorCount = t.errors.length;
+  }
+
+  // ── Round limit warning ──────────────────────────────────────────
+  if (t.totalRounds >= t.maxRounds - 3 && t.totalRounds < t.maxRounds && !t.isComplete) {
+    const remaining = t.maxRounds - t.totalRounds;
+    if (!delta.updates.some(u => u.includes("running low on rounds"))) {
+      newUpdates.push(
+        `⏰ **${remaining} rounds left.** Claude is running low on rounds and needs to wrap up. If there's unfinished work, it should summarize what's done and what the user needs to complete manually.`
+      );
+    }
+  }
+
+  // ── Session complete (the resolution) ────────────────────────────
+  if (t.isComplete && !delta.wasComplete) {
+    delta.wasComplete = true;
+    const elapsed = formatDuration(t.elapsedSeconds);
+    const successDeploys = t.deployAttempts.filter(d => d.success).length;
+    const failedDeploys = t.deployAttempts.filter(d => !d.success).length;
+    const errorRate = t.totalToolCalls > 0 ? ((t.toolErrors / t.totalToolCalls) * 100).toFixed(0) : "0";
+
+    let summary = `\n🏁 **Session complete** — ${elapsed} elapsed, ${t.totalRounds}/${t.maxRounds} rounds used, ${t.totalToolCalls} tool calls`;
+    if (t.toolErrors > 0) summary += ` (${errorRate}% error rate)`;
+    summary += `.`;
+
+    if (t.deployAttempts.length > 0) {
+      if (failedDeploys === 0 && successDeploys === 1) {
+        summary += ` Flow deployed successfully on the first try — clean execution.`;
+      } else if (failedDeploys === 0 && successDeploys > 1) {
+        summary += ` ${successDeploys} deploy attempts (all succeeded). Claude retried ${successDeploys - 1} time${successDeploys > 2 ? "s" : ""} — worth investigating why.`;
+      } else if (failedDeploys > 0 && successDeploys > 0) {
+        summary += ` ${t.deployAttempts.length} deploy attempts: ${successDeploys} succeeded, ${failedDeploys} failed. Bumpy but got there.`;
+      } else if (successDeploys === 0) {
+        summary += ` ❌ All ${t.deployAttempts.length} deploy attempts failed. The flow was not deployed.`;
+      }
+    }
+
+    if (t.finalStopReason === "max_rounds") {
+      summary += `\n\n⚠️ **Hit the ${t.maxRounds}-round limit.** Claude ran out of rounds before finishing. Check if the work is complete.`;
+    }
+
+    // Add a brief assessment
+    const efficiency = t.totalRounds <= 5 ? "excellent" : t.totalRounds <= 15 ? "good" : t.totalRounds <= 25 ? "moderate" : "poor";
+    summary += `\n\n**Efficiency: ${efficiency}** — ${t.totalRounds} rounds for ${t.phases.length} phase${t.phases.length > 1 ? "s" : ""}.`;
+
+    newUpdates.push(summary);
+  }
+
+  // ── Idle detection ───────────────────────────────────────────────
+  if (newUpdates.length === 0 && delta.updates.length > 0 && !t.isComplete) {
+    const lastRound = t.rounds[t.rounds.length - 1];
+    if (lastRound && lastRound.stopReason === "end_turn" && lastRound.tools.length === 0) {
+      newUpdates.push(
+        `⏳ Claude has stopped and is waiting for user input. The ball is in the user's court.`
+      );
+    }
+  }
+
+  delta.updates.push(...newUpdates);
+
+  // Render
+  let md = `\n---\n\n## 🔴 Session Updates\n\n`;
+  if (delta.updates.length === 0) {
+    md += `*Waiting for session activity...*\n`;
+  } else {
+    md += delta.updates.join("\n\n") + "\n";
+  }
   md += `\n---\n*Generated from \`${t.logFile}\`*\n`;
   return md;
+}
+
+/** Narrate rounds as a coherent story, not a log dump */
+function narrateRounds(rounds: RoundInfo[], t: SessionTelemetry, delta: DeltaState): string[] {
+  const blocks: string[] = [];
+
+  // Group consecutive text-only rounds (user interaction rounds)
+  let i = 0;
+  while (i < rounds.length) {
+    const r = rounds[i];
+
+    // ── Text-only rounds: group consecutive ones ───────────────────
+    if (r.tools.length === 0) {
+      let textCount = 0;
+      while (i < rounds.length && rounds[i].tools.length === 0) {
+        textCount++;
+        i++;
+      }
+      if (textCount === 1 && r.stopReason === "end_turn") {
+        blocks.push(
+          `💬 Claude responded to the user at ${timeOnly(r.startTime)} — presented its analysis and is waiting for direction.`
+        );
+      } else if (textCount > 1) {
+        blocks.push(
+          `💬 ${textCount} text exchanges between ${timeOnly(r.startTime)} and ${timeOnly(rounds[i - 1].startTime)} — Claude and the user are going back and forth on the approach.`
+        );
+      }
+      continue;
+    }
+
+    // ── Tool rounds: narrate with intent ───────────────────────────
+    // Collect consecutive tool rounds into a "work block"
+    const workBlock: RoundInfo[] = [];
+    while (i < rounds.length && rounds[i].tools.length > 0) {
+      workBlock.push(rounds[i]);
+      i++;
+    }
+
+    if (workBlock.length === 0) continue;
+
+    const allTools = workBlock.flatMap(r => r.tools);
+    const nonDeployTools = allTools.filter(t => t.name !== "sn_deploy_sdk_flow");
+    const deployTools = allTools.filter(t => t.name === "sn_deploy_sdk_flow");
+    const totalDur = allTools.reduce((s, t) => s + t.durationMs, 0);
+    const failures = allTools.filter(t => !t.success);
+    const startTime = timeOnly(workBlock[0].startTime);
+    const endTime = workBlock.length > 1 ? timeOnly(workBlock[workBlock.length - 1].startTime) : "";
+    const timeRange = endTime && endTime !== startTime ? `${startTime}–${endTime}` : startTime;
+
+    // Skip pure deploy blocks (handled by deploy tracking)
+    if (nonDeployTools.length === 0 && deployTools.length > 0) continue;
+
+    const intent = describeToolIntent(nonDeployTools.length > 0 ? nonDeployTools : allTools);
+    const context = narrativeContext(nonDeployTools.length > 0 ? nonDeployTools : allTools, delta.lastPhase, workBlock[0].roundNum);
+    const durStr = totalDur > 0 ? ` (${(totalDur / 1000).toFixed(1)}s across ${workBlock.length} round${workBlock.length > 1 ? "s" : ""})` : "";
+
+    let msg = `🔍 **${timeRange}** — ${context}${intent}${durStr}.`;
+
+    if (failures.length > 0 && failures.length < allTools.length) {
+      msg += ` ${failures.length} of ${allTools.length} calls hit errors — Claude will need to adapt.`;
+    } else if (failures.length > 0 && failures.length === allTools.length) {
+      msg += ` All ${failures.length} calls failed — Claude is hitting a wall here.`;
+    }
+
+    // Add deploy context if mixed with other tools
+    if (deployTools.length > 0 && nonDeployTools.length > 0) {
+      msg += ` Also triggered ${deployTools.length} deploy attempt${deployTools.length > 1 ? "s" : ""}.`;
+    }
+
+    blocks.push(msg);
+  }
+
+  return blocks;
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────
@@ -373,11 +742,12 @@ export function updateTelemetry(sessionId: string): void {
 
     // Parse and generate
     const telemetry = parseSessionLog(logFilename);
-    const markdown = generateMarkdown(telemetry);
+    const summaryMd = generateMarkdown(telemetry);
+    const updatesMd = generateSessionUpdates(telemetry, sessionId);
 
-    // Write telemetry file
+    // Write telemetry file (summary + session updates)
     const telemetryFile = `telemetry-session-${telemetry.sessionSuffix}.md`;
-    fs.writeFileSync(path.join(LOGS_DIR, telemetryFile), markdown);
+    fs.writeFileSync(path.join(LOGS_DIR, telemetryFile), summaryMd + updatesMd);
   } catch (err) {
     console.error(`[telemetry] Error generating telemetry for ${sessionId}:`, err);
   }

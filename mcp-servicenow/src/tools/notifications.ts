@@ -8,10 +8,22 @@ import { ServiceNowClient } from '../client/sn-client.js';
 
 // ============ NOTIFICATIONS ============
 
+// ── Type coercion helpers (AI agents often send strings for booleans/numbers) ──
+const coerceOptBool = (def: boolean) =>
+  z.preprocess(
+    (v) => (v === 'true' ? true : v === 'false' ? false : v === undefined ? undefined : v),
+    z.boolean().optional().default(def)
+  );
+const coerceOptNum = (def: number) =>
+  z.preprocess(
+    (v) => (typeof v === 'string' && /^\d+$/.test(v) ? parseInt(v, 10) : v),
+    z.number().optional().default(def)
+  );
+
 export const getNotificationsSchema = z.object({
   table: z.string().optional().describe('Filter by table name'),
-  activeOnly: z.boolean().optional().default(true),
-  limit: z.number().optional().default(50)
+  activeOnly: coerceOptBool(true),
+  limit: coerceOptNum(50)
 });
 
 export const createNotificationSchema = z.object({
@@ -20,11 +32,11 @@ export const createNotificationSchema = z.object({
   subject: z.string().describe('Email subject line'),
   messageHtml: z.string().describe('HTML email body'),
   recipients: z.string().optional().describe('Recipient field or user/group sys_id'),
-  sendSelf: z.boolean().optional().default(false).describe('Send to event creator'),
+  sendSelf: coerceOptBool(false).describe('Send to event creator'),
   condition: z.string().optional().describe('Condition for sending'),
-  insertAction: z.boolean().optional().default(false).describe('Send on insert'),
-  updateAction: z.boolean().optional().default(true).describe('Send on update'),
-  active: z.boolean().optional().default(true)
+  insertAction: coerceOptBool(false).describe('Send on insert'),
+  updateAction: coerceOptBool(true).describe('Send on update'),
+  active: coerceOptBool(true)
 });
 
 // ============ EVENTS ============

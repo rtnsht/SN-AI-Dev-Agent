@@ -17,13 +17,20 @@ export const getUpdateSetSchema = z.object({
   sys_id: z.string().describe('The sys_id of the update set')
 });
 
+// ── Type coercion helpers (AI agents often send strings for booleans/numbers) ──
+const coerceOptBool = (def: boolean) =>
+  z.preprocess(
+    (v) => (v === 'true' ? true : v === 'false' ? false : v === undefined ? undefined : v),
+    z.boolean().optional().default(def)
+  );
+
 export const createUpdateSetSchema = z.object({
   name: z.string().describe('Name for the update set'),
   description: z.string().optional().describe('Description of the update set'),
   application: z.string().optional().describe('Scope sys_id (sys_scope.sys_id) to create the update set in a specific application scope. Omit for Global scope.'),
   parent: z.string().optional().describe('Parent update set sys_id (for batch)'),
-  force: z.boolean().optional().default(false).describe('If true, skip duplicate name check and create anyway'),
-  autoTimestamp: z.boolean().optional().default(false).describe('If true and a duplicate name exists, auto-append a timestamp to make the name unique')
+  force: coerceOptBool(false).describe('If true, skip duplicate name check and create anyway'),
+  autoTimestamp: coerceOptBool(false).describe('If true and a duplicate name exists, auto-append a timestamp to make the name unique')
 });
 
 export const setCurrentUpdateSetSchema = z.object({

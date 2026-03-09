@@ -301,9 +301,10 @@ function getRetryDelay(error: unknown, attempt: number): number {
   return BASE_BACKOFF_MS * Math.pow(2, attempt);
 }
 
-// Load mcp-servicenow modules at runtime using Node.js require
-// (bypasses Turbopack's static import analysis which can't resolve subpath exports)
+// Load repo-local mcp-servicenow compiled modules at runtime using Node.js require.
+// This avoids stale copies under webapp/node_modules when the file: dependency is not refreshed.
 const appRequire = createRequire(path.join(process.cwd(), "package.json"));
+const localMcpDistDir = path.resolve(process.cwd(), "..", "mcp-servicenow", "dist");
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _toolRegistry: any = null;
@@ -312,14 +313,14 @@ let _toolDefs: any = null;
 
 function getToolRegistry() {
   if (!_toolRegistry) {
-    _toolRegistry = appRequire("mcp-servicenow/tool-registry");
+    _toolRegistry = appRequire(path.join(localMcpDistDir, "tool-registry.js"));
   }
   return _toolRegistry;
 }
 
 function getToolDefs() {
   if (!_toolDefs) {
-    _toolDefs = appRequire("mcp-servicenow/tool-definitions");
+    _toolDefs = appRequire(path.join(localMcpDistDir, "tool-definitions.js"));
   }
   return _toolDefs;
 }
@@ -501,6 +502,10 @@ async function executeAndLogTool(
   let success = true;
   try {
     output = await registry.executeToolCall(toolName, input, snClient);
+    // Many tools return { success: false, error: "..." } instead of throwing
+    if (typeof output === "object" && output !== null && (output as Record<string, unknown>).success === false) {
+      success = false;
+    }
   } catch (err) {
     output = { error: err instanceof Error ? err.message : String(err) };
     success = false;

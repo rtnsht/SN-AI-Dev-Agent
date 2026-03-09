@@ -6,12 +6,28 @@
 import { z } from 'zod';
 import { ServiceNowClient } from '../client/sn-client.js';
 
+// ── Type coercion helpers (AI agents often send strings for booleans/numbers) ──
+const coerceBool = z.preprocess(
+  (v) => (v === 'true' ? true : v === 'false' ? false : v),
+  z.boolean()
+);
+const coerceOptBool = (def: boolean) =>
+  z.preprocess(
+    (v) => (v === 'true' ? true : v === 'false' ? false : v === undefined ? undefined : v),
+    z.boolean().optional().default(def)
+  );
+const coerceOptNum = (def: number) =>
+  z.preprocess(
+    (v) => (typeof v === 'string' && /^\d+$/.test(v) ? parseInt(v, 10) : v),
+    z.number().optional().default(def)
+  );
+
 // ============ BUSINESS RULES ============
 
 export const getBusinessRulesSchema = z.object({
   table: z.string().describe('Table name to get business rules for'),
-  activeOnly: z.boolean().optional().default(true).describe('Only return active rules'),
-  limit: z.number().optional().default(50)
+  activeOnly: coerceOptBool(true).describe('Only return active rules'),
+  limit: coerceOptNum(50)
 });
 
 export const createBusinessRuleSchema = z.object({
@@ -19,37 +35,37 @@ export const createBusinessRuleSchema = z.object({
   table: z.string().describe('Table the rule applies to'),
   script: z.string().describe('The script code'),
   when: z.enum(['before', 'after', 'async', 'display']).describe('When the rule runs'),
-  order: z.number().optional().default(100).describe('Execution order'),
+  order: coerceOptNum(100).describe('Execution order'),
   condition: z.string().optional().describe('Condition for rule execution'),
-  insert: z.boolean().optional().default(true).describe('Run on insert'),
-  update: z.boolean().optional().default(true).describe('Run on update'),
-  delete: z.boolean().optional().default(false).describe('Run on delete'),
-  query: z.boolean().optional().default(false).describe('Run on query'),
-  active: z.boolean().optional().default(true).describe('Is the rule active')
+  insert: coerceOptBool(true).describe('Run on insert'),
+  update: coerceOptBool(true).describe('Run on update'),
+  delete: coerceOptBool(false).describe('Run on delete'),
+  query: coerceOptBool(false).describe('Run on query'),
+  active: coerceOptBool(true).describe('Is the rule active')
 });
 
 // ============ SCRIPT INCLUDES ============
 
 export const getScriptIncludesSchema = z.object({
   query: z.string().optional().describe('Query filter (e.g., "nameSTARTSWITHUtil")'),
-  activeOnly: z.boolean().optional().default(true),
-  limit: z.number().optional().default(50)
+  activeOnly: coerceOptBool(true),
+  limit: coerceOptNum(50)
 });
 
 export const createScriptIncludeSchema = z.object({
   name: z.string().describe('Name of the script include (also used as class name)'),
   script: z.string().describe('The script code'),
   apiName: z.string().optional().describe('API name (defaults to name)'),
-  clientCallable: z.boolean().optional().default(false).describe('Can be called from client'),
-  active: z.boolean().optional().default(true)
+  clientCallable: coerceOptBool(false).describe('Can be called from client'),
+  active: coerceOptBool(true)
 });
 
 // ============ CLIENT SCRIPTS ============
 
 export const getClientScriptsSchema = z.object({
   table: z.string().describe('Table name to get client scripts for'),
-  activeOnly: z.boolean().optional().default(true),
-  limit: z.number().optional().default(50)
+  activeOnly: coerceOptBool(true),
+  limit: coerceOptNum(50)
 });
 
 export const createClientScriptSchema = z.object({
@@ -58,7 +74,7 @@ export const createClientScriptSchema = z.object({
   script: z.string().describe('The script code'),
   type: z.enum(['onLoad', 'onChange', 'onSubmit', 'onCellEdit']).describe('Script type'),
   field: z.string().optional().describe('Field name (for onChange)'),
-  active: z.boolean().optional().default(true)
+  active: coerceOptBool(true)
 });
 
 // ============ IMPLEMENTATIONS ============

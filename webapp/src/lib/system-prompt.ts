@@ -149,9 +149,12 @@ Note: This gate auto-proceeds — do NOT ask user to type "approved" here. The s
    - [CRITICAL] Do NOT create flows via REST API tools (sn_create_flow). REST-created flows lack required internal snapshots and land in wrong scope.
    - INSTEAD: Generate SDK fluent code and deploy it using the sn_deploy_sdk_flow tool:
      - Use the established pattern: import { action, Flow, wfa, trigger } from '@servicenow/sdk/automation'
-     - Call sn_deploy_sdk_flow with { code, fileName, scope, scopeId } from the scope_selection phase
-     - The tool writes the .now.ts file, runs SDK build + install using CI mode (non-interactive)
-     - Set reinstall: true for first-time deployments to a scope
+     - Call sn_deploy_sdk_flow with { code, keysTs, fileName, scope, scopeId }
+     - You MUST provide keysTs — the complete generated/keys.ts content with Now.ID declarations for this flow
+     - Flow source is stored in a persistent app workspace under sdk-flows/apps/{scope}/ so all SDK-managed flows for that app build together
+     - NEVER set reinstall=true for this deploy path; use normal incremental install only
+     - Use sn_list_sdk_flows to check what's already deployed before creating
+     - Use sn_undeploy_sdk_flow to safely remove flows (only removes SDK-deployed flows)
    - If sn_deploy_sdk_flow fails, present the generated code to the user with manual deployment instructions — do NOT create a Business Rule or other artifact as a substitute
    - [CRITICAL] NEVER create duplicate logic: if the design calls for a Flow, deploy ONLY a Flow. Do NOT also create a Business Rule, Scheduled Job, or Script Include that duplicates the same logic "as a fallback." One artifact per piece of logic — no hedging.
 5. If artifacts missing from update set: use sn_move_to_update_set
@@ -254,7 +257,8 @@ FLOW LOGIC:
 - wfa.flowLogic.else({ $id: Now.ID['x'] }, () => { ... })
 - wfa.flowLogic.forEach(wfa.dataPill(arraySource, 'array.string'), { $id: Now.ID['x'] }, () => { ... })
 
-GENERATED KEYS — Every flow requires a generated/keys.ts file declaring all Now.ID keys:
+GENERATED KEYS — You MUST provide a complete keys.ts via the keysTs parameter when calling sn_deploy_sdk_flow.
+It MUST include bom_json + package_json entries alongside your flow's IDs. Generate random 32-char hex GUIDs for each ID.
 \`\`\`typescript
 import '@servicenow/sdk/global'
 declare global {
@@ -262,10 +266,12 @@ declare global {
         namespace Internal {
             interface Keys extends KeysRegistry {
                 explicit: {
-                    my_flow_key: { table: 'sys_hub_flow'; id: '<32-char-hex-guid>' }
-                    my_trigger_key: { table: 'sys_hub_trigger_instance_v2'; id: '<guid>' }
-                    my_action_key: { table: 'sys_hub_action_instance_v2'; id: '<guid>' }
-                    my_logic_key: { table: 'sys_hub_flow_logic_instance_v2'; id: '<guid>' }
+                    my_flow_key: { table: 'sys_hub_flow'; id: '<random-32-char-hex>' }
+                    my_trigger_key: { table: 'sys_hub_trigger_instance_v2'; id: '<random-32-char-hex>' }
+                    my_action_key: { table: 'sys_hub_action_instance_v2'; id: '<random-32-char-hex>' }
+                    my_logic_key: { table: 'sys_hub_flow_logic_instance_v2'; id: '<random-32-char-hex>' }
+                    bom_json: { table: 'sys_module'; id: '1aceb1a35b3d4df69d03bb16b66c088c' }
+                    package_json: { table: 'sys_module'; id: '7e3c5edc937b4772bf94b1eb8e498866' }
                 }
             }
         }
@@ -306,6 +312,24 @@ WRONG PATTERNS — DO NOT USE:
 - action.core.lookUpRecords('id', {...}) — WRONG: Use wfa.action(action.core.lookUpRecords, { $id }, {...})
 - values: { field: 'val' } — WRONG: Use values: TemplateValue({ field: 'val' })
 - record: someVar — WRONG: Use record: wfa.dataPill(someRef, 'reference')
+
+DEPLOYMENT — Call sn_deploy_sdk_flow with BOTH code AND keysTs:
+\`\`\`
+sn_deploy_sdk_flow({
+    code: "<complete .now.ts content>",
+    keysTs: "<complete keys.ts content including bom_json + package_json>",
+    fileName: "AutoCloseStaleIncidents.now.ts",
+    scope: "x_snc_yantra",
+    scopeId: "<sys_id of scoped app>",
+    reinstall: false
+})
+\`\`\`
+Each deploy updates the app-scoped workspace, regenerates merged keys.ts, and performs a normal incremental install.
+
+CLEANUP — Use sn_undeploy_sdk_flow to safely remove SDK-deployed flows:
+- Only removes flows tracked in the SDK registry (never touches non-SDK flows)
+- Deletes trigger instances, action instances, and the flow from the instance
+- Use sn_list_sdk_flows to see what's deployed before cleanup
 </sdk_flow_syntax>
 
 <naming>

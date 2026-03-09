@@ -1,0 +1,10 @@
+{
+  "name": "company-itsm-extension",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SDK app workspace for x_snc_company_itsm",
+  "scripts": {
+    "build": "now-sdk build",
+    "clean": "rm -rf dist .now-sdk-cache .now"
+  }
+}

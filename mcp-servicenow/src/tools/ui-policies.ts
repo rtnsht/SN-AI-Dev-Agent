@@ -8,10 +8,22 @@ import { ServiceNowClient } from '../client/sn-client.js';
 
 // ============ UI POLICIES ============
 
+// ── Type coercion helpers (AI agents often send strings for booleans/numbers) ──
+const coerceOptBool = (def: boolean) =>
+  z.preprocess(
+    (v) => (v === 'true' ? true : v === 'false' ? false : v === undefined ? undefined : v),
+    z.boolean().optional().default(def)
+  );
+const coerceOptNum = (def: number) =>
+  z.preprocess(
+    (v) => (typeof v === 'string' && /^\d+$/.test(v) ? parseInt(v, 10) : v),
+    z.number().optional().default(def)
+  );
+
 export const getUiPoliciesSchema = z.object({
   table: z.string().describe('Table name to get UI policies for'),
-  activeOnly: z.boolean().optional().default(true),
-  limit: z.number().optional().default(50)
+  activeOnly: coerceOptBool(true),
+  limit: coerceOptNum(50)
 });
 
 export const createUiPolicySchema = z.object({
@@ -20,9 +32,9 @@ export const createUiPolicySchema = z.object({
   conditions: z.string().optional().describe('Encoded condition string'),
   scriptTrue: z.string().optional().describe('Script to run when condition is true'),
   scriptFalse: z.string().optional().describe('Script to run when condition is false'),
-  onLoad: z.boolean().optional().default(true).describe('Run on form load'),
-  reverseIfFalse: z.boolean().optional().default(true),
-  active: z.boolean().optional().default(true)
+  onLoad: coerceOptBool(true).describe('Run on form load'),
+  reverseIfFalse: coerceOptBool(true),
+  active: coerceOptBool(true)
 });
 
 // ============ UI POLICY ACTIONS ============
@@ -46,8 +58,8 @@ export const createUiPolicyActionSchema = z.object({
 
 export const getUiActionsSchema = z.object({
   table: z.string().describe('Table name to get UI actions for'),
-  activeOnly: z.boolean().optional().default(true),
-  limit: z.number().optional().default(50)
+  activeOnly: coerceOptBool(true),
+  limit: coerceOptNum(50)
 });
 
 export const createUiActionSchema = z.object({
@@ -56,13 +68,13 @@ export const createUiActionSchema = z.object({
   script: z.string().describe('Server-side script'),
   clientScript: z.string().optional().describe('Client-side script'),
   actionName: z.string().optional().describe('Action name for client script'),
-  formButton: z.boolean().optional().default(true).describe('Show as form button'),
-  formLink: z.boolean().optional().default(false).describe('Show as form link'),
-  formContextMenu: z.boolean().optional().default(false),
-  listButton: z.boolean().optional().default(false),
-  listContextMenu: z.boolean().optional().default(false),
+  formButton: coerceOptBool(true).describe('Show as form button'),
+  formLink: coerceOptBool(false).describe('Show as form link'),
+  formContextMenu: coerceOptBool(false),
+  listButton: coerceOptBool(false),
+  listContextMenu: coerceOptBool(false),
   condition: z.string().optional().describe('Condition to show the action'),
-  active: z.boolean().optional().default(true)
+  active: coerceOptBool(true)
 });
 
 // ============ IMPLEMENTATIONS ============

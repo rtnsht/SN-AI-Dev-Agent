@@ -141,36 +141,12 @@ SN-AI-Dev-Agent/
 │   ├── tests/                   # Test scripts
 │   └── lib/                     # Helper libraries
 │
-├── webapp/                      # 🌐 NEXT.JS WEB APPLICATION
-│   ├── src/
-│   │   ├── app/
-│   │   │   ├── page.tsx         # Main page (state owner, orchestration)
-│   │   │   └── api/             # API routes
-│   │   │       ├── chat/        # POST /api/chat (non-streaming)
-│   │   │       ├── chat-stream/ # POST /api/chat-stream (SSE streaming)
-│   │   │       ├── test-connection/ # POST /api/test-connection
-│   │   │       ├── instance-prompts/ # POST /api/instance-prompts (dynamic starter cards)
-│   │   │       ├── config/      # GET /api/config (public settings)
-│   │   │       └── openrouter-models/ # GET /api/openrouter-models
-│   │   ├── components/
-│   │   │   ├── ChatWindow.tsx   # Message list, input, dynamic prompts
-│   │   │   ├── MessageBubble.tsx # Message rendering, user avatar initial
-│   │   │   ├── SettingsPanel.tsx # Credentials, API key, usage meter
-│   │   │   └── PhaseTracker.tsx # SDLC phase stepper
-│   │   └── lib/
-│   │       ├── sn-engine.ts     # AI orchestrator + instance prompt fetcher
-│   │       ├── system-prompt.ts # SDLC prompt + confidentiality guardrails
-│   │       ├── rate-limiter.ts  # IP-based sliding window limiter
-│   │       └── types.ts         # Shared types (ChatMessage.hidden, etc.)
-│   └── .env                     # API keys, rate limits, feature flags
-│
 ├── src/                         # 🛠️ CLI FRAMEWORK
 │   ├── cli.js
 │   ├── core/
 │   └── utils/
 │
 └── docs/                        # 📚 DOCUMENTATION
-    ├── architecture.md          # Technical architecture (v2.3)
     └── BROWNFIELD-ENHANCEMENT-PLAN.md
 ```
 
@@ -427,3 +403,87 @@ Artifacts created via REST API land in the "Default" update set instead of the i
 4. Verify with `sn_get_update_set_contents`
 5. Use `sn_move_to_update_set` as fallback for any missing artifacts
 
+---
+
+## 15. Live Session Telemetry
+
+Every AI agent session generates a live-updating telemetry dashboard at `webapp/logs/telemetry-session-{suffix}.md`.
+
+### How It Works
+1. User clicks **Connect** → POST `/api/session-start` logs connection metadata and starts a 15-second telemetry interval
+2. Every `logger.log()` call triggers a throttled `updateTelemetry()` (max once per 15s)
+3. The telemetry generator parses the session JSONL log and regenerates the markdown dashboard
+4. One file per session, overwritten in place — open in VS Code to watch live
+
+### What's Captured
+- **Connect metadata**: instance URL, username, model, AI provider
+- **Phase transitions**: spec → design → scope_selection → implementation
+- **Round-by-round activity**: tools called, durations, tokens, stop reasons
+- **Tool usage stats**: per-tool call counts, success/failure rates, avg duration
+- **SDK deploy attempts**: code size, reinstall flag, success/failure
+- **Errors**: timestamped with tool name and message
+- **Session Updates**: conversational narration with intent-based tool descriptions, phase-aware context, deploy storytelling, error categorization, and efficiency assessment
+
+### Key Files
+| File | Purpose |
+|------|---------|
+| `webapp/src/lib/telemetry-generator.ts` | JSONL parser → markdown generator + conversational narration |
+| `webapp/src/lib/logger.ts` | Hooks `updateTelemetry()` into every log write |
+| `webapp/src/app/api/session-start/route.ts` | Logs connect event, starts telemetry stream |
+
+---
+
+## 16. AI Agent Type Coercion (Schema Hardening)
+
+AI agents frequently send string values where schemas expect `boolean`, `number`, or `object`. All MCP tool schemas use `z.preprocess()` to transparently coerce these inputs.
+
+### Coerced Types
+- **String → Boolean**: `"true"` / `"false"` → `true` / `false`
+- **String → Number**: `"100"` → `100`
+- **JSON String → Object**: `'{"name":"x"}'` → `{name:"x"}`
+
+### Files with Coercion
+`scripts.ts`, `records.ts`, `ui-policies.ts`, `notifications.ts`, `update-sets.ts`, `scheduled-jobs.ts`, `acls.ts`, `flow-designer.ts`
+
+### After Editing MCP Schemas
+```bash
+cd mcp-servicenow && rm -rf dist && npx tsc
+```
+Then restart the webapp server.
+
+---
+
+## 17. SDK Flow `now.config.json` Format
+
+The ServiceNow SDK expects `scope` and `scopeId` at the top level of `now.config.json`:
+```json
+{
+  "scope": "x_snc_yantra",
+  "scopeId": "2ea695fec3d7321034b6b1f1b40131f0"
+}
+```
+**Do NOT** use `host` / `auth` / `deploy` sections in this workspace config — the SDK build rejects them as unsupported properties.
+
+### SDK Flow Project Structure (App-Scoped Workspace)
+```
+sdk-flows/
+├── _template/               # Config templates for new workspaces
+├── apps/                    # Persistent workspace per scoped app
+│   └── {scope}/
+│       ├── now.config.json  # Instance + scope config
+│       ├── package.json     # Must use real app name, not flow name
+│       ├── keys/            # Per-flow keys.ts fragments (persisted)
+│       ├── node_modules/    # Symlink → ../../node_modules
+│       └── src/fluent/
+│           ├── {FlowName}.now.ts
+│           └── generated/keys.ts  # merged from all keys fragments for the app
+├── node_modules/            # Shared @servicenow/sdk (installed once)
+├── package.json             # SDK dependencies
+├── registry.json            # Tracks deployed flows for safe cleanup
+└── .gitignore
+```
+
+### SDK `--reinstall` Safety Warning
+- `now-sdk install` — normal incremental update path
+- `now-sdk install --reinstall` — **DANGEROUS**: can DELETE metadata on the instance not present in the local package.
+- **In this workspace, SDK flow deployment must NOT use `--reinstall`** because one scoped app may contain multiple SDK-managed flows.

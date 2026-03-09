@@ -1437,62 +1437,320 @@ export async function listFlowExecutions(client: ServiceNowClient, input: z.infe
 export const deploySDKFlowSchema = z.object({
   /** The complete .now.ts fluent code */
   code: z.string().describe('The complete SDK fluent .now.ts code for the flow'),
-  /** Filename (e.g. "scheduled-cleanup.now.ts") */
-  fileName: z.string().describe('Filename for the .now.ts file (e.g. "my-flow.now.ts")'),
+  /** The complete generated/keys.ts content declaring Now.ID keys for this flow */
+  keysTs: z.string().describe('The generated/keys.ts content with Now.ID key declarations for this flow'),
+  /** Filename (e.g. "AutoCloseStaleIncidents.now.ts") */
+  fileName: z.string().describe('Filename for the .now.ts file (e.g. "MyFlow.now.ts")'),
   /** ServiceNow scope (e.g. "x_snc_yantra") */
   scope: z.string().describe('Scoped app scope string (e.g. "x_snc_yantra")'),
   /** sys_id of the scoped application */
   scopeId: z.string().describe('sys_id of the scoped application record'),
-  /** Whether to use --reinstall flag (first-time deploy) */
+  /** Deprecated safety valve — reinstall is no longer allowed in this deploy path */
   reinstall: z.preprocess(
     (val) => val === 'true' || val === true,
     z.boolean()
-  ).optional().default(false).describe('Use --reinstall for first-time deployments'),
+  ).optional().default(false).describe(
+    'Unsupported in this deploy mode. Must be omitted or false. ' +
+    'SDK flow deployment now always uses normal incremental install to avoid overwriting other flows.'
+  ),
 });
+
+// ── Registry helpers ──────────────────────────────────────────────────────
+
+interface RegistryEntry {
+  flowSysId: string;
+  fileName: string;
+  flowDisplayName?: string;
+  scope: string;
+  scopeId: string;
+  instanceUrl: string;
+  deployedAt: string;
+  status: 'deployed' | 'undeployed';
+  artifactIds: { flow: string; triggers: string[]; actions: string[] };
+}
+
+interface Registry {
+  version: number;
+  description: string;
+  flows: Record<string, RegistryEntry>;
+}
+
+function getRegistryPath(sdkFlowsDir: string): string {
+  return path.join(sdkFlowsDir, 'registry.json');
+}
+
+function readRegistry(sdkFlowsDir: string): Registry {
+  const regPath = getRegistryPath(sdkFlowsDir);
+  if (!existsSync(regPath)) {
+    return { version: 1, description: 'Tracks all SDK-deployed flows.', flows: {} };
+  }
+  return JSON.parse(readFileSync(regPath, 'utf-8'));
+}
+
+function writeRegistry(sdkFlowsDir: string, registry: Registry): void {
+  writeFileSync(getRegistryPath(sdkFlowsDir), JSON.stringify(registry, null, 2) + '\n', 'utf-8');
+}
+
+interface ParsedKeyEntry {
+  key: string;
+  table: string;
+  id: string;
+}
+
+function getAppWorkspaceDir(sdkFlowsDir: string, scope: string): string {
+  return path.join(sdkFlowsDir, 'apps', scope);
+}
+
+function getFlowSourcePath(appDir: string, safeFileName: string): string {
+  return path.join(appDir, 'src', 'fluent', safeFileName);
+}
+
+function getKeysFragmentsDir(appDir: string): string {
+  return path.join(appDir, 'keys');
+}
+
+function getKeysFragmentPath(appDir: string, flowName: string): string {
+  return path.join(getKeysFragmentsDir(appDir), `${flowName}.keys.ts`);
+}
+
+function getMergedKeysPath(appDir: string): string {
+  return path.join(appDir, 'src', 'fluent', 'generated', 'keys.ts');
+}
+
+function parseKeyEntries(keysTs: string): ParsedKeyEntry[] {
+  const entries: ParsedKeyEntry[] = [];
+  const entryRegex = /([A-Za-z0-9_]+)\s*:\s*\{\s*table:\s*['"]([^'"]+)['"]\s*;\s*id:\s*['"]([^'"]+)['"]\s*\}/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = entryRegex.exec(keysTs)) !== null) {
+    entries.push({ key: match[1], table: match[2], id: match[3] });
+  }
+
+  return entries;
+}
+
+function extractArtifactIdsFromKeysTs(keysTs: string): { flow: string; triggers: string[]; actions: string[] } {
+  const result = { flow: '', triggers: [] as string[], actions: [] as string[] };
+
+  for (const entry of parseKeyEntries(keysTs)) {
+    if (entry.table === 'sys_hub_flow') result.flow = entry.id;
+    else if (entry.table === 'sys_hub_trigger_instance_v2') result.triggers.push(entry.id);
+    else if (entry.table === 'sys_hub_action_instance_v2') result.actions.push(entry.id);
+  }
+
+  return result;
+}
+
+function buildMergedKeysTs(fragmentPaths: string[]): { content: string; conflicts: string[] } {
+  const merged = new Map<string, ParsedKeyEntry>();
+  const conflicts: string[] = [];
+
+  for (const fragmentPath of fragmentPaths.sort()) {
+    const fragment = readFileSync(fragmentPath, 'utf-8');
+    for (const entry of parseKeyEntries(fragment)) {
+      const existing = merged.get(entry.key);
+      if (!existing) {
+        merged.set(entry.key, entry);
+        continue;
+      }
+
+      if (existing.table !== entry.table || existing.id !== entry.id) {
+        conflicts.push(
+          `Key "${entry.key}" conflicts between fragments: ` +
+          `${existing.table}/${existing.id} vs ${entry.table}/${entry.id} (${path.basename(fragmentPath)})`
+        );
+      }
+    }
+  }
+
+  const bodyLines = Array.from(merged.values())
+    .sort((a, b) => a.key.localeCompare(b.key))
+    .map(entry => `          ${entry.key}: { table: '${entry.table}'; id: '${entry.id}' }`);
+
+  const content = [
+    `import '@servicenow/sdk/global'`,
+    '',
+    'declare global {',
+    '  namespace Now {',
+    '    namespace Internal {',
+    '      interface Keys extends KeysRegistry {',
+    '        explicit: {',
+    ...bodyLines,
+    '        }',
+    '      }',
+    '    }',
+    '  }',
+    '}',
+    '',
+  ].join('\n');
+
+  return { content, conflicts };
+}
+
+function refreshMergedKeysFile(appDir: string): { generatedKeysPath: string; fragmentCount: number; conflicts: string[] } {
+  const keysDir = getKeysFragmentsDir(appDir);
+  const generatedKeysPath = getMergedKeysPath(appDir);
+  const fragmentPaths = existsSync(keysDir)
+    ? readdirSync(keysDir)
+      .filter(name => name.endsWith('.keys.ts'))
+      .map(name => path.join(keysDir, name))
+    : [];
+
+  if (fragmentPaths.length === 0) {
+    if (existsSync(generatedKeysPath)) {
+      execSync(`rm -f "${generatedKeysPath}"`, { encoding: 'utf-8' });
+    }
+    return { generatedKeysPath, fragmentCount: 0, conflicts: [] };
+  }
+
+  const merged = buildMergedKeysTs(fragmentPaths);
+  mkdirSync(path.dirname(generatedKeysPath), { recursive: true });
+  writeFileSync(generatedKeysPath, merged.content, 'utf-8');
+  return { generatedKeysPath, fragmentCount: fragmentPaths.length, conflicts: merged.conflicts };
+}
+
+function restorePreviousFlowSource(appDir: string, flowSourcePath: string, previousCode: string | null, keysFragmentPath: string, previousKeysTs: string | null): void {
+  if (previousCode === null) execSync(`rm -f "${flowSourcePath}"`, { encoding: 'utf-8' });
+  else writeFileSync(flowSourcePath, previousCode, 'utf-8');
+
+  if (previousKeysTs === null) execSync(`rm -f "${keysFragmentPath}"`, { encoding: 'utf-8' });
+  else writeFileSync(keysFragmentPath, previousKeysTs, 'utf-8');
+
+  refreshMergedKeysFile(appDir);
+}
+
+function extractFlowDisplayName(code: string, fallbackFlowName: string): string {
+  const nameMatch = code.match(/\bname\s*:\s*['"]([^'"]+)['"]/);
+  return nameMatch?.[1] || fallbackFlowName;
+}
+
+async function findInstalledFlowArtifacts(client: ServiceNowClient, flowDisplayName: string, scopeId: string) {
+  const flows = await client.getRecords('sys_hub_flow', {
+    sysparm_query: `name=${flowDisplayName}^sys_scope=${scopeId}^ORDERBYDESCsys_updated_on`,
+    sysparm_fields: 'sys_id,name,sys_updated_on',
+    sysparm_limit: 1,
+  });
+
+  const flowSysId = flows[0]?.sys_id ? String(flows[0].sys_id) : '';
+  if (!flowSysId) return { flow: '', triggers: [] as string[], actions: [] as string[] };
+
+  const [triggers, actions] = await Promise.all([
+    client.getRecords('sys_hub_trigger_instance_v2', {
+      sysparm_query: `flow=${flowSysId}`,
+      sysparm_fields: 'sys_id',
+      sysparm_limit: 200,
+    }).catch(() => []),
+    client.getRecords('sys_hub_action_instance_v2', {
+      sysparm_query: `flow=${flowSysId}`,
+      sysparm_fields: 'sys_id',
+      sysparm_limit: 200,
+    }).catch(() => []),
+  ]);
+
+  return {
+    flow: flowSysId,
+    triggers: triggers.map(t => String(t.sys_id)),
+    actions: actions.map(a => String(a.sys_id)),
+  };
+}
 
 /**
  * Deploy SDK fluent code (.now.ts) to a ServiceNow instance.
  *
- * Uses the NOW SDK CI mode (SN_SDK_NODE_ENV=SN_SDK_CI_INSTALL) for
- * non-interactive authentication. Writes the flow code to the sdk-flows
- * project, runs build, then install.
+ * Uses a persistent APP-SCOPED workspace under sdk-flows/apps/{scope}/ so every
+ * build/install for that scope includes all locally managed flows for the app.
  */
 export async function deploySDKFlow(client: ServiceNowClient, input: z.infer<typeof deploySDKFlowSchema>) {
   const creds = client.credentials;
 
-  // Resolve sdk-flows directory (sibling to mcp-servicenow)
-  // From mcp-servicenow/src/tools/ → ../../.. → repo root → sdk-flows
-  const repoRoot = path.resolve(__dirname_esm, '..', '..', '..');
-  const sdkFlowsDir = path.join(repoRoot, 'sdk-flows');
-
-  if (!existsSync(sdkFlowsDir)) {
+  if (input.reinstall === true) {
     return {
       success: false,
-      error: `sdk-flows directory not found at ${sdkFlowsDir}. Ensure the SDK project is set up.`,
+      error: 'reinstall=true is disabled for SDK flow deployment.',
+      phase: 'input',
+      hint: 'This deploy path only supports safe incremental installs. Use normal install only. If you need a baseline for an existing app, run now-sdk init --from <scopeId> outside this flow deploy helper first.',
     };
   }
 
-  // Ensure filename ends with .now.ts
+  const repoRoot = path.resolve(__dirname_esm, '..', '..', '..');
+  const sdkFlowsDir = path.join(repoRoot, 'sdk-flows');
+  if (!existsSync(sdkFlowsDir)) {
+    return { success: false, error: `sdk-flows directory not found at ${sdkFlowsDir}.` };
+  }
+
   const safeFileName = input.fileName.endsWith('.now.ts')
     ? input.fileName
     : `${input.fileName.replace(/\.ts$/, '')}.now.ts`;
+  const flowName = safeFileName.replace(/\.now\.ts$/, '');
+  const flowDisplayName = extractFlowDisplayName(input.code, flowName);
 
-  // Step 1: Write .now.ts file
-  const fluentDir = path.join(sdkFlowsDir, 'src', 'fluent');
-  mkdirSync(fluentDir, { recursive: true });
-  const filePath = path.join(fluentDir, safeFileName);
-  writeFileSync(filePath, input.code, 'utf-8');
+  let appName: string;
+  let appVersion = '1.0.0';
+  try {
+    const appRecord = await client.getRecord('sys_app', input.scopeId, ['name', 'version', 'scope']);
+    if (appRecord && appRecord.name) {
+      appName = String(appRecord.name).toLowerCase().replace(/[^a-z0-9-]/g, '-');
+      if (appRecord.version) appVersion = String(appRecord.version);
+    } else {
+      appName = input.scope.replace(/_/g, '-');
+    }
+  } catch {
+    appName = input.scope.replace(/_/g, '-');
+  }
 
-  // Step 2: Update now.config.json with scope
-  const configPath = path.join(sdkFlowsDir, 'now.config.json');
-  writeFileSync(configPath, JSON.stringify({ scope: input.scope, scopeId: input.scopeId }, null, 4) + '\n', 'utf-8');
+  const appDir = getAppWorkspaceDir(sdkFlowsDir, input.scope);
+  const flowSourcePath = getFlowSourcePath(appDir, safeFileName);
+  const keysFragmentPath = getKeysFragmentPath(appDir, flowName);
+  const previousCode = existsSync(flowSourcePath) ? readFileSync(flowSourcePath, 'utf-8') : null;
+  const previousKeysTs = existsSync(keysFragmentPath) ? readFileSync(keysFragmentPath, 'utf-8') : null;
 
-  // Normalize instance URL
+  mkdirSync(path.dirname(flowSourcePath), { recursive: true });
+  mkdirSync(getKeysFragmentsDir(appDir), { recursive: true });
+
+  const nmLink = path.join(appDir, 'node_modules');
+  const nmTarget = path.join(sdkFlowsDir, 'node_modules');
+  if (!existsSync(nmLink)) {
+    const { symlinkSync } = await import('fs');
+    symlinkSync(nmTarget, nmLink);
+  }
+
   const instanceUrl = creds.instanceUrl.startsWith('https://')
-    ? creds.instanceUrl
-    : `https://${creds.instanceUrl}`;
+    ? creds.instanceUrl : `https://${creds.instanceUrl}`;
 
-  // CI env vars for non-interactive auth
+  const pkgJson = {
+    name: appName,
+    version: appVersion,
+    private: true,
+    description: `SDK app workspace for ${input.scope}`,
+    scripts: { build: 'now-sdk build', clean: 'rm -rf dist .now-sdk-cache .now' },
+  };
+  writeFileSync(path.join(appDir, 'package.json'), JSON.stringify(pkgJson, null, 2) + '\n');
+
+  const nowConfig = { scope: input.scope, scopeId: input.scopeId };
+  writeFileSync(path.join(appDir, 'now.config.json'), JSON.stringify(nowConfig, null, 2) + '\n');
+
+  writeFileSync(flowSourcePath, input.code, 'utf-8');
+  writeFileSync(keysFragmentPath, input.keysTs, 'utf-8');
+
+  const mergedKeys = refreshMergedKeysFile(appDir);
+  if (mergedKeys.conflicts.length > 0) {
+    restorePreviousFlowSource(appDir, flowSourcePath, previousCode, keysFragmentPath, previousKeysTs);
+    return {
+      success: false,
+      error: 'keys.ts merge conflict across app workspace',
+      phase: 'keys_merge',
+      details: mergedKeys.conflicts,
+      flowName,
+      filePath: flowSourcePath,
+    };
+  }
+
+  const expectedArtifactIds = extractArtifactIdsFromKeysTs(input.keysTs);
+  const distDir = path.join(appDir, 'dist');
+  const cacheDir = path.join(appDir, '.now-sdk-cache');
+  if (existsSync(distDir)) execSync(`rm -rf "${distDir}"`, { encoding: 'utf-8' });
+  if (existsSync(cacheDir)) execSync(`rm -rf "${cacheDir}"`, { encoding: 'utf-8' });
+
   const ciEnv = {
     ...process.env,
     SN_SDK_NODE_ENV: 'SN_SDK_CI_INSTALL',
@@ -1500,101 +1758,283 @@ export async function deploySDKFlow(client: ServiceNowClient, input: z.infer<typ
     SN_SDK_USER: creds.username,
     SN_SDK_USER_PWD: creds.password,
   };
+  const execOpts = { cwd: appDir, env: ciEnv, timeout: 90_000, encoding: 'utf-8' as const };
 
-  const execOpts = { cwd: sdkFlowsDir, env: ciEnv, timeout: 90_000, encoding: 'utf-8' as const };
-
-  // Step 3: Build
   let buildOutput: string;
   try {
     buildOutput = execSync('npx now-sdk build 2>&1', execOpts);
   } catch (err: unknown) {
+    restorePreviousFlowSource(appDir, flowSourcePath, previousCode, keysFragmentPath, previousKeysTs);
     const e = err as { stdout?: string; stderr?: string; message?: string };
     return {
-      success: false,
-      error: 'SDK build failed',
-      phase: 'build',
+      success: false, error: 'SDK build failed', phase: 'build',
       details: e.stdout || e.stderr || e.message || String(err),
-      filePath,
+      flowName, filePath: flowSourcePath,
     };
   }
 
-  // Step 4: Validate build output — check dist/ for flow artifacts with INSERT_OR_UPDATE
-  const distUpdateDir = path.join(sdkFlowsDir, 'dist', 'app', 'update');
+  const distUpdateDir = path.join(appDir, 'dist', 'app', 'update');
   const validationErrors: string[] = [];
-  let flowArtifactFound = false;
+  let targetFlowArtifactFound = false;
 
   if (!existsSync(distUpdateDir)) {
-    validationErrors.push('dist/app/update/ directory not found after build — build may have produced no artifacts.');
+    validationErrors.push('dist/app/update/ not found — build produced no artifacts.');
   } else {
     const xmlFiles = readdirSync(distUpdateDir).filter(f => f.endsWith('.xml'));
-    const flowXmlFiles = xmlFiles.filter(f => f.startsWith('sys_hub_flow_'));
-
-    if (flowXmlFiles.length === 0) {
-      validationErrors.push('No sys_hub_flow XML files found in build output. The .now.ts code may be invalid.');
-    }
-
-    for (const xmlFile of flowXmlFiles) {
+    for (const xmlFile of xmlFiles) {
       const xmlContent = readFileSync(path.join(distUpdateDir, xmlFile), 'utf-8');
       if (xmlContent.includes('action="DELETE"')) {
-        validationErrors.push(`CRITICAL: ${xmlFile} contains action="DELETE" — this will DESTROY the flow on the instance, not create it. The .now.ts code is structurally invalid.`);
-      } else if (xmlContent.includes('action="INSERT_OR_UPDATE"')) {
-        flowArtifactFound = true;
+        validationErrors.push(`CRITICAL: ${xmlFile} has action="DELETE" — destructive artifact.`);
+      }
+    }
+
+    if (expectedArtifactIds.flow) {
+      const targetXml = path.join(distUpdateDir, `sys_hub_flow_${expectedArtifactIds.flow}.xml`);
+      if (!existsSync(targetXml)) {
+        validationErrors.push(`Expected target flow artifact sys_hub_flow_${expectedArtifactIds.flow}.xml not found in build output.`);
+      } else {
+        const targetXmlContent = readFileSync(targetXml, 'utf-8');
+        targetFlowArtifactFound = targetXmlContent.includes('action="INSERT_OR_UPDATE"');
+      }
+    } else {
+      const anyFlowXml = xmlFiles.find(f => f.startsWith('sys_hub_flow_') && f.endsWith('.xml'));
+      targetFlowArtifactFound = Boolean(anyFlowXml);
+      if (!targetFlowArtifactFound) {
+        validationErrors.push('No sys_hub_flow XML found. The .now.ts code may be invalid.');
+      }
+    }
+  }
+
+  const distScopeDir = path.join(appDir, 'dist', 'app', 'scope');
+  if (existsSync(distScopeDir)) {
+    const scopeFiles = readdirSync(distScopeDir).filter(f => f.startsWith('sys_app_') && f.endsWith('.xml'));
+    for (const sf of scopeFiles) {
+      const scopeXml = readFileSync(path.join(distScopeDir, sf), 'utf-8');
+      const nameMatch = scopeXml.match(/<name>([^<]+)<\/name>/);
+      if (nameMatch) {
+        const builtAppName = nameMatch[1];
+        if (builtAppName.toLowerCase() !== appName.toLowerCase()) {
+          validationErrors.push(`sys_app name mismatch: built "${builtAppName}" but expected "${appName}". This could rename the existing app.`);
+        }
       }
     }
   }
 
   if (validationErrors.length > 0) {
+    restorePreviousFlowSource(appDir, flowSourcePath, previousCode, keysFragmentPath, previousKeysTs);
     return {
-      success: false,
-      error: 'Build output validation failed',
-      phase: 'validation',
-      validationErrors,
-      buildOutput,
-      filePath,
-      hint: 'The .now.ts code compiled but produced invalid/destructive artifacts. Check the flow syntax — use wfa.trigger(), wfa.action(), Now.ID[], TemplateValue().',
+      success: false, error: 'Build output validation failed', phase: 'validation',
+      validationErrors, buildOutput, flowName, filePath: flowSourcePath,
+      hint: 'Check syntax: wfa.trigger(), wfa.action(), Now.ID[], TemplateValue().',
+    };
+  }
+  if (!targetFlowArtifactFound) {
+    restorePreviousFlowSource(appDir, flowSourcePath, previousCode, keysFragmentPath, previousKeysTs);
+    return {
+      success: false, error: 'No valid target flow artifacts in build output', phase: 'validation',
+      buildOutput, flowName, filePath: flowSourcePath,
     };
   }
 
-  if (!flowArtifactFound) {
-    return {
-      success: false,
-      error: 'No valid flow artifacts in build output',
-      phase: 'validation',
-      buildOutput,
-      filePath,
-      hint: 'Build succeeded but no sys_hub_flow records with INSERT_OR_UPDATE were found.',
-    };
-  }
-
-  // Step 5: Install
   let installOutput: string;
-  const installCmd = input.reinstall
-    ? 'npx now-sdk install --reinstall 2>&1'
-    : 'npx now-sdk install 2>&1';
   try {
-    installOutput = execSync(installCmd, execOpts);
+    installOutput = execSync('npx now-sdk install 2>&1', execOpts);
   } catch (err: unknown) {
     const e = err as { stdout?: string; stderr?: string; message?: string };
+    const installError = e.stdout || e.stderr || e.message || String(err);
     return {
-      success: false,
-      error: 'SDK install failed',
-      phase: 'install',
-      details: e.stdout || e.stderr || e.message || String(err),
-      buildOutput,
-      filePath,
+      success: false, error: 'SDK install failed', phase: 'install',
+      details: installError,
+      buildOutput, flowName, filePath: flowSourcePath,
+      hint: 'Normal install failed. Keep reinstall disabled. If this scoped app already exists and needs a full SDK baseline, run "now-sdk init --from <scopeId>" first, then retry the incremental install.',
     };
   }
+
+  let artifactIds = expectedArtifactIds;
+  if (!artifactIds.flow) {
+    artifactIds = await findInstalledFlowArtifacts(client, flowDisplayName, input.scopeId);
+  }
+
+  const registry = readRegistry(sdkFlowsDir);
+  registry.flows[flowName] = {
+    flowSysId: artifactIds.flow,
+    fileName: safeFileName,
+    flowDisplayName,
+    scope: input.scope,
+    scopeId: input.scopeId,
+    instanceUrl,
+    deployedAt: new Date().toISOString(),
+    status: 'deployed',
+    artifactIds,
+  };
+  writeRegistry(sdkFlowsDir, registry);
 
   return {
     success: true,
-    message: `Flow deployed to ${input.scope} on ${instanceUrl}`,
+    message: `Flow "${flowName}" deployed to ${input.scope} on ${instanceUrl}`,
+    flowName,
+    flowDisplayName,
     fileName: safeFileName,
     scope: input.scope,
     scopeId: input.scopeId,
+    flowSysId: artifactIds.flow,
+    artifactIds,
     buildOutput,
     installOutput,
-    filePath,
-    artifactValidation: 'PASSED — sys_hub_flow with INSERT_OR_UPDATE confirmed in build output',
+    filePath: flowSourcePath,
+    keysFragmentPath,
+    mergedKeysPath: mergedKeys.generatedKeysPath,
+    workspace: appDir,
+    workspaceMode: 'app-scoped-persistent',
+    artifactValidation: 'PASSED — target flow artifact present and DELETE artifacts rejected',
   };
 }
 
+
+
+// ═══════════════════════════════════════════════════════════════
+//  sn_undeploy_sdk_flow — Safely remove an SDK-deployed flow
+// ═══════════════════════════════════════════════════════════════
+
+export const undeploySDKFlowSchema = z.object({
+  flowName: z.string().describe('Name of the flow to remove (as shown in registry, e.g. "AutoEscalateP1")'),
+});
+
+/**
+ * Safely remove a flow that was deployed via the SDK.
+ * Only removes flows tracked in registry.json with generation_source=fluent.
+ */
+export async function undeploySDKFlow(client: ServiceNowClient, input: z.infer<typeof undeploySDKFlowSchema>) {
+  const repoRoot = path.resolve(__dirname_esm, '..', '..', '..');
+  const sdkFlowsDir = path.join(repoRoot, 'sdk-flows');
+  const registry = readRegistry(sdkFlowsDir);
+
+  const entry = registry.flows[input.flowName];
+  if (!entry) {
+    return {
+      success: false,
+      error: `Flow "${input.flowName}" not found in registry. Only SDK-deployed flows can be undeployed.`,
+      registeredFlows: Object.keys(registry.flows),
+    };
+  }
+
+  if (entry.status === 'undeployed') {
+    return {
+      success: false,
+      error: `Flow "${input.flowName}" is already undeployed.`,
+    };
+  }
+
+  // Verify on instance: check generation_source=fluent
+  const flowSysId = entry.flowSysId;
+  if (flowSysId) {
+    try {
+      const flowRecord = await client.getRecord('sys_hub_flow', flowSysId) as Record<string, unknown> | null;
+      if (flowRecord && flowRecord.generation_source !== 'fluent') {
+        return {
+          success: false,
+          error: `Flow "${input.flowName}" on instance has generation_source="${flowRecord.generation_source}", not "fluent". Refusing to delete a non-SDK flow.`,
+        };
+      }
+    } catch {
+      // Flow may already be deleted on instance — that's OK
+    }
+  }
+
+  const deleted: { table: string; sysId: string; success: boolean }[] = [];
+
+  // Delete action instances
+  for (const actionId of (entry.artifactIds?.actions || [])) {
+    try {
+      await client.deleteRecord('sys_hub_action_instance_v2', actionId);
+      deleted.push({ table: 'sys_hub_action_instance_v2', sysId: actionId, success: true });
+    } catch {
+      deleted.push({ table: 'sys_hub_action_instance_v2', sysId: actionId, success: false });
+    }
+  }
+
+  // Delete trigger instances
+  for (const triggerId of (entry.artifactIds?.triggers || [])) {
+    try {
+      await client.deleteRecord('sys_hub_trigger_instance_v2', triggerId);
+      deleted.push({ table: 'sys_hub_trigger_instance_v2', sysId: triggerId, success: true });
+    } catch {
+      deleted.push({ table: 'sys_hub_trigger_instance_v2', sysId: triggerId, success: false });
+    }
+  }
+
+  // Delete the flow itself
+  if (flowSysId) {
+    try {
+      await client.deleteRecord('sys_hub_flow', flowSysId);
+      deleted.push({ table: 'sys_hub_flow', sysId: flowSysId, success: true });
+    } catch {
+      deleted.push({ table: 'sys_hub_flow', sysId: flowSysId, success: false });
+    }
+  }
+
+  // Remove local flow source from the persistent app workspace and regenerate merged keys
+  const appDir = getAppWorkspaceDir(sdkFlowsDir, entry.scope);
+  const flowSourcePath = getFlowSourcePath(appDir, entry.fileName);
+  const keysFragmentPath = getKeysFragmentPath(appDir, input.flowName);
+  let localSourceRemoved = false;
+
+  if (existsSync(flowSourcePath)) {
+    execSync(`rm -f "${flowSourcePath}"`, { encoding: 'utf-8' });
+    localSourceRemoved = true;
+  }
+  if (existsSync(keysFragmentPath)) {
+    execSync(`rm -f "${keysFragmentPath}"`, { encoding: 'utf-8' });
+    localSourceRemoved = true;
+  }
+  refreshMergedKeysFile(appDir);
+
+  // Update registry
+  registry.flows[input.flowName].status = 'undeployed';
+  writeRegistry(sdkFlowsDir, registry);
+
+  return {
+    success: true,
+    message: `Flow "${input.flowName}" undeployed and cleaned up.`,
+    deleted,
+    registryUpdated: true,
+    localSourceRemoved,
+    appWorkspace: appDir,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  sn_list_sdk_flows — List all SDK-deployed flows from registry
+// ═══════════════════════════════════════════════════════════════
+
+export const listSDKFlowsSchema = z.object({}).optional();
+
+/**
+ * List all flows tracked in the SDK registry with their deployment status.
+ */
+export async function listSDKFlows(_client: ServiceNowClient) {
+  const repoRoot = path.resolve(__dirname_esm, '..', '..', '..');
+  const sdkFlowsDir = path.join(repoRoot, 'sdk-flows');
+  const registry = readRegistry(sdkFlowsDir);
+
+  const flows = Object.entries(registry.flows).map(([name, entry]) => ({
+    appWorkspace: getAppWorkspaceDir(sdkFlowsDir, entry.scope),
+    name,
+    flowDisplayName: entry.flowDisplayName || name,
+    flowSysId: entry.flowSysId,
+    scope: entry.scope,
+    instanceUrl: entry.instanceUrl,
+    deployedAt: entry.deployedAt,
+    status: entry.status,
+    fileName: entry.fileName,
+    hasLocalWorkspace: existsSync(getFlowSourcePath(getAppWorkspaceDir(sdkFlowsDir, entry.scope), entry.fileName)),
+  }));
+
+  return {
+    success: true,
+    totalFlows: flows.length,
+    deployed: flows.filter(f => f.status === 'deployed').length,
+    undeployed: flows.filter(f => f.status === 'undeployed').length,
+    flows,
+  };
+}
