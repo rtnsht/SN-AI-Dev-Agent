@@ -292,9 +292,9 @@ At the start of every session involving requirements:
 
 > ⚠️ **IMPORTANT: REST API does NOT honor "current update set" session context like the UI does**
 
-Artifacts created via REST API land in the "Default" update set instead of the intended target. This framework implements a **two-layer defense strategy** to ensure reliable capture.
+Artifacts created via REST API land in the "Default" update set instead of the intended target. This framework implements a **three-layer defense strategy** to ensure reliable capture.
 
-### 14.1 Two-Layer Defense Strategy
+### 14.1 Three-Layer Defense Strategy
 
 **Layer 1 — Session-based capture** (`sn-client.ts`):
 - Cookie-jar session persistence via `axios-cookiejar-support` + `tough-cookie`
@@ -303,8 +303,16 @@ Artifacts created via REST API land in the "Default" update set instead of the i
 
 **Layer 2 — Post-creation move** (fallback in `sn-client.ts`):
 - `moveArtifactToUpdateSet()` queries `sys_update_xml` after every create/update
+- Multi-strategy search: exact name match → LIKE search → metadata table broad search with payload filtering
+- Retry logic with increasing delays (metadata tables like `sys_dictionary` get 1500ms initial + 3 retries)
 - Moves records to the target update set if they landed in the wrong one
 - Auto-move hooks in: `createRecord`, `updateRecord`, `createBusinessRule`, `createScriptInclude`, `createClientScript`
+
+**Layer 3 — Server-side GlideUpdateManager2** (fallback in `sn-client.ts`):
+- `callAddToUpdateSetApi()` calls the AddToUpdateSetHelper Scripted REST API
+- Server-side uses `GlideUpdateManager2().saveRecord(gr)` to explicitly create `sys_update_xml` entry
+- Works for ANY table type, including those that don't reliably generate `sys_update_xml` entries (e.g., `sys_dictionary`, `sysauto_script`, `sysevent_register`)
+- Auto-deployed alongside other helper APIs on connection init
 
 ### 14.2 Duplicate Update Set Detection
 
@@ -324,6 +332,7 @@ Artifacts created via REST API land in the "Default" update set instead of the i
 | Tool | Purpose |
 |------|---------|
 | `sn_move_to_update_set` | Manual fallback — move a specific artifact to a target update set |
+| `sn_verify_update_set_capture` | Verify ALL artifacts are captured in the update set; auto-moves missing ones |
 
 ### 14.4 Required Setup
 

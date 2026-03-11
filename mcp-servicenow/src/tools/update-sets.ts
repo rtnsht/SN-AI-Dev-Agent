@@ -52,6 +52,26 @@ export const moveToUpdateSetSchema = z.object({
   sys_id: z.string().describe('The sys_id of the record to move to the update set')
 });
 
+// Coerce JSON string → array (AI agents sometimes stringify arrays)
+const coerceJsonArray = z.preprocess(
+  (v) => {
+    if (typeof v === 'string') {
+      try { return JSON.parse(v); } catch { return v; }
+    }
+    return v;
+  },
+  z.array(z.object({
+    table: z.string().describe('Table name (e.g., "sys_script", "sys_dictionary")'),
+    sys_id: z.string().describe('sys_id of the artifact'),
+    name: z.string().optional().describe('Friendly name of the artifact')
+  }))
+);
+
+export const verifyUpdateSetCaptureSchema = z.object({
+  update_set_id: z.string().describe('The sys_id of the update set to verify against'),
+  artifacts: coerceJsonArray.describe('Array of artifacts to verify: [{table, sys_id, name?}]')
+});
+
 // ============ IMPLEMENTATIONS ============
 
 export async function listUpdateSets(client: ServiceNowClient, input: z.infer<typeof listUpdateSetsSchema>) {
@@ -60,13 +80,13 @@ export async function listUpdateSets(client: ServiceNowClient, input: z.infer<ty
     query = `state=${input.state}`;
   }
   query += (query ? '^' : '') + 'ORDERBYDESCsys_created_on';
-  
+
   const records = await client.getRecords('sys_update_set', {
     sysparm_query: query,
     sysparm_fields: 'sys_id,name,description,state,application,sys_created_on,sys_updated_on',
     sysparm_limit: input.limit
   });
-  
+
   return {
     success: true,
     count: records.length,
@@ -84,21 +104,21 @@ export async function listUpdateSets(client: ServiceNowClient, input: z.infer<ty
 
 export async function getUpdateSet(client: ServiceNowClient, input: z.infer<typeof getUpdateSetSchema>) {
   const record = await client.getRecord('sys_update_set', input.sys_id);
-  
+
   if (!record) {
     return {
       success: false,
       error: `Update set not found: ${input.sys_id}`
     };
   }
-  
+
   // Get update count
   const updates = await client.getRecords('sys_update_xml', {
     sysparm_query: `update_set=${input.sys_id}`,
     sysparm_fields: 'sys_id',
     sysparm_limit: 1000
   });
-  
+
   return {
     success: true,
     updateSet: {
@@ -232,7 +252,7 @@ export async function completeUpdateSet(client: ServiceNowClient, input: z.infer
   const record = await client.updateRecord('sys_update_set', input.sys_id, {
     state: 'complete'
   });
-  
+
   return {
     success: true,
     message: 'Update set completed successfully',
@@ -248,7 +268,7 @@ export async function getUpdateSetContents(client: ServiceNowClient, input: z.in
     sysparm_fields: 'sys_id,name,type,target_name,action,sys_created_on',
     sysparm_limit: input.limit
   });
-  
+
   return {
     success: true,
     updateSetId: input.sys_id,
@@ -264,6 +284,26 @@ export async function getUpdateSetContents(client: ServiceNowClient, input: z.in
   };
 }
 
+/**
+ * Helper to extract sys_id from a ServiceNow reference field
+ * (may be a plain string or an object {link, value})
+ */
+function resolveRef(field: unknown): string {
+  if (typeof field === 'string') return field;
+  if (field && typeof field === 'object' && 'value' in (field as Record<string, unknown>)) {
+    return String((field as Record<string, unknown>).value);
+  }
+  return String(field ?? '');
+}
+
+/** Metadata/dictionary tables that may use non-standard sys_update_xml naming */
+const METADATA_TABLES = new Set([
+  'sys_dictionary', 'sys_db_object', 'sys_documentation',
+  'sys_choice', 'sys_ui_policy', 'sys_ui_policy_action',
+  'sys_ui_section', 'sys_ui_element', 'sys_ui_form',
+  'sys_ui_list', 'sys_ui_related_list', 'sys_ui_view'
+]);
+
 export async function moveToUpdateSet(client: ServiceNowClient, input: z.infer<typeof moveToUpdateSetSchema>) {
   try {
     // Verify the target update set exists and is in progress
@@ -275,31 +315,57 @@ export async function moveToUpdateSet(client: ServiceNowClient, input: z.infer<t
       return { success: false, error: 'Target update set is not in progress' };
     }
 
-    // Small delay to allow sys_update_xml record to be fully created
-    await new Promise(resolve => setTimeout(resolve, 500));
+    const isMetadataTable = METADATA_TABLES.has(input.table);
+    const initialDelay = isMetadataTable ? 1500 : 500;
+    const maxRetries = isMetadataTable ? 3 : 2;
+    let targetRecords: Array<Record<string, unknown>> = [];
 
-    // Look for sys_update_xml records matching this artifact
-    const updateName = `${input.table}_${input.sys_id}`;
-    const records = await client.getRecords('sys_update_xml', {
-      sysparm_query: `name=${updateName}^ORDERBYDESCsys_created_on`,
-      sysparm_fields: 'sys_id,name,update_set,action',
-      sysparm_limit: 10
-    });
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const delay = attempt === 0 ? initialDelay : initialDelay * (attempt + 1);
+      await new Promise(resolve => setTimeout(resolve, delay));
 
-    // Fallback: broader search if exact match not found
-    let targetRecords = records;
-    if (records.length === 0) {
+      // Strategy 1: Exact name match
+      const updateName = `${input.table}_${input.sys_id}`;
       targetRecords = await client.getRecords('sys_update_xml', {
-        sysparm_query: `nameLIKE${input.sys_id}^ORDERBYDESCsys_created_on`,
+        sysparm_query: `name=${updateName}^ORDERBYDESCsys_created_on`,
         sysparm_fields: 'sys_id,name,update_set,action',
+        sysparm_exclude_reference_link: true,
         sysparm_limit: 10
       });
+
+      // Strategy 2: LIKE search on sys_id
+      if (targetRecords.length === 0) {
+        targetRecords = await client.getRecords('sys_update_xml', {
+          sysparm_query: `nameLIKE${input.sys_id}^ORDERBYDESCsys_created_on`,
+          sysparm_fields: 'sys_id,name,update_set,action',
+          sysparm_exclude_reference_link: true,
+          sysparm_limit: 10
+        });
+      }
+
+      // Strategy 3: For metadata tables, search by table prefix + recent creation + payload
+      if (targetRecords.length === 0 && isMetadataTable) {
+        const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
+        const broadRecords = await client.getRecords('sys_update_xml', {
+          sysparm_query: `nameSTARTSWITH${input.table}_^sys_created_on>=${fiveMinAgo}^ORDERBYDESCsys_created_on`,
+          sysparm_fields: 'sys_id,name,update_set,action,payload',
+          sysparm_exclude_reference_link: true,
+          sysparm_limit: 20
+        });
+        targetRecords = broadRecords.filter(r =>
+          String(r.payload || '').includes(input.sys_id) ||
+          String(r.name || '').includes(input.sys_id)
+        );
+      }
+
+      if (targetRecords.length > 0) break;
     }
 
     if (targetRecords.length === 0) {
       return {
         success: false,
-        error: `No sys_update_xml records found for ${updateName}. The record may not have generated an update XML entry yet.`
+        error: `No sys_update_xml records found for ${input.table}_${input.sys_id} after ${maxRetries} attempts. ` +
+          `The record may not have generated an update XML entry yet.`
       };
     }
 
@@ -308,12 +374,13 @@ export async function moveToUpdateSet(client: ServiceNowClient, input: z.infer<t
     const errors: string[] = [];
 
     for (const record of targetRecords) {
-      if (record.update_set === input.update_set_id) {
+      const currentUpdateSet = resolveRef(record.update_set);
+      if (currentUpdateSet === input.update_set_id) {
         alreadyCorrect++;
         continue;
       }
       try {
-        await client.updateRecord('sys_update_xml', record.sys_id, {
+        await client.updateRecord('sys_update_xml', String(record.sys_id), {
           update_set: input.update_set_id
         });
         moved++;
@@ -340,3 +407,56 @@ export async function moveToUpdateSet(client: ServiceNowClient, input: z.infer<t
   }
 }
 
+
+
+export async function verifyUpdateSetCapture(
+  client: ServiceNowClient,
+  input: z.infer<typeof verifyUpdateSetCaptureSchema>
+) {
+  try {
+    // Ensure the active update set matches
+    if (client.activeUpdateSetId !== input.update_set_id) {
+      client.setActiveUpdateSet(input.update_set_id);
+    }
+
+    const result = await client.verifyAllArtifactsCaptured(input.artifacts);
+
+    // Also get the full update set contents for the summary
+    const contents = await client.getRecords('sys_update_xml', {
+      sysparm_query: `update_set=${input.update_set_id}`,
+      sysparm_fields: 'sys_id,name,type,target_name,action,sys_created_on',
+      sysparm_exclude_reference_link: true,
+      sysparm_limit: 500
+    });
+
+    return {
+      success: true,
+      allCaptured: result.allCaptured,
+      summary: {
+        totalArtifacts: input.artifacts.length,
+        captured: result.captured,
+        movedNow: result.movedNow,
+        missing: result.missing,
+      },
+      details: result.details,
+      updateSetContents: {
+        totalItems: contents.length,
+        items: contents.map(c => ({
+          name: c.name,
+          type: c.type,
+          targetName: c.target_name,
+          action: c.action,
+          created: c.sys_created_on
+        }))
+      },
+      recommendation: result.allCaptured
+        ? 'All artifacts are confirmed captured in the update set.'
+        : `${result.missing} artifact(s) could not be captured. Use sn_move_to_update_set for each missing artifact, or verify manually in the ServiceNow instance.`
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: `Failed to verify update set capture: ${error}`
+    };
+  }
+}

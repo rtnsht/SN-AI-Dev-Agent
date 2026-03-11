@@ -77,6 +77,7 @@ const TOOL_HANDLERS: Record<string, (snClient: ServiceNowClient, args: unknown) 
   sn_complete_update_set: async (c, a) => updateSets.completeUpdateSet(c, updateSets.completeUpdateSetSchema.parse(a)),
   sn_get_update_set_contents: async (c, a) => updateSets.getUpdateSetContents(c, updateSets.getUpdateSetContentsSchema.parse(a)),
   sn_move_to_update_set: async (c, a) => updateSets.moveToUpdateSet(c, updateSets.moveToUpdateSetSchema.parse(a)),
+  sn_verify_update_set_capture: async (c, a) => updateSets.verifyUpdateSetCapture(c, updateSets.verifyUpdateSetCaptureSchema.parse(a)),
 
   // UI Policies & Actions
   sn_get_ui_policies: async (c, a) => uiPolicies.getUiPolicies(c, uiPolicies.getUiPoliciesSchema.parse(a)),

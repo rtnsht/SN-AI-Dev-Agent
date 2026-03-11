@@ -139,25 +139,44 @@ Note: This gate auto-proceeds — do NOT ask user to type "approved" here. The s
 </scope_selection>
 
 <implementation>
+[UPDATE SET CAPTURE — THREE-LAYER DEFENSE]
+The system uses a three-layer defense strategy to ensure ALL artifacts are captured in the active update set:
+- Layer 1: Session-based capture (automatic — sets current update set on the server session)
+- Layer 2: Post-creation sys_update_xml move with multi-strategy search and retry logic (automatic)
+- Layer 3: Server-side GlideUpdateManager2().saveRecord() via AddToUpdateSetHelper API (automatic fallback)
+All three layers run automatically on every artifact creation. Layer 3 handles tables that don't reliably generate sys_update_xml entries (sys_dictionary, sysauto_script, sysevent_register, etc.).
+
 1. Create Update Set using scope from previous step:
    - Call sn_create_update_set with name + scope sys_id (from scope_selection)
    - If duplicateDetected: show existing sets, ask user to reuse/rename/timestamp
    - NEVER silently create duplicates
 2. Set current: sn_set_current_update_set with the sys_id
-3. Create artifacts (business rules, script includes, client scripts, flows, etc.)
-   - Check "updateSetCapture" in each response
-   - Verify with sn_get_update_set_contents
-4. Flow Designer artifacts (flows, subflows, flow actions):
+3. Create artifacts (business rules, script includes, client scripts, dictionary records, flows, etc.)
+   - After EACH artifact creation, check "updateSetCapture" in the response
+   - If updateSetCapture.moved is 0 or updateSetCapture.errors has entries, immediately call sn_move_to_update_set for that artifact
+   - Track ALL created artifacts: [{table, sys_id, name}] for final verification
+4. Dictionary records (sys_dictionary) — custom fields:
+   - When creating custom fields, use sn_create_record with table="sys_dictionary"
+   - Dictionary records are metadata artifacts that MUST be captured in the update set
+   - After creating each dictionary record, verify updateSetCapture shows moved >= 1
+   - If capture fails, call sn_move_to_update_set with table="sys_dictionary" and the record sys_id
+5. Flow Designer artifacts (flows, subflows, flow actions):
    - Use REST API tools (sn_create_flow, sn_create_flow_trigger, sn_create_flow_action_instance) to create draft flows
    - Note: REST-created flows are drafts — they must be activated in the Flow Designer UI to generate required snapshots
    - [CRITICAL] NEVER create duplicate logic: if the design calls for a Flow, deploy ONLY a Flow. Do NOT also create a Business Rule, Scheduled Job, or Script Include that duplicates the same logic "as a fallback." One artifact per piece of logic — no hedging.
-5. If artifacts missing from update set: use sn_move_to_update_set
-6. For every created/updated artifact, provide a clickable instance URL so the user can verify directly:
+6. If artifacts missing from update set: use sn_move_to_update_set
+7. [MANDATORY] BEFORE marking implementation complete, run final verification:
+   - Call sn_verify_update_set_capture with update_set_id and the full list of artifacts [{table, sys_id, name}]
+   - This verifies ALL artifacts are in the update set and auto-moves any missing ones
+   - If any artifacts remain missing after verification, report them to the user and attempt sn_move_to_update_set individually
+   - ONLY proceed to PHASE_GATE if allCaptured is true or user explicitly acknowledges missing artifacts
+8. For every created/updated artifact, provide a clickable instance URL so the user can verify directly:
    - Format: \`https://<instance>/nav_to.do?uri=<table>.do?sys_id=<sys_id>\`
    - Example: \`https://dev12345.service-now.com/nav_to.do?uri=sys_script.do?sys_id=abc123\`
 
 End with: <!-- PHASE_GATE:implementation -->
-Summarize: All artifacts deployed (with links). Note any flows that need activation in Flow Designer UI.
+Summarize: All artifacts deployed (with links). Include update set verification results showing all captured items.
+Note any flows that need activation in Flow Designer UI.
 STOP: "Please review the implementation. Type 'approved' to proceed to testing."
 </implementation>
 

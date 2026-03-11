@@ -1,12 +1,14 @@
 /**
  * Helper APIs Setup
- * 
+ *
  * Manages deployment and discovery of required Scripted REST APIs on ServiceNow instances.
  * These APIs provide workarounds for platform limitations in the standard Table API.
- * 
+ *
  * Required Helper APIs:
  * 1. UIPolicyActionHelper - Creates UI Policy Actions with proper ui_policy reference field
  * 2. UpdateSetHelper - Sets current update set for artifact capture
+ * 3. AddToUpdateSetHelper - Uses GlideUpdateManager2().saveRecord() to explicitly add any
+ *    record to a specified update set (Layer 3 fallback for artifact capture)
  */
 
 import { ServiceNowClient } from '../client/sn-client.js';
@@ -25,6 +27,7 @@ export interface HelperApisStatus {
   apis: {
     uiPolicyActionHelper: HelperApiInfo;
     updateSetHelper: HelperApiInfo;
+    addToUpdateSetHelper: HelperApiInfo;
   };
 }
 
@@ -108,6 +111,80 @@ function getUpdateSetHelperScript(): string {
 })(request, response);`;
 }
 
+/**
+ * Get the Add to Update Set Helper API script.
+ * Uses GlideUpdateManager2().saveRecord() to explicitly create a sys_update_xml
+ * entry for ANY record in ANY table, adding it to a specified update set.
+ * This is the Layer 3 fallback when session-based capture and sys_update_xml
+ * move both fail (common with sys_dictionary, sysauto_script, sysevent, etc.).
+ */
+function getAddToUpdateSetHelperScript(): string {
+  return `(function process(/*RESTAPIRequest*/ request, /*RESTAPIResponse*/ response) {
+    var body = request.body.data;
+    var tableName = body.table || '';
+    var recordSysId = body.sys_id || '';
+    var updateSetId = body.update_set_id || '';
+
+    if (!tableName || !recordSysId) {
+        response.setStatus(400);
+        return { error: 'Missing required fields: table, sys_id' };
+    }
+
+    // Get the record
+    var gr = new GlideRecord(tableName);
+    if (!gr.get(recordSysId)) {
+        response.setStatus(404);
+        return { error: 'Record not found: ' + tableName + '/' + recordSysId };
+    }
+
+    // If update_set_id provided, set it as the current update set first
+    if (updateSetId) {
+        var usGr = new GlideRecord('sys_update_set');
+        if (usGr.get(updateSetId) && usGr.state == 'in progress') {
+            var us = new GlideUpdateSet();
+            us.set(updateSetId);
+        } else {
+            response.setStatus(400);
+            return { error: 'Update set not found or not in progress: ' + updateSetId };
+        }
+    }
+
+    // Use GlideUpdateManager2 to create the sys_update_xml entry
+    // This is the same mechanism used by the "Add to Update Set" utility
+    try {
+        var updateManager = new GlideUpdateManager2();
+        updateManager.saveRecord(gr);
+
+        // Verify the entry was created
+        var updateXml = new GlideRecord('sys_update_xml');
+        updateXml.addQuery('remote_update_set', 'NULL');
+        updateXml.addEncodedQuery('nameLIKE' + recordSysId);
+        updateXml.orderByDesc('sys_created_on');
+        updateXml.setLimit(1);
+        updateXml.query();
+
+        var captured = false;
+        var updateXmlSysId = '';
+        if (updateXml.next()) {
+            captured = true;
+            updateXmlSysId = updateXml.sys_id.toString();
+        }
+
+        return {
+            success: true,
+            message: 'Record added to update set via GlideUpdateManager2',
+            table: tableName,
+            sys_id: recordSysId,
+            captured: captured,
+            update_xml_sys_id: updateXmlSysId
+        };
+    } catch (e) {
+        response.setStatus(500);
+        return { error: 'GlideUpdateManager2.saveRecord failed: ' + e.message };
+    }
+})(request, response);`;
+}
+
 export class HelperApisSetup {
   private client: ServiceNowClient;
   private instanceUrl: string;
@@ -142,6 +219,11 @@ export class HelperApisSetup {
           name: 'UpdateSetHelper',
           serviceId: 'update_set_helper',
           deployed: false
+        },
+        addToUpdateSetHelper: {
+          name: 'AddToUpdateSetHelper',
+          serviceId: 'add_to_update_set_helper',
+          deployed: false
         }
       }
     };
@@ -164,6 +246,15 @@ export class HelperApisSetup {
       description: 'Set current update set for artifact capture'
     });
 
+    // Check/deploy Add to Update Set Helper (Layer 3 fallback)
+    await this.checkOrDeployApi(status.apis.addToUpdateSetHelper, {
+      resourceName: 'addToUpdateSet',
+      resourcePath: '/add_record',
+      httpMethod: 'POST',
+      script: getAddToUpdateSetHelperScript(),
+      description: 'Add any record to update set via GlideUpdateManager2 (Layer 3 fallback)'
+    });
+
     status.initialized = true;
     apiPathCache.set(this.instanceUrl, status);
 
@@ -180,7 +271,7 @@ export class HelperApisSetup {
   /**
    * Get the API path for a specific helper
    */
-  getApiPath(apiKey: 'uiPolicyActionHelper' | 'updateSetHelper'): string | undefined {
+  getApiPath(apiKey: 'uiPolicyActionHelper' | 'updateSetHelper' | 'addToUpdateSetHelper'): string | undefined {
     const cached = apiPathCache.get(this.instanceUrl);
     return cached?.apis[apiKey]?.basePath;
   }

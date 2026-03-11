@@ -961,8 +961,19 @@ The framework auto-deploys lightweight Scripted REST APIs to the connected Servi
 |-----|-----------|---------|------------|
 | **UIPolicyActionHelper** | `ui_policy_action_helper` | Create UI Policy Actions with proper `ui_policy` reference field | Table API cannot set reference fields on `sys_ui_policy_action` correctly |
 | **UpdateSetHelper** | `update_set_helper` | Set current update set via `GlideUpdateSet().set()` | REST API does not honor session-based update set context like the UI does |
+| **AddToUpdateSetHelper** | `add_to_update_set_helper` | Add any record to update set via `GlideUpdateManager2().saveRecord()` | Layer 3 fallback — certain tables (`sys_dictionary`, `sysauto_script`, `sysevent_register`) don't reliably generate `sys_update_xml` entries that Layers 1–2 can find |
 
-### 18.2 Auto-Detection and Deployment
+### 18.2 Three-Layer Update Set Capture Defense
+
+Artifacts created via REST API land in the "Default" update set. The framework uses a three-layer defense:
+
+- **Layer 1 — Session-based capture**: `callSetCurrentUpdateSetApi()` → server-side `GlideUpdateSet().set()`
+- **Layer 2 — Post-creation move**: `moveArtifactToUpdateSet()` queries `sys_update_xml` with multi-strategy search (exact name → LIKE → metadata broad search) and retry logic
+- **Layer 3 — GlideUpdateManager2**: `callAddToUpdateSetApi()` → server-side `GlideUpdateManager2().saveRecord(gr)` explicitly creates the `sys_update_xml` entry for any table type
+
+All three layers run automatically on every artifact creation. A final `sn_verify_update_set_capture` tool validates all artifacts are captured before marking implementation complete.
+
+### 18.3 Auto-Detection and Deployment
 
 On connection, `HelperApisSetup.initializeHelperApis()` runs:
 
@@ -973,13 +984,11 @@ On connection, `HelperApisSetup.initializeHelperApis()` runs:
 
 Status is shown in the Settings panel under the connection card as green (Ready) or amber (Not deployed) badges.
 
-### 18.3 No New Helper APIs Required
+### 18.4 Other Features — No Additional Helper APIs Required
 
 The recent features (dynamic instance prompts, reconnect flow, confidentiality guardrails, hidden messages, authenticated avatar) all use either:
 - **Standard Table API** (`getRecords` on `sys_db_object`, `sys_script`, `sc_cat_item`, `sys_update_set`)
 - **Frontend-only logic** (CSS, state management, system prompt text)
-
-No additional Scripted REST APIs are needed on the instance.
 
 
 ---

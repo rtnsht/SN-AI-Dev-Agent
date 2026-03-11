@@ -43,6 +43,9 @@ export async function testConnection(client: ServiceNowClient) {
       if (status.apis.updateSetHelper.basePath) {
         client.setHelperApiPath('updateSetHelper', status.apis.updateSetHelper.basePath);
       }
+      if (status.apis.addToUpdateSetHelper.basePath) {
+        client.setHelperApiPath('addToUpdateSetHelper', status.apis.addToUpdateSetHelper.basePath);
+      }
 
       client.helperApisInitialized = true;
 
@@ -57,6 +60,10 @@ export async function testConnection(client: ServiceNowClient) {
           updateSetHelper: {
             deployed: status.apis.updateSetHelper.deployed,
             path: status.apis.updateSetHelper.basePath
+          },
+          addToUpdateSetHelper: {
+            deployed: status.apis.addToUpdateSetHelper.deployed,
+            path: status.apis.addToUpdateSetHelper.basePath
           }
         }
       };
@@ -152,13 +159,15 @@ export async function initializeInstance(
   if (client.helperApisInitialized) {
     const uiPolicyPath = client.getHelperApiPath('uiPolicyActionHelper');
     const updateSetPath = client.getHelperApiPath('updateSetHelper');
+    const addToUpdateSetPath = client.getHelperApiPath('addToUpdateSetHelper');
     return {
       success: true,
       message: 'Instance already initialized',
       instanceUrl: client.instanceUrl,
       helperApis: {
         uiPolicyActionHelper: { path: uiPolicyPath, deployed: !!uiPolicyPath },
-        updateSetHelper: { path: updateSetPath, deployed: !!updateSetPath }
+        updateSetHelper: { path: updateSetPath, deployed: !!updateSetPath },
+        addToUpdateSetHelper: { path: addToUpdateSetPath, deployed: !!addToUpdateSetPath }
       }
     };
   }
@@ -176,6 +185,9 @@ export async function initializeInstance(
     if (status.apis.updateSetHelper.basePath) {
       client.setHelperApiPath('updateSetHelper', status.apis.updateSetHelper.basePath);
     }
+    if (status.apis.addToUpdateSetHelper.basePath) {
+      client.setHelperApiPath('addToUpdateSetHelper', status.apis.addToUpdateSetHelper.basePath);
+    }
 
     client.helperApisInitialized = true;
 
@@ -191,6 +203,10 @@ export async function initializeInstance(
         updateSetHelper: {
           deployed: status.apis.updateSetHelper.deployed,
           path: status.apis.updateSetHelper.basePath
+        },
+        addToUpdateSetHelper: {
+          deployed: status.apis.addToUpdateSetHelper.deployed,
+          path: status.apis.addToUpdateSetHelper.basePath
         }
       }
     };

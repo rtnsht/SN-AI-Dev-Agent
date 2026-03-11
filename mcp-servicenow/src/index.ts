@@ -172,6 +172,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'sn_move_to_update_set':
         result = await updateSets.moveToUpdateSet(snClient, updateSets.moveToUpdateSetSchema.parse(args));
         break;
+      case 'sn_verify_update_set_capture':
+        result = await updateSets.verifyUpdateSetCapture(snClient, updateSets.verifyUpdateSetCaptureSchema.parse(args));
+        break;
 
       // UI Policy tools
       case 'sn_get_ui_policies':

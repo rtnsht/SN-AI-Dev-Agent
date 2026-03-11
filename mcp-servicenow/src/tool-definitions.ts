@@ -282,10 +282,34 @@ export const MORE_TOOLS: ToolDefinition[] = [
       type: 'object',
       properties: {
         update_set_id: { type: 'string', description: 'The sys_id of the target update set' },
-        table: { type: 'string', description: 'The table name of the artifact (e.g., "sys_script", "sys_script_include", "sys_script_client")' },
+        table: { type: 'string', description: 'The table name of the artifact (e.g., "sys_script", "sys_script_include", "sys_script_client", "sys_dictionary")' },
         sys_id: { type: 'string', description: 'The sys_id of the record to move to the update set' }
       },
       required: ['update_set_id', 'table', 'sys_id']
+    }
+  },
+  {
+    name: 'sn_verify_update_set_capture',
+    description: 'Verify that ALL artifacts are captured in the active update set. Call this AFTER creating all artifacts to ensure nothing is missing. Automatically attempts to move any missing artifacts. Returns a detailed report of captured, moved, and missing items.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        update_set_id: { type: 'string', description: 'The sys_id of the update set to verify against' },
+        artifacts: {
+          type: 'array',
+          description: 'Array of artifacts to verify',
+          items: {
+            type: 'object',
+            properties: {
+              table: { type: 'string', description: 'Table name (e.g., "sys_script", "sys_dictionary")' },
+              sys_id: { type: 'string', description: 'sys_id of the artifact' },
+              name: { type: 'string', description: 'Friendly name of the artifact (optional)' }
+            },
+            required: ['table', 'sys_id']
+          }
+        }
+      },
+      required: ['update_set_id', 'artifacts']
     }
   }
 ];
@@ -2017,7 +2041,7 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
     'sn_create_scheduled_job',
     'sn_create_fix_script', 'sn_run_fix_script',
     // Update set management
-    'sn_create_update_set', 'sn_set_current_update_set', 'sn_move_to_update_set',
+    'sn_create_update_set', 'sn_set_current_update_set', 'sn_move_to_update_set', 'sn_verify_update_set_capture',
     // Flow Designer
     'sn_list_flows', 'sn_get_flow', 'sn_analyze_flow',
     'sn_create_flow', 'sn_create_flow_trigger', 'sn_create_flow_action_instance', 'sn_create_flow_stage',
@@ -2056,7 +2080,7 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
   deployment: new Set([
     // Update set completion
     'sn_create_update_set', 'sn_set_current_update_set',
-    'sn_complete_update_set', 'sn_move_to_update_set',
+    'sn_complete_update_set', 'sn_move_to_update_set', 'sn_verify_update_set_capture',
     // Change management & audit
     'sn_log_change', 'sn_get_audit_history',
     'sn_request_approval', 'sn_process_approval', 'sn_get_approval_status',
