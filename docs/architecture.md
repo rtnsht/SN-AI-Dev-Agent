@@ -335,7 +335,6 @@ graph LR
         F7["variables<br/>(list, create, inputs)"]
         F8["templates<br/>(export, list, create from)"]
         F9["executions<br/>(execute, status, history)"]
-        F10["SDK deploy<br/>(deploy, undeploy, list)"]
     end
 
     subgraph ANALYSIS["Analysis & Quality (17)"]
@@ -451,24 +450,6 @@ SN-AI-Dev-Agent/
 │   │   │   └── DeploymentHelper.js  ← Reusable artifact deployment utility
 │   │   └── types/                   ← TypeScript type definitions
 │   └── package.json
-│
-├── sdk-flows/                       ← NOW SDK App-Scoped Workspaces
-│   ├── node_modules/                ← Shared @servicenow/sdk (326MB, installed once)
-│   ├── package.json                 ← Shared SDK dependencies
-│   ├── registry.json                ← Tracks all deployed flows (for safe cleanup)
-│   ├── _template/                   ← Skeleton files for new flow workspaces
-│   │   ├── package.json.tmpl
-│   │   └── now.config.json.tmpl
-│   └── apps/                        ← Persistent workspace per scoped app
-│       └── {scope}/                 ← Created on first deploy for that app
-│           ├── node_modules → ../../node_modules  (symlink)
-│           ├── package.json
-│           ├── now.config.json
-│           ├── keys/                ← Per-flow keys.ts fragments
-│           ├── src/fluent/
-│           │   ├── generated/keys.ts  ← Merged keys for all local flows in the app
-│           │   └── {FlowName}.now.ts  ← Flow source files for the app
-│           └── dist/                  ← App build output
 │
 ├── specs/                           ← Requirement specifications (SDLC artifacts)
 │   ├── config.properties            ← Phase gate settings
@@ -998,91 +979,7 @@ No additional Scripted REST APIs are needed on the instance.
 
 ---
 
-## 19. SDK Flow App-Scoped Workspace Architecture
-
-### Problem Solved
-The NOW SDK (`now-sdk build`) compiles **all** `.now.ts` files in a workspace as a single unit, and the application package is the deployment unit. Per-flow workspaces plus `--reinstall` caused later installs to replace earlier SDK-managed flows in the same app.
-
-### Solution: Persistent App Workspaces + Normal Install
-Each scoped app gets its own directory under `sdk-flows/apps/{scope}/` with:
-- **Symlinked `node_modules`** → `../../node_modules` (shared SDK install)
-- **One `now.config.json`** — app scope binding
-- **Per-flow source files** under `src/fluent/`
-- **Per-flow keys fragments** under `keys/`
-- **Merged `generated/keys.ts`** regenerated from all fragments before every build
-- **Normal `now-sdk install` only** — no `--reinstall`
-
-### Deploy Pipeline
-```
-sn_deploy_sdk_flow({ code, keysTs, fileName, scope, scopeId })
-│
-├── 1. Create/update sdk-flows/apps/{scope}/
-├── 2. Symlink node_modules → ../../node_modules
-├── 3. Write package.json, now.config.json
-├── 4. Write src/fluent/{FlowName}.now.ts (code)
-├── 5. Write keys/{FlowName}.keys.ts (raw keys fragment)
-├── 6. Regenerate src/fluent/generated/keys.ts from all fragments
-├── 7. Clean: rm -rf dist/ .now-sdk-cache/
-├── 8. npx now-sdk build
-├── 9. Validate: reject DELETE artifacts, confirm target flow artifact exists
-├── 10. npx now-sdk install
-└── 11. Update registry.json with artifact IDs
-```
-
-### Safe Cleanup Pipeline
-```
-sn_undeploy_sdk_flow({ flowName })
-│
-├── 1. Check registry.json (refuse if not SDK-deployed)
-├── 2. Verify generation_source=fluent on instance
-├── 3. DELETE action instances → trigger instances → flow
-├── 4. Remove src/fluent/{FlowName}.now.ts and keys/{FlowName}.keys.ts
-├── 5. Regenerate merged generated/keys.ts
-└── 6. Update registry.json: status = "undeployed"
-```
-
-### Registry (`sdk-flows/registry.json`)
-Tracks all SDK-deployed flows with:
-- `flowSysId` — the flow's sys_id on the instance
-- `artifactIds` — flow, trigger, and action instance sys_ids
-- `scope`, `scopeId`, `instanceUrl`
-- `flowDisplayName` — display name extracted from code when available
-- `status` — "deployed" or "undeployed"
-- `deployedAt` — ISO timestamp
-
-### Tools
-| Tool | Purpose |
-|------|---------|
-| `sn_deploy_sdk_flow` | Deploy flow into the persistent app workspace, merge keys, validate build output, and perform normal incremental install |
-| `sn_undeploy_sdk_flow` | Safe removal — only SDK-deployed flows, verifies generation_source=fluent, removes local flow source, regenerates keys |
-| `sn_list_sdk_flows` | List all tracked flows with deployment status and local source presence |
-
-### Key Design Decisions
-1. **App-scoped workspace** — matches the SDK application-package deployment model.
-2. **No `--reinstall`** — prevents one flow deploy from deleting another flow in the same app.
-3. **Per-flow keys fragments + merged `keys.ts`** — preserves local source per flow while giving the SDK one valid generated keys file.
-4. **Build rollback on source errors** — invalid flow code does not poison the persistent app workspace.
-5. **Registry-gated cleanup** — `sn_undeploy_sdk_flow` refuses to delete flows not in the registry.
-
-### `--reinstall` Postmortem
-
-> **Status:** Fixed — deploy path now rejects `reinstall=true`
-
-**Root cause:** The NOW SDK treats one workspace as one application. `now-sdk install --reinstall` uninstalls the app's SDK-managed artifacts before reinstalling from the current build package.
-
-With per-flow workspaces, two different flows in the same scoped app produced two different one-flow packages with the same app name. Reinstalling the second package removed the first flow from the instance.
-
-**Current policy:**
-| Behavior | Detail |
-|----------|--------|
-| `now-sdk install` | Allowed — normal incremental path |
-| `now-sdk install --reinstall` | Rejected by `sn_deploy_sdk_flow` and `/api/deploy-sdk` |
-| Existing app baseline | Recommended via `now-sdk init --from <scopeId>` when needed |
-| Local source model | Persistent app workspace under `sdk-flows/apps/{scope}/` |
-
----
-
-## 20. Live Session Telemetry
+## 19. Live Session Telemetry
 
 ### Overview
 Every AI agent session produces a **live-updating telemetry dashboard** as a markdown file (`webapp/logs/telemetry-session-{suffix}.md`). The file is regenerated every 15 seconds from the session's JSONL log, providing real-time visibility into what the AI agent is doing.
@@ -1140,7 +1037,6 @@ The generated markdown file contains:
 | **Phase Timeline** | Each phase transition with timestamp and tools available |
 | **Round-by-Round Activity** | Every API round: tools called (✅/❌), duration, tokens in/out, stop reason |
 | **Tool Usage Distribution** | Per-tool stats: call count, successes, failures, average duration |
-| **SDK Deploy Attempts** | Code size, reinstall flag, duration, success/failure per deploy |
 | **Errors** | Timestamped error log with tool name and message |
 | **🔴 Session Updates** | Conversational narration of session progress (see below) |
 
@@ -1150,7 +1046,7 @@ The telemetry dashboard includes a **Session Updates** section that provides a h
 
 **Delta State Tracking** (`DeltaState`):
 - `lastRoundCount`, `lastPhaseCount`, `lastToolCalls` — detect new activity
-- `lastDeployCount`, `lastErrorCount` — detect new deploys/errors
+- `lastErrorCount` — detect new errors
 - `updates[]` — accumulated narration paragraphs (append-only)
 
 **Narration Events:**
@@ -1161,12 +1057,10 @@ The telemetry dashboard includes a **Session Updates** section that provides a h
 | Phase transition | 🔄 Phase transition → **implementation** (52 tools available). |
 | Research round | 🔍 Round 3/30: Researching action types — `sn_list_action_types`, `sn_get_action_type`. |
 | Instance discovery | 🔍 Round 2/30: Instance discovery — ✅ `sn_get_table_schema`, ✅ `sn_query_records` (2 tools, 2.4s) |
-| Deploy attempt | 🚀 **Deploy #1**: `sn_deploy_sdk_flow` (2588 chars) — 5.6s ✅ |
-| Deploy loop warning | ⚠️ 4 deploy attempts so far — Claude may be stuck in a deploy loop. |
 | Tool error | ❌ Tool error: `sn_query_records` — Request failed with status code 400 |
 | Round limit warning | ⚠️ 3 rounds remaining. Claude needs to wrap up. |
 | Waiting for user | ⏳ Waiting for user input... (Claude stopped with `end_turn`, no tools) |
-| Session complete | 🏁 **Session complete.** 11/30 rounds, 12 tool calls, 2m 5s elapsed. 1 deploy attempts (1 successful). |
+| Session complete | 🏁 **Session complete.** 11/30 rounds, 12 tool calls, 2m 5s elapsed. |
 
 **Tool Categorization** — Rounds are narrated with context-aware descriptions:
 - `sn_list_action_types` / `sn_get_action_type` → "Researching action types"
@@ -1206,7 +1100,7 @@ The telemetry dashboard includes a **Session Updates** section that provides a h
 
 ---
 
-## 21. AI Agent Type Coercion (Schema Hardening)
+## 20. AI Agent Type Coercion (Schema Hardening)
 
 ### Problem
 AI agents (Claude, GPT, etc.) frequently send **string values** where Zod schemas expect `boolean`, `number`, or `object`. For example:
@@ -1267,40 +1161,3 @@ const coerceJsonObject = z.preprocess(
 
 ---
 
-## 22. Bug Fixes from Session Analysis (j5cohoy)
-
-### 22.1 `now.config.json` Format — SDK Build Failure
-
-**Bug:** `deploySDKFlow()` wrote `now.config.json` with `{ host: { url }, auth: { username }, deploy: { scopeId } }`. The ServiceNow SDK expects `{ scope, scopeId }` at the top level. This caused every SDK build to fail with a config validation error in ~1 second.
-
-**Impact:** All 3 deploy attempts in session `j5cohoy` silently failed. The flow was never deployed to the instance.
-
-**Fix:** Both `mcp-servicenow/src/tools/flow-designer.ts` and `webapp/src/app/api/deploy-sdk/route.ts` now write:
-```json
-{ "scope": "x_snc_yantra", "scopeId": "..." }
-```
-
-### 22.2 `executeAndLogTool` Success Detection
-
-**Bug:** `sn-engine.ts` `executeAndLogTool()` only set `success = false` when the tool **threw an exception**. Many tools (including `deploySDKFlow`) return `{ success: false, error: "..." }` without throwing. The logger recorded these as `success: true`, corrupting telemetry data.
-
-**Impact:** Session logs showed 3 "successful" deploys when all 3 actually failed. Telemetry narration was misleading.
-
-**Fix:** Added a check after tool execution:
-```typescript
-if (typeof output === "object" && output !== null && (output as Record<string, unknown>).success === false) {
-  success = false;
-}
-```
-
-### 22.3 Session Updates Narration Rewrite
-
-**Problem:** The original narration was mechanical — it listed rounds and tool names without context. Example: `🔍 Round 3/30: Instance discovery — ✅ sn_query_records (1 tools, 1.4s)`.
-
-**Fix:** Complete rewrite of `generateSessionUpdates()` with:
-- **Intent-based tool descriptions** — `describeToolIntent()` maps tool names to plain English (e.g., "surveying the instance — checking existing business rules, flows, and related records")
-- **Phase-aware context** — `narrativeContext()` adds opening phrases based on the current phase (e.g., "Before writing the spec, Claude is doing its homework —")
-- **Work block grouping** — consecutive tool rounds are grouped into a single narration block instead of one line per round
-- **Deploy storytelling** — deploy attempts are narrated with context (first attempt, reinstall retry, loop warning)
-- **Error categorization** — type mismatches, unknown tools, and generic errors get different narration styles
-- **Completion assessment** — session end includes efficiency rating and deploy success summary

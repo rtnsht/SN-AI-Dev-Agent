@@ -72,8 +72,6 @@ interface SessionTelemetry {
   toolStats: Map<string, { calls: number; successes: number; failures: number; totalMs: number }>;
   // Errors
   errors: { time: string; tool: string; message: string }[];
-  // Deploy attempts
-  deployAttempts: { round: number; codeSize: number; reinstall: boolean; durationMs: number; success: boolean }[];
 }
 
 // ── Parser ─────────────────────────────────────────────────────────────────
@@ -98,7 +96,7 @@ function parseSessionLog(logFile: string): SessionTelemetry {
     isComplete: false, finalStopReason: "",
     rounds: [], phases: [],
     toolStats: new Map(),
-    errors: [], deployAttempts: [],
+    errors: [],
   };
 
   let currentRound: Partial<RoundInfo> | null = null;
@@ -201,24 +199,6 @@ function parseSessionLog(logFile: string): SessionTelemetry {
         });
       }
 
-      // Track deploy attempts
-      if (toolName === "sn_deploy_sdk_flow") {
-        const inp = (d.input as Record<string, unknown>) || {};
-        // Extract code size from truncated input: "code... [5929 chars]"
-        let codeSize = 0;
-        const codeStr = String(inp.code || "");
-        const charsMatch = codeStr.match(/\[(\d+) chars\]/);
-        if (charsMatch) codeSize = parseInt(charsMatch[1]);
-        else codeSize = codeStr.length;
-
-        telemetry.deployAttempts.push({
-          round: telemetry.totalRounds,
-          codeSize,
-          reinstall: inp.reinstall === true || inp.reinstall === "true",
-          durationMs: dur,
-          success,
-        });
-      }
     }
 
     // ── Completion ───────────────────────────────────────────────────
@@ -291,7 +271,6 @@ function generateMarkdown(t: SessionTelemetry): string {
 | **Rounds** | ${t.totalRounds}/${t.maxRounds} |
 | **Tool Calls** | ${t.totalToolCalls} (${t.toolErrors} errors) |
 | **Tokens** | 🔽 ${t.totalInputTokens.toLocaleString()} in · 🔼 ${t.totalOutputTokens.toLocaleString()} out · 📦 ${t.totalCacheReadTokens.toLocaleString()} cached |
-| **Deploy Attempts** | ${t.deployAttempts.length} |
 | **Stop Reason** | ${t.finalStopReason || "—"} |
 
 ---
@@ -330,16 +309,6 @@ function generateMarkdown(t: SessionTelemetry): string {
     md += `| \`${name}\` | ${stats.calls} | ${stats.successes} | ${stats.failures} | ${avg}s |\n`;
   }
 
-  // Deploy attempts
-  if (t.deployAttempts.length > 0) {
-    md += `\n---\n\n## 🚀 SDK Deploy Attempts\n\n`;
-    md += `| # | Round | Code Size | Reinstall | Duration | Status |\n`;
-    md += `|---|-------|-----------|-----------|----------|--------|\n`;
-    t.deployAttempts.forEach((d, i) => {
-      md += `| ${i + 1} | ${d.round} | ${d.codeSize} chars | ${d.reinstall ? "yes" : "no"} | ${(d.durationMs / 1000).toFixed(1)}s | ${d.success ? "✅" : "❌"} |\n`;
-    });
-  }
-
   // Errors
   if (t.errors.length > 0) {
     md += `\n---\n\n## ⚠️ Errors\n\n`;
@@ -359,7 +328,6 @@ interface DeltaState {
   lastRoundCount: number;
   lastPhaseCount: number;
   lastToolCalls: number;
-  lastDeployCount: number;
   lastErrorCount: number;
   lastPhase: string;
   lastChatIndex: number;       // tracks which chat request we're in
@@ -374,7 +342,7 @@ function getDelta(sessionId: string): DeltaState {
   if (!deltaStates.has(sessionId)) {
     deltaStates.set(sessionId, {
       lastRoundCount: 0, lastPhaseCount: 0, lastToolCalls: 0,
-      lastDeployCount: 0, lastErrorCount: 0, lastPhase: "",
+      lastErrorCount: 0, lastPhase: "",
       lastChatIndex: 0, consecutiveErrors: 0,
       wasComplete: false, updates: [],
     });
@@ -506,39 +474,6 @@ function generateSessionUpdates(t: SessionTelemetry, sessionId: string): string 
     delta.lastRoundCount = t.rounds.length;
   }
 
-  // ── Deploy attempts (the climax) ─────────────────────────────────
-  if (t.deployAttempts.length > delta.lastDeployCount) {
-    const newDeploys = t.deployAttempts.slice(delta.lastDeployCount);
-    for (let i = 0; i < newDeploys.length; i++) {
-      const dep = newDeploys[i];
-      const attemptNum = delta.lastDeployCount + i + 1;
-      const dur = (dep.durationMs / 1000).toFixed(1);
-
-      if (dep.success && attemptNum === 1 && !dep.reinstall) {
-        newUpdates.push(
-          `🚀 **First deploy attempt** — Claude pushed ${dep.codeSize} chars of flow code to the instance (${dur}s). The SDK build and install both succeeded.`
-        );
-      } else if (dep.success && dep.reinstall && attemptNum === 2) {
-        newUpdates.push(
-          `🔄 **Deploy #${attemptNum}** — Claude is retrying with \`--reinstall\` flag, which forces the SDK to overwrite any existing flow with the same ID. This usually means the first deploy created the flow but Claude wants to ensure it's the latest version. (${dur}s, ✅)`
-        );
-      } else if (dep.success && dep.reinstall && attemptNum >= 3) {
-        newUpdates.push(
-          `⚠️ **Deploy #${attemptNum}** — Another reinstall attempt (${dur}s, ✅). ${attemptNum >= 4 ? "Claude appears to be stuck in a deploy loop — the tool reports success but something in the response is making Claude think it needs to try again." : "Claude may be unsatisfied with the previous result or is seeing an unexpected response from the install command."}`
-        );
-      } else if (!dep.success) {
-        newUpdates.push(
-          `❌ **Deploy #${attemptNum} failed** — The SDK ${dep.reinstall ? "reinstall" : "install"} did not succeed (${dur}s). Claude will likely inspect the error and adjust the flow code.`
-        );
-      } else {
-        newUpdates.push(
-          `🚀 **Deploy #${attemptNum}** — ${dep.codeSize} chars, ${dep.reinstall ? "reinstall" : "fresh install"}, ${dur}s ${dep.success ? "✅" : "❌"}`
-        );
-      }
-    }
-    delta.lastDeployCount = t.deployAttempts.length;
-  }
-
   // ── Errors (the complications) ───────────────────────────────────
   if (t.errors.length > delta.lastErrorCount) {
     const newErrors = t.errors.slice(delta.lastErrorCount);
@@ -596,25 +531,11 @@ function generateSessionUpdates(t: SessionTelemetry, sessionId: string): string 
   if (t.isComplete && !delta.wasComplete) {
     delta.wasComplete = true;
     const elapsed = formatDuration(t.elapsedSeconds);
-    const successDeploys = t.deployAttempts.filter(d => d.success).length;
-    const failedDeploys = t.deployAttempts.filter(d => !d.success).length;
     const errorRate = t.totalToolCalls > 0 ? ((t.toolErrors / t.totalToolCalls) * 100).toFixed(0) : "0";
 
     let summary = `\n🏁 **Session complete** — ${elapsed} elapsed, ${t.totalRounds}/${t.maxRounds} rounds used, ${t.totalToolCalls} tool calls`;
     if (t.toolErrors > 0) summary += ` (${errorRate}% error rate)`;
     summary += `.`;
-
-    if (t.deployAttempts.length > 0) {
-      if (failedDeploys === 0 && successDeploys === 1) {
-        summary += ` Flow deployed successfully on the first try — clean execution.`;
-      } else if (failedDeploys === 0 && successDeploys > 1) {
-        summary += ` ${successDeploys} deploy attempts (all succeeded). Claude retried ${successDeploys - 1} time${successDeploys > 2 ? "s" : ""} — worth investigating why.`;
-      } else if (failedDeploys > 0 && successDeploys > 0) {
-        summary += ` ${t.deployAttempts.length} deploy attempts: ${successDeploys} succeeded, ${failedDeploys} failed. Bumpy but got there.`;
-      } else if (successDeploys === 0) {
-        summary += ` ❌ All ${t.deployAttempts.length} deploy attempts failed. The flow was not deployed.`;
-      }
-    }
 
     if (t.finalStopReason === "max_rounds") {
       summary += `\n\n⚠️ **Hit the ${t.maxRounds}-round limit.** Claude ran out of rounds before finishing. Check if the work is complete.`;
@@ -689,19 +610,14 @@ function narrateRounds(rounds: RoundInfo[], t: SessionTelemetry, delta: DeltaSta
     if (workBlock.length === 0) continue;
 
     const allTools = workBlock.flatMap(r => r.tools);
-    const nonDeployTools = allTools.filter(t => t.name !== "sn_deploy_sdk_flow");
-    const deployTools = allTools.filter(t => t.name === "sn_deploy_sdk_flow");
     const totalDur = allTools.reduce((s, t) => s + t.durationMs, 0);
     const failures = allTools.filter(t => !t.success);
     const startTime = timeOnly(workBlock[0].startTime);
     const endTime = workBlock.length > 1 ? timeOnly(workBlock[workBlock.length - 1].startTime) : "";
     const timeRange = endTime && endTime !== startTime ? `${startTime}–${endTime}` : startTime;
 
-    // Skip pure deploy blocks (handled by deploy tracking)
-    if (nonDeployTools.length === 0 && deployTools.length > 0) continue;
-
-    const intent = describeToolIntent(nonDeployTools.length > 0 ? nonDeployTools : allTools);
-    const context = narrativeContext(nonDeployTools.length > 0 ? nonDeployTools : allTools, delta.lastPhase, workBlock[0].roundNum);
+    const intent = describeToolIntent(allTools);
+    const context = narrativeContext(allTools, delta.lastPhase, workBlock[0].roundNum);
     const durStr = totalDur > 0 ? ` (${(totalDur / 1000).toFixed(1)}s across ${workBlock.length} round${workBlock.length > 1 ? "s" : ""})` : "";
 
     let msg = `🔍 **${timeRange}** — ${context}${intent}${durStr}.`;
@@ -710,11 +626,6 @@ function narrateRounds(rounds: RoundInfo[], t: SessionTelemetry, delta: DeltaSta
       msg += ` ${failures.length} of ${allTools.length} calls hit errors — Claude will need to adapt.`;
     } else if (failures.length > 0 && failures.length === allTools.length) {
       msg += ` All ${failures.length} calls failed — Claude is hitting a wall here.`;
-    }
-
-    // Add deploy context if mixed with other tools
-    if (deployTools.length > 0 && nonDeployTools.length > 0) {
-      msg += ` Also triggered ${deployTools.length} deploy attempt${deployTools.length > 1 ? "s" : ""}.`;
     }
 
     blocks.push(msg);

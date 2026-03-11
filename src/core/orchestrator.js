@@ -152,7 +152,6 @@ export class Orchestrator {
   /**
    * Select application scope for deployment
    * CRITICAL: Must be called before implementation
-   * Flow Designer artifacts require a custom scoped application
    */
   async selectScope() {
     const scopeSelector = new ScopeSelector(this.client);
@@ -164,11 +163,6 @@ export class Orchestrator {
     const recommendations = scopeSelector.getDeploymentRecommendations(this.solution);
 
     logger.info(`Selected scope: ${this.selectedScope.name} (${this.selectedScope.scope})`);
-
-    if (recommendations.hasFlowArtifacts) {
-      logger.warn('Flow Designer artifacts detected - will use SDK for deployment');
-      recommendations.notes.forEach(note => logger.info(note));
-    }
 
     // Store recommendations for later use in deployment
     this.deploymentRecommendations = recommendations;
@@ -210,23 +204,10 @@ export class Orchestrator {
 
     logger.info(`Update set created in scope: ${this.selectedScope?.name || 'Global'}`);
 
-    // Separate REST API vs SDK artifacts
-    const restArtifacts = this.artifacts.filter(a =>
-      !this.deploymentRecommendations?.deploymentMethods?.sdk?.some(s => s.name === a.name)
-    );
-    const sdkArtifacts = this.deploymentRecommendations?.deploymentMethods?.sdk || [];
-
-    // Deploy REST API artifacts
-    if (restArtifacts.length > 0) {
-      const deployResults = await usManager.deployArtifacts(restArtifacts);
-      logger.info(`Deployed ${deployResults.filter(r => r.success).length}/${restArtifacts.length} REST API artifacts`);
-    }
-
-    // Log SDK artifacts for manual deployment
-    if (sdkArtifacts.length > 0) {
-      logger.warn(`${sdkArtifacts.length} Flow Designer artifacts require SDK deployment:`);
-      sdkArtifacts.forEach(a => logger.info(`  - ${a.name} (${a.type})`));
-      logger.info('Run: cd sdk-flows && npx now-sdk install --auth <profile> --reinstall');
+    // Deploy artifacts
+    if (this.artifacts.length > 0) {
+      const deployResults = await usManager.deployArtifacts(this.artifacts);
+      logger.info(`Deployed ${deployResults.filter(r => r.success).length}/${this.artifacts.length} artifacts`);
     }
 
     // Complete update set
@@ -240,8 +221,6 @@ export class Orchestrator {
   }
 
   async generateSummary() {
-    const sdkArtifacts = this.deploymentRecommendations?.deploymentMethods?.sdk || [];
-
     const summary = {
       timestamp: new Date().toISOString(),
       requirement: { id: this.analysis.id, title: this.analysis.title, type: this.analysis.type },
@@ -255,9 +234,6 @@ export class Orchestrator {
       deployment: {
         updateSet: this.updateSet?.name,
         artifactsDeployed: this.artifacts.length,
-        restApiArtifacts: this.artifacts.length - sdkArtifacts.length,
-        sdkArtifacts: sdkArtifacts.length,
-        requiresSDK: sdkArtifacts.length > 0
       },
       outputs: {
         spec: path.join(this.outputDir, 'docs', `spec-${this.analysis.id}.md`),

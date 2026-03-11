@@ -22,7 +22,7 @@ export const SDLC_PHASES: SDLCPhaseInfo[] = [
 export type AIProvider = "anthropic" | "openrouter";
 
 /** Model choices available to the user (for Anthropic direct) */
-export type ModelChoice = "sonnet-4" | "opus-4";
+export type ModelChoice = "sonnet-4" | "opus-4" | "haiku-4";
 
 export interface ModelOption {
   key: string;
@@ -34,8 +34,9 @@ export interface ModelOption {
 
 /** Anthropic direct models */
 export const ANTHROPIC_MODELS: ModelOption[] = [
-  { key: "sonnet-4", label: "Claude Sonnet 4.6", modelId: "claude-sonnet-4-6", description: "Fast & intelligent", provider: "anthropic" },
-  { key: "opus-4", label: "Claude Opus 4.6", modelId: "claude-opus-4-6", description: "Most capable", provider: "anthropic" },
+  { key: "opus-4", label: "Claude Opus 4.6", modelId: "claude-opus-4-6", description: "Most intelligent — agents & coding", provider: "anthropic" },
+  { key: "sonnet-4", label: "Claude Sonnet 4.6", modelId: "claude-sonnet-4-6", description: "Best speed + intelligence balance", provider: "anthropic" },
+  { key: "haiku-4", label: "Claude Haiku 4.5", modelId: "claude-haiku-4-5", description: "Fastest — near-frontier intelligence", provider: "anthropic" },
 ];
 
 /** Legacy MODEL_OPTIONS for backward compatibility */

@@ -1866,11 +1866,11 @@ export const FLOW_DESIGNER_TOOLS: ToolDefinition[] = [
   }
 ];
 
-// Scoped Application Tools - CRITICAL for Flow Designer deployment
+// Scoped Application Tools
 export const SCOPED_APP_TOOLS: ToolDefinition[] = [
   {
     name: 'sn_get_custom_apps',
-    description: 'Get all custom scoped applications from the instance. IMPORTANT: Must be called before implementation phase to determine deployment scope. Flow Designer artifacts (flows, subflows, flow actions) REQUIRE a custom scoped application.',
+    description: 'Get all custom scoped applications from the instance. Useful for determining deployment scope.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1898,7 +1898,7 @@ export const SCOPED_APP_TOOLS: ToolDefinition[] = [
   },
   {
     name: 'sn_create_custom_app',
-    description: 'Create a new custom scoped application. Use this when user wants to deploy Flow Designer artifacts but no suitable custom app exists.',
+    description: 'Create a new custom scoped application.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1912,46 +1912,7 @@ export const SCOPED_APP_TOOLS: ToolDefinition[] = [
   }
 ];
 
-// SDK Fluent Deployment Tool — deploys .now.ts flows via NOW SDK CI mode
-export const SDK_DEPLOY_TOOLS: ToolDefinition[] = [
-  {
-    name: 'sn_deploy_sdk_flow',
-    description: 'Deploy a Flow Designer flow using NOW SDK fluent code. Source is stored in a persistent app workspace under sdk-flows/apps/{scope}/ so all locally managed flows for the scoped app build together. Builds, validates (rejects DELETE artifacts), and installs using normal incremental install only. Tracks deployments in registry.json for safe cleanup.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        code: { type: 'string', description: 'Complete SDK fluent .now.ts code for the flow' },
-        keysTs: { type: 'string', description: 'Complete generated/keys.ts content declaring Now.ID keys for this flow. Must include bom_json and package_json entries.' },
-        fileName: { type: 'string', description: 'Filename for the .now.ts file (e.g. "AutoCloseStaleIncidents.now.ts")' },
-        scope: { type: 'string', description: 'Scoped app scope string (e.g. "x_snc_yantra")' },
-        scopeId: { type: 'string', description: 'sys_id of the scoped application record' },
-        reinstall: { type: 'boolean', description: 'Deprecated/unsupported. Must be omitted or false. This deploy path rejects reinstall=true because it can overwrite other SDK-managed flows in the same scoped app.' },
-      },
-      required: ['code', 'keysTs', 'fileName', 'scope', 'scopeId'],
-    },
-  },
-  {
-    name: 'sn_undeploy_sdk_flow',
-    description: 'Safely remove an SDK-deployed flow from the instance. Only removes flows tracked in registry.json with generation_source=fluent. Deletes trigger instances, action instances, and the flow record. Removes the flow source from the app workspace, regenerates merged keys.ts, and updates registry.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        flowName: { type: 'string', description: 'Name of the flow to remove (as shown in registry, e.g. "AutoEscalateP1")' },
-      },
-      required: ['flowName'],
-    },
-  },
-  {
-    name: 'sn_list_sdk_flows',
-    description: 'List all flows tracked in the SDK registry with deployment status, sys_ids, scope, and whether local workspace exists.',
-    inputSchema: {
-      type: 'object',
-      properties: {},
-    },
-  },
-];
-
-export const ALL_TOOLS = [...TOOLS, ...MORE_TOOLS, ...ADDITIONAL_TOOLS, ...BROWNFIELD_TOOLS, ...FLOW_DESIGNER_TOOLS, ...SCOPED_APP_TOOLS, ...SDK_DEPLOY_TOOLS];
+export const ALL_TOOLS = [...TOOLS, ...MORE_TOOLS, ...ADDITIONAL_TOOLS, ...BROWNFIELD_TOOLS, ...FLOW_DESIGNER_TOOLS, ...SCOPED_APP_TOOLS];
 
 /**
  * Convert tool definitions to Anthropic Messages API format.
@@ -2057,15 +2018,16 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
     'sn_create_fix_script', 'sn_run_fix_script',
     // Update set management
     'sn_create_update_set', 'sn_set_current_update_set', 'sn_move_to_update_set',
-    // Flow Designer — READ-ONLY (flow creation requires SDK fluent code, not REST)
+    // Flow Designer
     'sn_list_flows', 'sn_get_flow', 'sn_analyze_flow',
+    'sn_create_flow', 'sn_create_flow_trigger', 'sn_create_flow_action_instance', 'sn_create_flow_stage',
     'sn_list_flow_stages', 'sn_list_flow_action_instances',
     'sn_list_action_types', 'sn_list_trigger_definitions', 'sn_get_action_type_schema',
-    'sn_list_subflows', 'sn_list_custom_actions',
-    'sn_list_flow_variables', 'sn_list_action_inputs',
-    'sn_list_flow_templates',
-    // SDK Fluent Deployment (builds & installs flows via NOW SDK CI mode)
-    'sn_deploy_sdk_flow', 'sn_undeploy_sdk_flow', 'sn_list_sdk_flows',
+    'sn_list_subflows', 'sn_create_subflow', 'sn_list_custom_actions', 'sn_create_custom_action',
+    'sn_call_subflow_in_flow',
+    'sn_list_flow_variables', 'sn_create_flow_variable', 'sn_list_action_inputs', 'sn_create_action_input',
+    'sn_export_flow_as_template', 'sn_list_flow_templates', 'sn_create_flow_from_template',
+    'sn_execute_flow', 'sn_get_flow_execution_status', 'sn_list_flow_executions',
     // Scope management
     'sn_get_custom_apps', 'sn_get_scope_selection_options', 'sn_create_custom_app',
     // Best practices & templates for implementation guidance

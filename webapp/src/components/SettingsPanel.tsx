@@ -3,6 +3,7 @@
 import Image from "next/image";
 import type { Credentials, ConnectionResult, UsageInfo, AIProvider, ModelOption } from "@/lib/types";
 import { ANTHROPIC_MODELS } from "@/lib/types";
+import { APP_LOGO } from "@/lib/branding";
 
 interface Props {
   credentials: Credentials;
@@ -33,7 +34,7 @@ interface Props {
   allowUserApiKeys?: boolean;
 }
 
-const INPUT_CLS = "w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors";
+const INPUT_CLS = "w-full px-3 py-2.5 rounded-md text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-info)] focus:border-transparent";
 
 export default function SettingsPanel({
   credentials, setCredentials, connected, connInfo, isConnecting, onConnect, onReconnect,
@@ -51,111 +52,113 @@ export default function SettingsPanel({
   const displayModels = aiProvider === "openrouter" ? modelOptions : ANTHROPIC_MODELS;
 
   return (
-    <div className="p-4 h-full flex flex-col">
-      <div className="flex items-center gap-2 mb-5">
-        <Image src="/yantra-logo.png" alt="Yantra" width={36} height={36} className="rounded-full" unoptimized />
+    <div className="p-4 h-full flex flex-col" style={{ background: "var(--surface-sidebar)" }}>
+      {/* Header */}
+      <div className="flex items-center gap-2.5 mb-6">
+        <Image src={APP_LOGO} alt="App Logo" width={32} height={32} className="rounded-md" unoptimized />
         <div>
-          <h2 className="text-sm font-semibold text-gray-200">Connection</h2>
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider">ServiceNow Instance</p>
+          <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Connection</h2>
+          <p className="sidebar-group-label" style={{ padding: 0, fontSize: "10px" }}>ServiceNow Instance</p>
         </div>
       </div>
 
       <div className="space-y-3 flex-1 overflow-y-auto">
         <div>
-          <label className="block text-xs font-medium text-gray-400 mb-1">Instance URL</label>
+          <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Instance URL</label>
           {serverSnCredsConfigured ? (
-            <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/30 rounded-lg">
-              <span className="w-2 h-2 bg-green-400 rounded-full flex-shrink-0" />
-              <span className="text-xs text-green-300 truncate">{credentials.instanceUrl}</span>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
+              <span className="text-[11px] truncate" style={{ color: "var(--color-success)" }}>{credentials.instanceUrl}</span>
             </div>
           ) : (
-            <input type="url" placeholder="https://dev12345.service-now.com" value={credentials.instanceUrl} onChange={(e) => update("instanceUrl", e.target.value)} className={INPUT_CLS} disabled={isConnecting} />
+            <input type="url" placeholder="https://dev12345.service-now.com" value={credentials.instanceUrl} onChange={(e) => update("instanceUrl", e.target.value)} className={INPUT_CLS} style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)" }} disabled={isConnecting} />
           )}
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-400 mb-1">Username</label>
+          <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Username</label>
           {serverSnCredsConfigured ? (
-            <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/30 rounded-lg">
-              <span className="w-2 h-2 bg-green-400 rounded-full flex-shrink-0" />
-              <span className="text-xs text-green-300">{credentials.username}</span>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
+              <span className="text-[11px]" style={{ color: "var(--color-success)" }}>{credentials.username}</span>
             </div>
           ) : (
-            <input type="text" placeholder="admin" value={credentials.username} onChange={(e) => update("username", e.target.value)} className={INPUT_CLS} disabled={isConnecting} />
+            <input type="text" placeholder="admin" value={credentials.username} onChange={(e) => update("username", e.target.value)} className={INPUT_CLS} style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)" }} disabled={isConnecting} />
           )}
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-400 mb-1">Password</label>
+          <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Password</label>
           {serverSnCredsConfigured ? (
-            <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/30 rounded-lg">
-              <span className="w-2 h-2 bg-green-400 rounded-full flex-shrink-0" />
-              <span className="text-xs text-green-300">Provided by server</span>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
+              <span className="text-[11px]" style={{ color: "var(--color-success)" }}>Provided by server</span>
             </div>
           ) : (
-            <input type="password" placeholder="••••••••" value={credentials.password} onChange={(e) => update("password", e.target.value)} className={INPUT_CLS} disabled={isConnecting} />
+            <input type="password" placeholder="••••••••" value={credentials.password} onChange={(e) => update("password", e.target.value)} className={INPUT_CLS} style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)" }} disabled={isConnecting} />
           )}
         </div>
 
         {/* AI Provider Selection */}
-        <div className="pt-3 border-t border-gray-800">
-          <label className="block text-xs font-medium text-gray-400 mb-1.5">AI Provider</label>
+        <div className="pt-3" style={{ borderTop: "1px solid var(--border-default)" }}>
+          <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>AI Provider</label>
           <div className="flex gap-2">
             <button
               onClick={() => !modelLocked && setAiProvider("anthropic")}
               disabled={modelLocked}
-              className={`flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
-                aiProvider === "anthropic"
-                  ? "border-blue-500 bg-blue-500/10 text-blue-300"
-                  : "border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600"
-              } ${modelLocked ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+              className={`flex-1 px-3 py-2 rounded-md text-[11px] font-medium transition-colors ${modelLocked ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+              style={{
+                background: aiProvider === "anthropic" ? "rgba(76,125,255,0.1)" : "var(--surface-secondary)",
+                border: `1px solid ${aiProvider === "anthropic" ? "rgba(76,125,255,0.3)" : "var(--border-emphasis)"}`,
+                color: aiProvider === "anthropic" ? "var(--color-info)" : "var(--text-secondary)",
+              }}
             >
               Anthropic
             </button>
             <button
               onClick={() => !modelLocked && setAiProvider("openrouter")}
               disabled={modelLocked}
-              className={`flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
-                aiProvider === "openrouter"
-                  ? "border-purple-500 bg-purple-500/10 text-purple-300"
-                  : "border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600"
-              } ${modelLocked ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+              className={`flex-1 px-3 py-2 rounded-md text-[11px] font-medium transition-colors ${modelLocked ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+              style={{
+                background: aiProvider === "openrouter" ? "rgba(168,85,247,0.1)" : "var(--surface-secondary)",
+                border: `1px solid ${aiProvider === "openrouter" ? "rgba(168,85,247,0.3)" : "var(--border-emphasis)"}`,
+                color: aiProvider === "openrouter" ? "#a855f7" : "var(--text-secondary)",
+              }}
             >
               OpenRouter
             </button>
           </div>
           {modelLocked && (
-            <p className="text-[10px] text-gray-600 mt-1 flex items-center gap-1">
+            <p className="text-[10px] mt-1 flex items-center gap-1" style={{ color: "var(--text-disabled)" }}>
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
               Provider locked for this session
             </p>
           )}
         </div>
 
-        {/* API Key Section - differs by provider */}
-        <div className="pt-3 border-t border-gray-800">
-          <label className="block text-xs font-medium text-gray-400 mb-1">
+        {/* API Key Section */}
+        <div className="pt-3" style={{ borderTop: "1px solid var(--border-default)" }}>
+          <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>
             {aiProvider === "openrouter" ? "OpenRouter API Key" : "Claude API Key"}
           </label>
 
           {aiProvider === "anthropic" ? (
-            /* Anthropic API Key logic */
             <>
               {!allowUserApiKeys && serverApiKeyConfigured ? (
-                <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/30 rounded-lg">
-                  <span className="w-2 h-2 bg-green-400 rounded-full flex-shrink-0" />
-                  <span className="text-xs text-green-300">Managed by server</span>
-                  <svg className="w-3 h-3 text-gray-500 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
+                  <span className="text-[11px]" style={{ color: "var(--color-success)" }}>Managed by server</span>
+                  <svg className="w-3 h-3 ml-auto" style={{ color: "var(--text-disabled)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
                 </div>
               ) : serverApiKeyConfigured && !rateLimitHit && !credentials.claudeApiKey ? (
-                <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/30 rounded-lg">
-                  <span className="w-2 h-2 bg-green-400 rounded-full flex-shrink-0" />
-                  <span className="text-xs text-green-300">Provided by server</span>
+                <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
+                  <span className="text-[11px]" style={{ color: "var(--color-success)" }}>Provided by server</span>
                 </div>
               ) : allowUserApiKeys ? (
                 <>
                   {rateLimitHit && (
-                    <div className="mb-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                      <p className="text-[11px] text-amber-300 font-medium">⚡ Free tier limit reached</p>
-                      <p className="text-[10px] text-amber-400/80 mt-0.5">Enter your own API key below to continue.</p>
+                    <div className="mb-2 px-3 py-2 rounded-md" style={{ background: "rgba(245,196,81,0.06)", border: "1px solid rgba(245,196,81,0.15)" }}>
+                      <p className="text-[11px] font-medium" style={{ color: "var(--color-warning)" }}>⚡ Free tier limit reached</p>
+                      <p className="text-[10px] mt-0.5" style={{ color: "var(--text-disabled)" }}>Enter your own API key below to continue.</p>
                     </div>
                   )}
                   <input
@@ -166,24 +169,29 @@ export default function SettingsPanel({
                       update("claudeApiKey", e.target.value);
                       if (e.target.value && rateLimitHit) onApiKeyProvided();
                     }}
-                    className={`${INPUT_CLS} ${rateLimitHit ? "ring-2 ring-amber-500/50 border-amber-500/50" : ""}`}
+                    className={INPUT_CLS}
+                    style={{
+                      background: "var(--surface-secondary)",
+                      border: rateLimitHit ? "1px solid rgba(245,196,81,0.3)" : "1px solid var(--border-emphasis)",
+                      color: "var(--text-primary)",
+                      ...(rateLimitHit ? { boxShadow: "0 0 0 2px rgba(245,196,81,0.15)" } : {}),
+                    }}
                     disabled={isConnecting}
                   />
                 </>
               ) : (
-                <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-lg">
-                  <span className="w-2 h-2 bg-red-400 rounded-full flex-shrink-0" />
-                  <span className="text-xs text-red-300">No API key configured. Contact admin.</span>
+                <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(249,115,115,0.06)", border: "1px solid rgba(249,115,115,0.15)" }}>
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-failed)" }} />
+                  <span className="text-[11px]" style={{ color: "var(--color-danger)" }}>No API key configured. Contact admin.</span>
                 </div>
               )}
             </>
           ) : (
-            /* OpenRouter API Key logic */
             <>
               {serverOpenRouterKeyConfigured && !credentials.openRouterApiKey ? (
-                <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/30 rounded-lg">
-                  <span className="w-2 h-2 bg-green-400 rounded-full flex-shrink-0" />
-                  <span className="text-xs text-green-300">Provided by server</span>
+                <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
+                  <span className="text-[11px]" style={{ color: "var(--color-success)" }}>Provided by server</span>
                 </div>
               ) : (
                 <input
@@ -192,30 +200,32 @@ export default function SettingsPanel({
                   value={credentials.openRouterApiKey}
                   onChange={(e) => update("openRouterApiKey", e.target.value)}
                   className={INPUT_CLS}
+                  style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)" }}
                   disabled={isConnecting}
                 />
               )}
-              <p className="text-[10px] text-gray-500 mt-1.5 leading-relaxed">
-                Get your key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline">openrouter.ai/keys</a>
+              <p className="text-[10px] mt-1.5 leading-relaxed" style={{ color: "var(--text-disabled)" }}>
+                Get your key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: "#a855f7" }}>openrouter.ai/keys</a>
               </p>
             </>
           )}
 
-          {/* Usage info — shown when using server-provided key (Anthropic or OpenRouter) */}
+          {/* Usage info */}
           {usage && ((aiProvider === "anthropic" && serverApiKeyConfigured && !credentials.claudeApiKey) || (aiProvider === "openrouter" && serverOpenRouterKeyConfigured && !credentials.openRouterApiKey)) && (
             <div className="mt-2 space-y-1.5">
               <div className="flex items-center justify-between text-[10px]">
-                <span className="text-gray-400">{usage.used}/{usage.max} requests used</span>
-                <span className={`font-medium ${usage.remaining <= 2 ? "text-amber-400" : "text-gray-500"}`}>
+                <span style={{ color: "var(--text-secondary)" }}>{usage.used}/{usage.max} requests used</span>
+                <span className="font-medium" style={{ color: usage.remaining <= 2 ? "var(--color-warning)" : "var(--text-disabled)" }}>
                   {usage.remaining} left
                 </span>
               </div>
-              <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
+              <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "var(--surface-secondary)" }}>
                 <div
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    usage.remaining === 0 ? "bg-red-500" : usage.remaining <= 2 ? "bg-amber-500" : "bg-blue-500"
-                  }`}
-                  style={{ width: `${(usage.used / usage.max) * 100}%` }}
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${(usage.used / usage.max) * 100}%`,
+                    background: usage.remaining === 0 ? "var(--color-danger)" : usage.remaining <= 2 ? "var(--color-warning)" : "var(--color-info)",
+                  }}
                 />
               </div>
             </div>
@@ -223,98 +233,105 @@ export default function SettingsPanel({
         </div>
 
         {/* Model selection */}
-        <div className="pt-3 border-t border-gray-800">
-          <label className="block text-xs font-medium text-gray-400 mb-1.5">AI Model</label>
+        <div className="pt-3" style={{ borderTop: "1px solid var(--border-default)" }}>
+          <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>AI Model</label>
 
           {modelsLoading ? (
-            <div className="flex items-center gap-2 px-3 py-3 bg-gray-800 border border-gray-700 rounded-lg">
-              <svg className="w-4 h-4 animate-spin text-gray-500" fill="none" viewBox="0 0 24 24">
+            <div className="flex items-center gap-2 px-3 py-3 rounded-md" style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-emphasis)" }}>
+              <svg className="w-4 h-4 animate-spin" style={{ color: "var(--text-disabled)" }} fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              <span className="text-xs text-gray-500">Loading models...</span>
+              <span className="text-[11px]" style={{ color: "var(--text-disabled)" }}>Loading models...</span>
             </div>
           ) : aiProvider === "openrouter" && displayModels.length > 10 ? (
-            /* OpenRouter: Use dropdown for many models */
             <>
               <select
                 value={selectedModel}
                 onChange={(e) => !modelLocked && setSelectedModel(e.target.value)}
                 disabled={modelLocked}
                 className={`${INPUT_CLS} ${modelLocked ? "opacity-60 cursor-not-allowed" : ""}`}
+                style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)" }}
               >
                 {displayModels.map((opt) => (
-                  <option key={opt.key} value={opt.key}>
-                    {opt.label}
-                  </option>
+                  <option key={opt.key} value={opt.key}>{opt.label}</option>
                 ))}
               </select>
               {selectedModel && (
-                <p className="text-[10px] text-gray-500 mt-1">
+                <p className="text-[10px] mt-1" style={{ color: "var(--text-disabled)" }}>
                   {displayModels.find(m => m.key === selectedModel)?.description || ""}
                 </p>
               )}
             </>
           ) : (
-            /* Anthropic or few models: Radio-button style */
             <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
-              {displayModels.map((opt) => (
-                <button
-                  key={opt.key}
-                  onClick={() => !modelLocked && setSelectedModel(opt.key)}
-                  disabled={modelLocked}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg border text-left transition-colors ${
-                    selectedModel === opt.key
-                      ? aiProvider === "openrouter" ? "border-purple-500 bg-purple-500/10" : "border-blue-500 bg-blue-500/10"
-                      : "border-gray-700 bg-gray-800 hover:border-gray-600"
-                  } ${modelLocked ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
-                >
-                  <div className={`w-3 h-3 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
-                    selectedModel === opt.key
-                      ? aiProvider === "openrouter" ? "border-purple-500" : "border-blue-500"
-                      : "border-gray-600"
-                  }`}>
-                    {selectedModel === opt.key && (
-                      <div className={`w-1.5 h-1.5 rounded-full ${aiProvider === "openrouter" ? "bg-purple-500" : "bg-blue-500"}`} />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className={`text-xs font-medium ${
-                      selectedModel === opt.key
-                        ? aiProvider === "openrouter" ? "text-purple-300" : "text-blue-300"
-                        : "text-gray-300"
-                    }`}>{opt.label}</p>
-                    <p className="text-[10px] text-gray-500 truncate">{opt.description}</p>
-                  </div>
-                </button>
-              ))}
+              {displayModels.map((opt) => {
+                const isSelected = selectedModel === opt.key;
+                const accentColor = aiProvider === "openrouter" ? "#a855f7" : "var(--color-info)";
+                return (
+                  <button
+                    key={opt.key}
+                    onClick={() => !modelLocked && setSelectedModel(opt.key)}
+                    disabled={modelLocked}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors ${modelLocked ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+                    style={{
+                      background: isSelected ? `color-mix(in srgb, ${accentColor} 8%, transparent)` : "var(--surface-secondary)",
+                      border: `1px solid ${isSelected ? `color-mix(in srgb, ${accentColor} 30%, transparent)` : "var(--border-emphasis)"}`,
+                    }}
+                  >
+                    <div
+                      className="w-3 h-3 rounded-full flex-shrink-0 flex items-center justify-center"
+                      style={{ border: `2px solid ${isSelected ? accentColor : "var(--text-disabled)"}` }}
+                    >
+                      {isSelected && (
+                        <div className="w-1.5 h-1.5 rounded-full" style={{ background: accentColor }} />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-medium" style={{ color: isSelected ? accentColor : "var(--text-primary)" }}>{opt.label}</p>
+                      <p className="text-[10px] truncate" style={{ color: "var(--text-disabled)" }}>{opt.description}</p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
 
           {modelLocked && (
-            <p className="text-[10px] text-gray-600 mt-1.5 flex items-center gap-1">
+            <p className="text-[10px] mt-1.5 flex items-center gap-1" style={{ color: "var(--text-disabled)" }}>
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
               Locked for this session. Start a new chat to change.
             </p>
           )}
 
           {aiProvider === "openrouter" && displayModels.length > 0 && (
-            <p className="text-[10px] text-gray-600 mt-1.5">
-              {displayModels.length} models available
-            </p>
+            <div
+              className="mt-2 px-3 py-2 rounded-md text-[10px] leading-relaxed"
+              style={{
+                background: "rgba(168,85,247,0.06)",
+                border: "1px solid rgba(168,85,247,0.2)",
+                color: "var(--text-secondary)",
+              }}
+            >
+              <span className="font-semibold" style={{ color: "#a855f7" }}>Tested with</span>{" "}
+              Claude, Gemini, ChatGPT, and Qwen. Other models in the list may also work — all listed models support tool calling and coding.
+              <span className="block mt-1" style={{ color: "var(--text-disabled)" }}>
+                {displayModels.length} models available
+              </span>
+            </div>
           )}
         </div>
 
         {/* Connection status card */}
         {connected && connInfo && (
-          <div className="mt-2 p-3 bg-gray-800/70 rounded-lg border border-gray-700 space-y-2">
+          <div className="mt-2 p-3 rounded-md space-y-2" style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-default)" }}>
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-400 rounded-full" />
-              <span className="text-xs font-medium text-green-400">Connected</span>
+              <span className="w-2 h-2 rounded-full" style={{ background: "var(--status-success)" }} />
+              <span className="text-[11px] font-medium" style={{ color: "var(--color-success)" }}>Connected</span>
             </div>
-            <div className="text-[11px] text-gray-400 space-y-0.5">
+            <div className="text-[11px] space-y-0.5" style={{ color: "var(--text-secondary)" }}>
               <p>👤 {connInfo.userInfo?.name || credentials.username}</p>
-              <p>🌐 {credentials.instanceUrl.replace(/https?:\/\//, "").replace(/\/$/, "")}</p>
+              <p className="font-mono text-[10px]" style={{ color: "var(--text-disabled)" }}>🌐 {credentials.instanceUrl.replace(/https?:\/\//, "").replace(/\/$/, "")}</p>
               {connInfo.roles && (
                 <p className="truncate" title={connInfo.roles.join(", ")}>
                   🔑 {connInfo.roles.length} role{connInfo.roles.length !== 1 ? "s" : ""}: {connInfo.hasAdmin ? "admin" : ""}{connInfo.hasAdmin && connInfo.hasSecurityAdmin ? ", " : ""}{connInfo.hasSecurityAdmin ? "security_admin" : ""}{!connInfo.hasAdmin && !connInfo.hasSecurityAdmin ? "limited" : ""}
@@ -324,19 +341,14 @@ export default function SettingsPanel({
 
             {/* Helper APIs Status */}
             {connInfo.helperApis && (
-              <div className="pt-2 mt-2 border-t border-gray-700">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <svg className="w-3 h-3 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  <span className="text-[10px] font-medium text-cyan-400 uppercase tracking-wider">Helper APIs</span>
-                </div>
+              <div className="pt-2 mt-2" style={{ borderTop: "1px solid var(--border-default)" }}>
+                <div className="sidebar-group-label" style={{ padding: "0 0 4px 0" }}>Helper APIs</div>
                 <div className="space-y-1">
                   {connInfo.helperApis.uiPolicyActionHelper && (
                     <div className="flex items-center gap-2">
-                      <span className={`w-1.5 h-1.5 rounded-full ${connInfo.helperApis.uiPolicyActionHelper.deployed ? "bg-green-400" : "bg-amber-400"}`} />
-                      <span className="text-[10px] text-gray-400">
-                        UI Policy Helper: <span className={connInfo.helperApis.uiPolicyActionHelper.deployed ? "text-green-400" : "text-amber-400"}>
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ background: connInfo.helperApis.uiPolicyActionHelper.deployed ? "var(--status-success)" : "var(--status-progress)" }} />
+                      <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>
+                        UI Policy: <span style={{ color: connInfo.helperApis.uiPolicyActionHelper.deployed ? "var(--color-success)" : "var(--color-warning)" }}>
                           {connInfo.helperApis.uiPolicyActionHelper.deployed ? "Ready" : "Not deployed"}
                         </span>
                       </span>
@@ -344,9 +356,9 @@ export default function SettingsPanel({
                   )}
                   {connInfo.helperApis.updateSetHelper && (
                     <div className="flex items-center gap-2">
-                      <span className={`w-1.5 h-1.5 rounded-full ${connInfo.helperApis.updateSetHelper.deployed ? "bg-green-400" : "bg-amber-400"}`} />
-                      <span className="text-[10px] text-gray-400">
-                        Update Set Helper: <span className={connInfo.helperApis.updateSetHelper.deployed ? "text-green-400" : "text-amber-400"}>
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ background: connInfo.helperApis.updateSetHelper.deployed ? "var(--status-success)" : "var(--status-progress)" }} />
+                      <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>
+                        Update Set: <span style={{ color: connInfo.helperApis.updateSetHelper.deployed ? "var(--color-success)" : "var(--color-warning)" }}>
                           {connInfo.helperApis.updateSetHelper.deployed ? "Ready" : "Not deployed"}
                         </span>
                       </span>
@@ -363,7 +375,10 @@ export default function SettingsPanel({
         {connected ? (
           <button
             onClick={onReconnect}
-            className="w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+            className="w-full py-2.5 px-4 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2"
+            style={{ background: "var(--color-warning)", color: "#0A0A0B" }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = "0.9")}
+            onMouseLeave={e => (e.currentTarget.style.opacity = "1")}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
             Reconnect
@@ -372,7 +387,10 @@ export default function SettingsPanel({
           <button
             onClick={onConnect}
             disabled={!canConnect}
-            className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+            className="w-full py-2.5 px-4 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ background: canConnect ? "var(--color-primary)" : "var(--surface-elevated)", color: canConnect ? "white" : "var(--text-disabled)" }}
+            onMouseEnter={e => canConnect && (e.currentTarget.style.background = "var(--color-primary-hover)")}
+            onMouseLeave={e => canConnect && (e.currentTarget.style.background = "var(--color-primary)")}
           >
             {isConnecting ? (
               <>

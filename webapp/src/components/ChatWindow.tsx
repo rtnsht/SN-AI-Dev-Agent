@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback, type RefObject } from "react"
 import Image from "next/image";
 import type { ChatMessage, SDLCPhase, LiveStatus, FileAttachment } from "@/lib/types";
 import MessageBubble from "./MessageBubble";
+import { APP_NAME, APP_LOGO, APP_TAGLINE, APP_SUBTITLE } from "@/lib/branding";
 
 /* ── Web Speech API type shim ── */
 interface SpeechRecognitionEvent extends Event {
@@ -98,6 +99,80 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** Activity log entry from streaming events */
+export interface ActivityLogEntry {
+  message: string;
+  phase: string;
+  timestamp: number;
+  toolName?: string;
+  toolInput?: Record<string, unknown>;
+  done?: boolean;
+}
+
+/** Convert raw tool name + input into a friendly conversational label */
+function friendlyToolLabel(toolName: string, input?: Record<string, unknown>): string {
+  const table = input?.table as string | undefined;
+  const name = input?.name as string | undefined;
+  const query = input?.query as string | undefined;
+
+  // sn_get_* tools — "Looking up X" or "X on table"
+  const getMap: Record<string, string> = {
+    sn_get_instance_info: "Checking instance info",
+    sn_get_tables: "Listing available tables",
+    sn_get_table_schema: table ? `Reading ${table} table schema` : "Reading table schema",
+    sn_get_business_rules: table ? `Business rules on ${table}` : "Business rules",
+    sn_get_client_scripts: table ? `Client scripts on ${table}` : "Client scripts",
+    sn_get_ui_policies: table ? `UI policies on ${table}` : "UI policies",
+    sn_get_ui_actions: table ? `UI actions on ${table}` : "UI actions",
+    sn_get_ui_policy_actions: "UI policy actions",
+    sn_get_script_includes: query ? `Script includes matching ${query}` : "Script includes",
+    sn_get_acls: table ? `ACLs on ${table}` : "ACLs",
+    sn_get_notifications: table ? `Notifications for ${table}` : "Notifications",
+    sn_get_scheduled_jobs: "Scheduled jobs",
+    sn_get_fix_scripts: "Fix scripts",
+    sn_get_update_set_contents: "Update set contents",
+  };
+  if (getMap[toolName]) return getMap[toolName];
+
+  // sn_query_records / sn_read_record
+  if (toolName === "sn_query_records") return table ? `Querying ${table} records` : "Querying records";
+  if (toolName === "sn_read_record" || toolName === "sn_get_record") return table ? `Reading ${table} record` : "Reading record";
+
+  // sn_create_* tools
+  if (toolName.startsWith("sn_create_")) {
+    const entity = toolName.replace("sn_create_", "").replace(/_/g, " ");
+    return name ? `Creating ${entity}: ${name}${table ? ` on ${table}` : ""}` : `Creating ${entity}${table ? ` on ${table}` : ""}`;
+  }
+
+  // sn_update_* tools
+  if (toolName.startsWith("sn_update_")) {
+    const entity = toolName.replace("sn_update_", "").replace(/_/g, " ");
+    return name ? `Updating ${entity}: ${name}` : `Updating ${entity}`;
+  }
+
+  // sn_list_* tools
+  if (toolName === "sn_list_flows") return "Listing flows";
+  if (toolName === "sn_list_update_sets") return "Listing update sets";
+  if (toolName.startsWith("sn_list_")) return `Listing ${toolName.replace("sn_list_", "").replace(/_/g, " ")}`;
+
+  // sn_analyze_instance
+  if (toolName === "sn_analyze_instance") return "Analyzing instance";
+
+  // sn_execute_* / sn_run_*
+  if (toolName.startsWith("sn_execute_") || toolName.startsWith("sn_run_")) return `Running ${toolName.replace(/^sn_(execute|run)_/, "").replace(/_/g, " ")}`;
+
+  // sn_set_* / sn_move_*
+  if (toolName === "sn_set_current_update_set") return "Setting active update set";
+  if (toolName === "sn_move_to_update_set") return "Moving artifact to update set";
+
+  // Flow designer
+  if (toolName === "sn_get_flow") return "Reading flow details";
+  if (toolName === "sn_scaffold_flow") return "Scaffolding flow";
+
+  // Generic fallback — humanize the tool name
+  return toolName.replace(/^sn_/, "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+}
+
 interface Props {
   messages: ChatMessage[];
   isLoading: boolean;
@@ -115,9 +190,150 @@ interface Props {
   userName?: string;
   /** Dynamic example prompts generated from instance data */
   instancePrompts?: { icon: string; text: string; desc: string }[];
+  /** Agent activity log entries for inline display */
+  activityLog?: ActivityLogEntry[];
 }
 
-export default function ChatWindow({ messages, isLoading, onSend, onCancel, onApprove, onChoiceSelect, connected, inputRef, showToolDetails = true, liveStatus, userName, instancePrompts }: Props) {
+/** Deduplicate and clean activity log for display — merge status noise, keep tool entries */
+function processActivityLog(entries: ActivityLogEntry[]): ActivityLogEntry[] {
+  const result: ActivityLogEntry[] = [];
+  for (const entry of entries) {
+    // Tool entries always shown (with friendly labels)
+    if (entry.phase === "tool" && entry.toolName) {
+      result.push(entry);
+      continue;
+    }
+    // Skip noisy status messages that duplicate tool events
+    const msg = entry.message;
+    if (msg.startsWith("Executing:") || msg.includes("completed")) continue;
+    // Collapse "Starting..." and "Round N: Analyzing request..." into one thinking line
+    if (msg === "Starting..." || /^Round \d+/.test(msg)) {
+      // Only add if last entry isn't already a thinking line
+      const last = result[result.length - 1];
+      if (last?.phase === "thinking") continue;
+      result.push({ ...entry, message: "Analyzing your request..." });
+      continue;
+    }
+    // Collapse "Generating response..." messages
+    if (msg === "Generating response...") {
+      const last = result[result.length - 1];
+      if (last?.message === "Preparing response...") continue;
+      result.push({ ...entry, message: "Preparing response..." });
+      continue;
+    }
+    // Keep other status messages as-is
+    result.push(entry);
+  }
+  return result;
+}
+
+/** Claude-style inline agent activity — clean, conversational, no icons */
+function InlineAgentActivity({ activityLog, liveStatus, onCancel }: { activityLog: ActivityLogEntry[]; liveStatus: LiveStatus | null; onCancel: () => void }) {
+  const [expanded, setExpanded] = useState(true);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to latest entry
+  useEffect(() => {
+    if (scrollRef.current && expanded) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [activityLog, expanded]);
+
+  const processed = processActivityLog(activityLog);
+  const toolCount = processed.filter(e => e.phase === "tool").length;
+
+  // Header text: latest tool's friendly label or latest status
+  const latestEntry = processed[processed.length - 1];
+  const headerText = latestEntry
+    ? (latestEntry.toolName ? friendlyToolLabel(latestEntry.toolName, latestEntry.toolInput) : latestEntry.message)
+    : "Thinking...";
+
+  return (
+    <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--border-default)", background: "var(--surface-secondary)" }}>
+      {/* Collapsible header */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left transition-colors"
+        style={{ background: "var(--surface-secondary)" }}
+        onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-elevated)")}
+        onMouseLeave={e => (e.currentTarget.style.background = "var(--surface-secondary)")}
+      >
+        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: "var(--color-primary)", animation: "statusPulse 1.5s ease-in-out infinite" }} />
+        <span className="flex-1 text-xs truncate" style={{ color: "var(--text-secondary)" }}>
+          {headerText}
+          {toolCount > 0 && <span className="ml-2" style={{ color: "var(--text-disabled)" }}>· {toolCount} tool{toolCount !== 1 ? "s" : ""}</span>}
+        </span>
+        <svg
+          className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${expanded ? "rotate-0" : "-rotate-90"}`}
+          style={{ color: "var(--text-disabled)" }}
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {/* Step list */}
+      {expanded && (
+        <div
+          ref={scrollRef}
+          className="overflow-y-auto py-1"
+          style={{ maxHeight: "220px", borderTop: "1px solid var(--border-default)" }}
+        >
+          {processed.map((entry, idx) => {
+            const isLast = idx === processed.length - 1;
+            const isActive = isLast && !!liveStatus;
+            const isDone = entry.phase === "tool" ? entry.done !== false : !isActive;
+            const label = entry.toolName ? friendlyToolLabel(entry.toolName, entry.toolInput) : entry.message;
+
+            return (
+              <div
+                key={idx}
+                className="flex items-center gap-2.5 px-4 py-1 text-xs"
+                style={{ color: isActive ? "var(--text-primary)" : "var(--text-disabled)" }}
+              >
+                {/* Indicator: pulsing dot for active, checkmark for done */}
+                {isActive && !isDone ? (
+                  <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--color-primary)", animation: "statusPulse 1s ease-in-out infinite" }} />
+                  </span>
+                ) : (
+                  <svg className="w-4 h-4 flex-shrink-0" style={{ color: "var(--text-disabled)", opacity: 0.6 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+                <span className="truncate min-w-0">{label}</span>
+              </div>
+            );
+          })}
+          {processed.length === 0 && (
+            <div className="flex items-center gap-2.5 px-4 py-1 text-xs" style={{ color: "var(--text-disabled)" }}>
+              <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--color-primary)", animation: "statusPulse 1s ease-in-out infinite" }} />
+              </span>
+              <span>Thinking...</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Stop button */}
+      <div className="flex items-center justify-end px-3 py-1.5" style={{ borderTop: "1px solid var(--border-default)" }}>
+        <button
+          onClick={onCancel}
+          className="flex items-center gap-1 px-2 py-0.5 text-xs text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40 rounded-md transition-colors"
+          title="Cancel request"
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          Stop
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function ChatWindow({ messages, isLoading, onSend, onCancel, onApprove, onChoiceSelect, connected, inputRef, showToolDetails = true, liveStatus, userName, instancePrompts, activityLog = [] }: Props) {
   const [input, setInput] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [files, setFiles] = useState<FileAttachment[]>([]);
@@ -343,38 +559,41 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
   const showEmptyState = messages.every((m) => m.role === "system");
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="flex-1 flex flex-col min-h-0" style={{ background: "var(--surface-app)" }}>
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-6">
-        <div className="max-w-3xl mx-auto space-y-4">
+      <div className="flex-1 overflow-y-auto px-2 sm:px-6 py-4 sm:py-6">
+        <div className="max-w-3xl mx-auto space-y-4 sm:space-y-5">
           {showEmptyState && (
             <div className="flex-1 flex items-center justify-center h-full">
-              <div className="text-center max-w-lg mx-auto">
-                <div className="w-48 h-48 mx-auto -mb-1 flex items-center justify-center">
-                  <Image src="/yantra-logo.png" alt="Yantra - AI Dev Agent - SN" width={192} height={192} className="rounded-full" unoptimized />
+              <div className="text-center max-w-lg mx-auto px-2">
+                <div className="w-24 h-24 sm:w-40 sm:h-40 mx-auto -mb-1 flex items-center justify-center">
+                  <Image src={APP_LOGO} alt={APP_NAME} width={160} height={160} className="rounded-xl" unoptimized />
                 </div>
-                <h2 className="text-2xl font-bold text-gray-100 mb-1 tracking-tight">
-                  Say it. Ship it.
+                <h2 className="text-display mb-1" style={{ color: "var(--text-primary)", fontSize: "clamp(20px, 4vw, 32px)" }}>
+                  {APP_TAGLINE}
                 </h2>
-                <p className="text-xs text-gray-400 tracking-widest uppercase mb-4">
-                  Spec-driven &middot; Human-approved &middot; AI-powered
+                <p className="phase-label mb-3 sm:mb-4" style={{ fontSize: "11px" }}>
+                  {APP_SUBTITLE}
                 </p>
-                <p className="text-sm text-gray-500 mb-6">
+                <p className="text-small mb-4 sm:mb-6" style={{ color: "var(--text-disabled)" }}>
                   {connected
-                    ? "You're connected! Describe what you need — Yantra builds, tests, and deploys it on your ServiceNow instance."
-                    : "Open the settings panel, connect your instance, and tell Yantra what to build."}
+                    ? `You're connected! Describe what you need — ${APP_NAME} builds, tests, and deploys it on your ServiceNow instance.`
+                    : `Open the settings panel, connect your instance, and tell ${APP_NAME} what to build.`}
                 </p>
                 {connected && (
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {(instancePrompts && instancePrompts.length > 0 ? instancePrompts : DEFAULT_PROMPTS).map((p, i) => (
                       <button
                         key={i}
                         onClick={() => onSend(p.text)}
-                        className="text-left p-3 rounded-xl bg-gray-800/50 border border-gray-800 hover:border-gray-600 hover:bg-gray-800 transition-all group overflow-hidden"
+                        className="text-left p-3 rounded-md transition-all group overflow-hidden"
+                        style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-default)" }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--border-emphasis)"; e.currentTarget.style.background = "var(--surface-elevated)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.background = "var(--surface-secondary)"; }}
                       >
                         <span className="text-lg">{p.icon}</span>
-                        <p className="text-xs text-gray-300 mt-1 group-hover:text-gray-100 transition-colors line-clamp-2 break-words">{p.text}</p>
-                        <p className="text-[10px] text-gray-600 mt-0.5 truncate">{p.desc}</p>
+                        <p className="text-[12px] mt-1 transition-colors line-clamp-2 break-words" style={{ color: "var(--text-secondary)" }}>{p.text}</p>
+                        <p className="text-[10px] mt-0.5 truncate" style={{ color: "var(--text-disabled)" }}>{p.desc}</p>
                       </button>
                     ))}
                   </div>
@@ -395,42 +614,11 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
           ))}
 
           {isLoading && (
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                AI
-              </div>
-              <div className="bg-gray-800/80 rounded-2xl rounded-tl-sm px-4 py-3 border border-gray-700/50">
-                <div className="flex items-center gap-2 text-sm text-gray-400">
-                  <div className="flex gap-1">
-                    <span className={`w-2 h-2 rounded-full animate-bounce ${liveStatus?.phase === "tool" ? "bg-amber-400" : liveStatus?.phase === "responding" ? "bg-green-400" : "bg-blue-400"}`} style={{ animationDelay: "0ms" }} />
-                    <span className={`w-2 h-2 rounded-full animate-bounce ${liveStatus?.phase === "tool" ? "bg-amber-400" : liveStatus?.phase === "responding" ? "bg-green-400" : "bg-blue-400"}`} style={{ animationDelay: "150ms" }} />
-                    <span className={`w-2 h-2 rounded-full animate-bounce ${liveStatus?.phase === "tool" ? "bg-amber-400" : liveStatus?.phase === "responding" ? "bg-green-400" : "bg-blue-400"}`} style={{ animationDelay: "300ms" }} />
-                  </div>
-                  <span className="text-xs text-gray-500">
-                    {liveStatus ? (
-                      <span className="flex items-center gap-1.5">
-                        {liveStatus.phase === "tool" && <span className="text-amber-400">🔧</span>}
-                        {liveStatus.phase === "thinking" && <span className="text-blue-400">💭</span>}
-                        {liveStatus.phase === "responding" && <span className="text-green-400">✍️</span>}
-                        {liveStatus.message}
-                      </span>
-                    ) : (
-                      "Thinking & executing tools..."
-                    )}
-                  </span>
-                  <button
-                    onClick={onCancel}
-                    className="ml-2 flex items-center gap-1 px-2 py-0.5 text-xs text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40 rounded-md transition-colors"
-                    title="Cancel request"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    Stop
-                  </button>
-                </div>
-              </div>
-            </div>
+            <InlineAgentActivity
+              activityLog={activityLog}
+              liveStatus={liveStatus ?? null}
+              onCancel={onCancel}
+            />
           )}
 
           <div ref={bottomRef} />
@@ -439,7 +627,11 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
 
       {/* Input */}
       <div
-        className={`border-t border-gray-800 p-4 bg-gray-900/50 transition-colors ${dragOver ? "bg-blue-900/20 border-blue-500/50" : ""}`}
+        className="p-2 sm:p-4 transition-colors"
+        style={{
+          borderTop: "1px solid var(--border-default)",
+          background: dragOver ? "rgba(76,125,255,0.04)" : "var(--surface-primary)",
+        }}
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
@@ -450,7 +642,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
             <div className="flex gap-2 mb-2 flex-wrap">
               {images.map((img, i) => (
                 <div key={i} className="relative group">
-                  <img src={img} alt={`Attachment ${i + 1}`} className="h-16 w-16 object-cover rounded-lg border border-gray-700" />
+                  <img src={img} alt={`Attachment ${i + 1}`} className="h-16 w-16 object-cover rounded-md" style={{ border: "1px solid var(--border-emphasis)" }} />
                   <button
                     onClick={() => removeImage(i)}
                     className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 hover:bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -463,7 +655,10 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
               {images.length < MAX_IMAGES && (
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="h-16 w-16 rounded-lg border border-dashed border-gray-600 hover:border-gray-400 flex items-center justify-center text-gray-500 hover:text-gray-300 transition-colors"
+                  className="h-16 w-16 rounded-md flex items-center justify-center transition-colors"
+                  style={{ border: "1px dashed var(--border-emphasis)", color: "var(--text-disabled)" }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--text-secondary)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border-emphasis)"; e.currentTarget.style.color = "var(--text-disabled)"; }}
                   title="Add another image"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
@@ -476,15 +671,16 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
           {files.length > 0 && (
             <div className="flex gap-2 mb-2 flex-wrap">
               {files.map((f, i) => (
-                <div key={i} className="relative group flex items-center gap-2 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg">
+                <div key={i} className="relative group flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-emphasis)" }}>
                   <span className="text-lg">{fileIcon(f.name)}</span>
                   <div className="flex flex-col min-w-0">
-                    <span className="text-xs text-gray-300 truncate max-w-[120px]">{f.name}</span>
-                    <span className="text-[10px] text-gray-500">{formatSize(f.size)}</span>
+                    <span className="text-[11px] truncate max-w-[120px]" style={{ color: "var(--text-primary)" }}>{f.name}</span>
+                    <span className="text-[10px]" style={{ color: "var(--text-disabled)" }}>{formatSize(f.size)}</span>
                   </div>
                   <button
                     onClick={() => removeFile(i)}
-                    className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 hover:bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ background: "var(--color-danger)" }}
                     title="Remove file"
                   >
                     x
@@ -496,14 +692,14 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
 
           {/* Drag overlay hint */}
           {dragOver && (
-            <div className="mb-2 py-3 border-2 border-dashed border-blue-500/50 rounded-xl text-center text-xs text-blue-400">
+            <div className="mb-2 py-3 rounded-md text-center text-xs" style={{ border: "2px dashed rgba(76,125,255,0.4)", color: "var(--color-info)" }}>
               Drop images or documents here
             </div>
           )}
 
           {/* Recording indicator -- prominent bar with clear controls */}
           {isRecording && (
-            <div className="flex items-center gap-3 mb-2 px-4 py-2.5 bg-red-950/60 border border-red-500/40 rounded-xl">
+            <div className="flex items-center gap-3 mb-2 px-4 py-2.5 rounded-md" style={{ background: "rgba(249,115,115,0.06)", border: "1px solid rgba(249,115,115,0.2)" }}>
               {/* Pulsing red dot */}
               <span className="relative flex h-3 w-3 flex-shrink-0">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
@@ -546,7 +742,10 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={!connected || isLoading || images.length >= MAX_IMAGES}
-              className="p-3 text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded-xl transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
+              className="p-3 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
+              style={{ color: "var(--text-secondary)" }}
+              onMouseEnter={e => { if (!e.currentTarget.disabled) { e.currentTarget.style.background = "var(--surface-elevated)"; e.currentTarget.style.color = "var(--text-primary)"; }}}
+              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-secondary)"; }}
               title="Attach image (paste or drag also works)"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -565,7 +764,10 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
             <button
               onClick={() => docInputRef.current?.click()}
               disabled={!connected || isLoading || files.length >= MAX_FILES}
-              className="p-3 text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded-xl transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
+              className="p-3 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
+              style={{ color: "var(--text-secondary)" }}
+              onMouseEnter={e => { if (!e.currentTarget.disabled) { e.currentTarget.style.background = "var(--surface-elevated)"; e.currentTarget.style.color = "var(--text-primary)"; }}}
+              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-secondary)"; }}
               title="Attach document (PDF, Word, Excel)"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -591,20 +793,28 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
               placeholder={connected ? "Ask me anything about your ServiceNow instance..." : "Connect first →"}
               disabled={!connected || isLoading}
               rows={1}
-              className="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 resize-none overflow-y-auto"
-              style={{ maxHeight: "50vh" }}
+              className="flex-1 px-3 sm:px-4 py-2.5 sm:py-3 rounded-md text-sm focus:outline-none focus:ring-2 disabled:opacity-50 resize-none overflow-y-auto"
+              style={{
+                background: "var(--surface-secondary)",
+                border: "1px solid var(--border-emphasis)",
+                color: "var(--text-primary)",
+                maxHeight: "50vh",
+                /* focus ring handled by focus:ring-2 + custom color */
+                "--tw-ring-color": "var(--color-info)",
+              } as React.CSSProperties}
             />
 
-            {/* Voice input button — right side, adjacent to send */}
+            {/* Voice input button */}
             {speechSupported && (
               <button
                 onClick={toggleRecording}
                 disabled={!connected || isLoading}
-                className={`flex items-center gap-1.5 rounded-xl transition-all flex-shrink-0 ${
-                  isRecording
-                    ? "px-3 py-2.5 bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/30"
-                    : "p-3 text-gray-400 hover:text-red-300 hover:bg-red-950/30 border border-transparent hover:border-red-500/20"
-                } disabled:opacity-30 disabled:cursor-not-allowed`}
+                className="flex items-center gap-1.5 rounded-md transition-all flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+                style={{
+                  padding: isRecording ? "10px 12px" : "12px",
+                  background: isRecording ? "var(--color-danger)" : "transparent",
+                  color: isRecording ? "white" : "var(--text-secondary)",
+                }}
                 title={isRecording ? "Stop recording" : "Voice input (speech-to-text)"}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -618,7 +828,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
               </button>
             )}
             {!speechSupported && (
-              <div className="p-3 text-gray-600 flex-shrink-0 cursor-not-allowed" title="Voice input not supported. Use Chrome or Edge.">
+              <div className="p-3 flex-shrink-0 cursor-not-allowed" style={{ color: "var(--text-disabled)" }} title="Voice input not supported. Use Chrome or Edge.">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4M12 15a3 3 0 003-3V5a3 3 0 00-6 0v7a3 3 0 003 3z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3l18 18" />
@@ -630,7 +840,8 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
             {isLoading ? (
               <button
                 onClick={onCancel}
-                className="p-3 bg-red-600 hover:bg-red-500 text-white rounded-xl transition-colors flex-shrink-0"
+                className="p-3 rounded-md transition-colors flex-shrink-0"
+                style={{ background: "var(--color-danger)", color: "white" }}
                 title="Cancel request"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -641,7 +852,11 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
               <button
                 onClick={handleSubmit}
                 disabled={!connected || (!input.trim() && images.length === 0 && files.length === 0)}
-                className="p-3 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-xl transition-colors flex-shrink-0"
+                className="p-3 rounded-md transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{
+                  background: (connected && (input.trim() || images.length > 0 || files.length > 0)) ? "var(--color-primary)" : "var(--surface-elevated)",
+                  color: (connected && (input.trim() || images.length > 0 || files.length > 0)) ? "white" : "var(--text-disabled)",
+                }}
                 title="Send (Enter)"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -650,26 +865,24 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
               </button>
             )}
           </div>
-          {/* Keyboard hints — aligned with the textarea (skip image btn + send btn columns) */}
-          <div className="flex gap-2 mt-2">
-            {/* Spacer matching image button width */}
+          {/* Keyboard hints */}
+          <div className="hidden sm:flex gap-2 mt-2">
             <div className="w-[44px] flex-shrink-0" />
-            <div className="flex-1 flex items-center justify-center gap-5 px-4 py-1.5 rounded-lg bg-indigo-950/50 border border-indigo-500/25 text-xs">
-              <span className="flex items-center gap-1.5 font-bold text-blue-300">
-                <kbd className="px-1.5 py-0.5 bg-blue-500/20 border border-blue-400/40 rounded text-[11px] text-blue-200 font-mono font-bold shadow-sm shadow-blue-500/10">Enter</kbd>
-                <span className="ml-0.5 text-blue-200">to Send</span>
+            <div className="flex-1 flex items-center justify-center gap-5 px-4 py-1.5 rounded-md text-xs" style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-subtle)" }}>
+              <span className="flex items-center gap-1.5 font-medium" style={{ color: "var(--color-info)" }}>
+                <kbd className="px-1.5 py-0.5 rounded text-[11px] font-mono font-bold" style={{ background: "rgba(76,125,255,0.1)", border: "1px solid rgba(76,125,255,0.2)", color: "var(--color-info)" }}>Enter</kbd>
+                <span className="ml-0.5">to Send</span>
               </span>
-              <span className="text-indigo-500/60">│</span>
-              <span className="flex items-center gap-1.5 font-bold text-gray-200">
-                <kbd className="px-1.5 py-0.5 bg-gray-600/40 border border-gray-500/50 rounded text-[11px] text-gray-200 font-mono font-bold shadow-sm shadow-gray-700/20">⇧ Shift</kbd>
-                <span className="text-gray-400/80">+</span>
-                <kbd className="px-1.5 py-0.5 bg-gray-600/40 border border-gray-500/50 rounded text-[11px] text-gray-200 font-mono font-bold shadow-sm shadow-gray-700/20">Enter</kbd>
-                <span className="ml-0.5 text-gray-300">for New Line</span>
+              <span style={{ color: "var(--border-emphasis)" }}>│</span>
+              <span className="flex items-center gap-1.5 font-medium" style={{ color: "var(--text-secondary)" }}>
+                <kbd className="px-1.5 py-0.5 rounded text-[11px] font-mono font-bold" style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)" }}>⇧ Shift</kbd>
+                <span style={{ color: "var(--text-disabled)" }}>+</span>
+                <kbd className="px-1.5 py-0.5 rounded text-[11px] font-mono font-bold" style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)" }}>Enter</kbd>
+                <span className="ml-0.5">for New Line</span>
               </span>
-              <span className="text-indigo-500/60">│</span>
-              <span className="font-bold text-gray-300">Paste or drag images/docs</span>
+              <span style={{ color: "var(--border-emphasis)" }}>│</span>
+              <span className="font-medium" style={{ color: "var(--text-secondary)" }}>Paste or drag images/docs</span>
             </div>
-            {/* Spacer matching send button width */}
             <div className="w-[44px] flex-shrink-0" />
           </div>
         </div>

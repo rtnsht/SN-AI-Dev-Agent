@@ -43,11 +43,14 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="p-1 rounded-md text-gray-500 hover:text-gray-300 hover:bg-gray-700/50 transition-colors"
+      className="p-1 rounded-md transition-colors"
+      style={{ color: "var(--text-disabled)" }}
+      onMouseEnter={e => { e.currentTarget.style.color = "var(--text-primary)"; e.currentTarget.style.background = "var(--surface-elevated)"; }}
+      onMouseLeave={e => { e.currentTarget.style.color = "var(--text-disabled)"; e.currentTarget.style.background = "transparent"; }}
       title={copied ? "Copied!" : "Copy message"}
     >
       {copied ? (
-        <svg className="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-3.5 h-3.5" style={{ color: "var(--color-success)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
         </svg>
       ) : (
@@ -109,24 +112,25 @@ function InteractiveChoices({
         <button
           key={choice.key}
           onClick={() => !answered && onSelect(choice.key)}
-          className={`text-left px-3 py-2 rounded-lg border text-sm transition-all ${
-            answered
-              ? "bg-gray-800/30 border-gray-700/30 text-gray-500"
-              : idx === focusIdx
-              ? "bg-blue-600/20 border-blue-500/60 text-blue-200 ring-1 ring-blue-500/40"
-              : "bg-gray-800/50 border-gray-700/50 text-gray-300 hover:border-gray-500 hover:bg-gray-700/50"
-          }`}
+          className="text-left px-3 py-2 rounded-md text-sm transition-all"
+          style={{
+            background: answered ? "var(--surface-secondary)" : idx === focusIdx ? "rgba(76,125,255,0.12)" : "var(--surface-secondary)",
+            border: `1px solid ${answered ? "var(--border-default)" : idx === focusIdx ? "rgba(76,125,255,0.4)" : "var(--border-emphasis)"}`,
+            color: answered ? "var(--text-disabled)" : idx === focusIdx ? "var(--color-info)" : "var(--text-primary)",
+            opacity: answered ? 0.5 : 1,
+            ...(idx === focusIdx && !answered ? { boxShadow: "0 0 0 1px rgba(76,125,255,0.2)" } : {}),
+          }}
           role="option"
           aria-selected={idx === focusIdx}
         >
           <span className="font-medium">{choice.label}</span>
           {choice.description && (
-            <span className="block text-[11px] text-gray-400 mt-0.5">{choice.description}</span>
+            <span className="block text-[11px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{choice.description}</span>
           )}
         </button>
       ))}
       {!answered && (
-        <span className="self-center text-[10px] text-gray-600 ml-1">
+        <span className="self-center text-[10px] ml-1" style={{ color: "var(--text-disabled)" }}>
           Arrow keys to navigate, Enter to select
         </span>
       )}
@@ -142,33 +146,36 @@ function ToolExecutionCard({ exec }: { exec: ToolExecution }) {
     "error" in (exec.output as Record<string, unknown>);
 
   return (
-    <div className="border border-gray-700/50 rounded-lg overflow-hidden text-xs mt-1.5">
+    <div className="rounded-md overflow-hidden text-xs mt-1.5" style={{ border: "1px solid var(--border-default)" }}>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-3 py-1.5 bg-gray-800/30 hover:bg-gray-800/60 transition-colors text-left"
+        className="w-full flex items-center justify-between px-3 py-1.5 transition-colors text-left"
+        style={{ background: "var(--surface-secondary)" }}
+        onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-elevated)")}
+        onMouseLeave={e => (e.currentTarget.style.background = "var(--surface-secondary)")}
       >
         <span className="flex items-center gap-2">
-          <span className={`text-[10px] ${isError ? "text-red-400" : "text-green-400"}`}>
+          <span className="text-[10px]" style={{ color: isError ? "var(--color-danger)" : "var(--color-success)" }}>
             {isError ? "✗" : "✓"}
           </span>
-          <span className="font-mono text-gray-400 text-[11px]">{exec.toolName}</span>
+          <span className="font-mono text-[11px]" style={{ color: "var(--text-secondary)" }}>{exec.toolName}</span>
         </span>
         <span className="flex items-center gap-2">
-          <span className="text-gray-600 text-[10px]">{exec.durationMs}ms</span>
-          <svg className={`w-3 h-3 text-gray-600 transition-transform ${expanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+          <span className="text-[10px]" style={{ color: "var(--text-disabled)" }}>{exec.durationMs}ms</span>
+          <svg className={`w-3 h-3 transition-transform ${expanded ? "rotate-180" : ""}`} style={{ color: "var(--text-disabled)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
         </span>
       </button>
       {expanded && (
-        <div className="px-3 py-2 space-y-2 bg-gray-900/50 border-t border-gray-700/30">
+        <div className="px-3 py-2 space-y-2" style={{ background: "var(--surface-app)", borderTop: "1px solid var(--border-default)" }}>
           <div>
-            <span className="text-gray-500 font-medium text-[10px] uppercase">Input</span>
-            <pre className="mt-1 p-2 bg-gray-950 rounded text-gray-400 overflow-x-auto max-h-32 overflow-y-auto text-[11px] leading-relaxed">
+            <span className="font-medium text-[10px] uppercase" style={{ color: "var(--text-disabled)" }}>Input</span>
+            <pre className="mt-1 p-2 rounded overflow-x-auto max-h-32 overflow-y-auto text-[11px] leading-relaxed font-mono" style={{ background: "var(--surface-primary)", color: "var(--text-secondary)" }}>
               {JSON.stringify(exec.input, null, 2)}
             </pre>
           </div>
           <div>
-            <span className="text-gray-500 font-medium text-[10px] uppercase">Output</span>
-            <pre className="mt-1 p-2 bg-gray-950 rounded text-gray-400 overflow-x-auto max-h-48 overflow-y-auto text-[11px] leading-relaxed">
+            <span className="font-medium text-[10px] uppercase" style={{ color: "var(--text-disabled)" }}>Output</span>
+            <pre className="mt-1 p-2 rounded overflow-x-auto max-h-48 overflow-y-auto text-[11px] leading-relaxed font-mono" style={{ background: "var(--surface-primary)", color: "var(--text-secondary)" }}>
               {typeof exec.output === "string"
                 ? exec.output
                 : JSON.stringify(exec.output, null, 2)}
@@ -180,18 +187,21 @@ function ToolExecutionCard({ exec }: { exec: ToolExecution }) {
   );
 }
 
-/* System message banner (connection info, role warnings, errors) */
+/* System message banner — non-intrusive top banner per spec */
 function SystemMessage({ message }: Props) {
-  const typeStyles: Record<string, string> = {
-    success: "bg-green-500/10 border-green-500/30 text-green-300",
-    warning: "bg-amber-500/10 border-amber-500/30 text-amber-300",
-    error: "bg-red-500/10 border-red-500/30 text-red-300",
-    info: "bg-blue-500/10 border-blue-500/30 text-blue-300",
+  const typeColors: Record<string, { bg: string; border: string; text: string }> = {
+    success: { bg: "rgba(56,201,118,0.06)", border: "rgba(56,201,118,0.15)", text: "var(--color-success)" },
+    warning: { bg: "rgba(245,196,81,0.06)", border: "rgba(245,196,81,0.15)", text: "var(--color-warning)" },
+    error:   { bg: "rgba(249,115,115,0.06)", border: "rgba(249,115,115,0.15)", text: "var(--color-danger)" },
+    info:    { bg: "rgba(76,125,255,0.06)", border: "rgba(76,125,255,0.15)", text: "var(--color-info)" },
   };
-  const style = typeStyles[message.type || "info"] || typeStyles.info;
+  const colors = typeColors[message.type || "info"] || typeColors.info;
 
   return (
-    <div className={`px-4 py-2.5 rounded-lg border text-xs leading-relaxed ${style}`}>
+    <div
+      className="px-4 py-2.5 rounded-md text-xs leading-relaxed"
+      style={{ background: colors.bg, border: `1px solid ${colors.border}`, color: colors.text }}
+    >
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS_SYSTEM}>
         {message.content}
       </ReactMarkdown>
@@ -203,34 +213,34 @@ function SystemMessage({ message }: Props) {
 const MD_COMPONENTS_SYSTEM: Record<string, any> = {
   p: ({ children }: any) => <p className="inline">{children}</p>,
   strong: ({ children }: any) => <strong className="font-semibold">{children}</strong>,
-  code: ({ children }: any) => <code className="px-1 py-0.5 bg-white/10 rounded text-[11px] font-mono">{children}</code>,
+  code: ({ children }: any) => <code className="px-1 py-0.5 rounded text-[11px] font-mono" style={{ background: "rgba(255,255,255,0.08)" }}>{children}</code>,
 };
 
 const MD_COMPONENTS: Record<string, any> = {
   p: ({ children }: any) => <p className="mb-2 last:mb-0">{children}</p>,
-  strong: ({ children }: any) => <strong className="font-semibold text-gray-100">{children}</strong>,
-  em: ({ children }: any) => <em className="italic text-gray-300">{children}</em>,
-  h1: ({ children }: any) => <h1 className="text-base font-bold mb-2 mt-3 first:mt-0 text-gray-100">{children}</h1>,
-  h2: ({ children }: any) => <h2 className="text-sm font-bold mb-1.5 mt-2.5 first:mt-0 text-gray-100">{children}</h2>,
-  h3: ({ children }: any) => <h3 className="text-sm font-semibold mb-1 mt-2 first:mt-0 text-gray-200">{children}</h3>,
+  strong: ({ children }: any) => <strong className="font-semibold" style={{ color: "var(--text-primary)" }}>{children}</strong>,
+  em: ({ children }: any) => <em className="italic" style={{ color: "var(--text-secondary)" }}>{children}</em>,
+  h1: ({ children }: any) => <h1 className="text-base font-bold mb-2 mt-3 first:mt-0" style={{ color: "var(--text-primary)" }}>{children}</h1>,
+  h2: ({ children }: any) => <h2 className="text-sm font-bold mb-1.5 mt-2.5 first:mt-0" style={{ color: "var(--text-primary)" }}>{children}</h2>,
+  h3: ({ children }: any) => <h3 className="text-sm font-semibold mb-1 mt-2 first:mt-0" style={{ color: "var(--text-primary)" }}>{children}</h3>,
   ul: ({ children }: any) => <ul className="list-disc list-outside ml-4 mb-2 space-y-0.5">{children}</ul>,
   ol: ({ children }: any) => <ol className="list-decimal list-outside ml-4 mb-2 space-y-0.5">{children}</ol>,
-  li: ({ children }: any) => <li className="text-gray-300">{children}</li>,
+  li: ({ children }: any) => <li style={{ color: "var(--text-secondary)" }}>{children}</li>,
   code: ({ className, children }: any) => {
     const isBlock = className?.includes("language-");
     if (isBlock) {
-      return <code className="block p-3 my-2 bg-gray-950 rounded-lg text-[12px] font-mono text-gray-300 overflow-x-auto">{children}</code>;
+      return <code className="block p-3 my-2 rounded-md text-[12px] font-mono overflow-x-auto" style={{ background: "var(--surface-app)", color: "var(--text-secondary)" }}>{children}</code>;
     }
-    return <code className="px-1.5 py-0.5 bg-gray-700/70 rounded text-[12px] font-mono text-blue-300">{children}</code>;
+    return <code className="px-1.5 py-0.5 rounded text-[12px] font-mono" style={{ background: "var(--surface-elevated)", color: "var(--color-info)" }}>{children}</code>;
   },
   pre: ({ children }: any) => <pre className="my-2">{children}</pre>,
   table: ({ children }: any) => <div className="overflow-x-auto my-2"><table className="min-w-full text-xs border-collapse">{children}</table></div>,
-  thead: ({ children }: any) => <thead className="bg-gray-800/50">{children}</thead>,
-  th: ({ children }: any) => <th className="px-3 py-1.5 text-left font-medium text-gray-400 border-b border-gray-700">{children}</th>,
-  td: ({ children }: any) => <td className="px-3 py-1.5 border-b border-gray-800 text-gray-300">{children}</td>,
-  blockquote: ({ children }: any) => <blockquote className="border-l-2 border-blue-500/50 pl-3 my-2 text-gray-400 italic">{children}</blockquote>,
-  a: ({ href, children }: any) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 underline hover:text-blue-300">{children}</a>,
-  hr: () => <hr className="my-3 border-gray-700" />,
+  thead: ({ children }: any) => <thead style={{ background: "var(--surface-secondary)" }}>{children}</thead>,
+  th: ({ children }: any) => <th className="px-3 py-1.5 text-left font-medium" style={{ color: "var(--text-secondary)", borderBottom: "1px solid var(--border-emphasis)" }}>{children}</th>,
+  td: ({ children }: any) => <td className="px-3 py-1.5" style={{ borderBottom: "1px solid var(--border-subtle)", color: "var(--text-secondary)" }}>{children}</td>,
+  blockquote: ({ children }: any) => <blockquote className="pl-3 my-2 italic" style={{ borderLeft: "2px solid var(--color-info)", color: "var(--text-secondary)" }}>{children}</blockquote>,
+  a: ({ href, children }: any) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: "var(--color-info)" }}>{children}</a>,
+  hr: () => <hr className="my-3" style={{ borderColor: "var(--border-default)" }} />,
 };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
@@ -249,22 +259,16 @@ export default function MessageBubble({ message, onApprove, onChoiceSelect, show
 
   return (
     <div className={`group/msg flex items-start gap-3 ${isUser ? "ml-auto flex-row-reverse" : ""}`}>
-      {/* Avatar */}
+      {/* Content — no chat bubble styling, Linear/Notion comment aesthetic */}
       <div
-        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-          isUser ? "bg-blue-600" : "bg-gradient-to-br from-purple-500 to-blue-600"
-        }`}
-      >
-        {isUser ? (userName ? userName.charAt(0).toUpperCase() : "U") : "AI"}
-      </div>
-
-      {/* Content */}
-      <div
-        className={`relative rounded-2xl px-4 py-3 min-w-0 ${
-          isUser
-            ? "bg-blue-600 rounded-tr-sm text-white max-w-md"
-            : "bg-gray-800/80 rounded-tl-sm text-gray-100 border border-gray-700/40 flex-1"
-        }`}
+        className="relative px-3 sm:px-4 py-2.5 sm:py-3 min-w-0 rounded-md"
+        style={{
+          background: isUser ? "var(--surface-secondary)" : "transparent",
+          border: isUser ? "1px solid var(--border-default)" : "none",
+          color: "var(--text-primary)",
+          maxWidth: isUser ? "85%" : undefined,
+          flex: isUser ? undefined : "1",
+        }}
       >
         {/* Copy button — visible on hover */}
         <div className={`absolute top-1.5 ${isUser ? "left-1.5" : "right-1.5"} opacity-0 group-hover/msg:opacity-100 transition-opacity`}>
@@ -300,10 +304,10 @@ export default function MessageBubble({ message, onApprove, onChoiceSelect, show
 
         {/* Tool executions */}
         {message.toolExecutions && message.toolExecutions.length > 0 && (
-          <div className="mt-3 pt-2 border-t border-gray-700/40">
+          <div className="mt-3 pt-2" style={{ borderTop: "1px solid var(--border-subtle)" }}>
             {showToolDetails ? (
               <>
-                <p className="text-[11px] text-gray-500 mb-1">
+                <p className="text-[11px] mb-1" style={{ color: "var(--text-disabled)" }}>
                   🔧 {message.toolExecutions.length} tool{message.toolExecutions.length > 1 ? "s" : ""} executed
                 </p>
                 {message.toolExecutions.map((exec, i) => (
@@ -312,9 +316,9 @@ export default function MessageBubble({ message, onApprove, onChoiceSelect, show
               </>
             ) : (
               /* Compact summary — no expandable cards */
-              <p className="text-[11px] text-gray-500">
+              <p className="text-[11px]" style={{ color: "var(--text-disabled)" }}>
                 🔧 {message.toolExecutions.length} tool{message.toolExecutions.length > 1 ? "s" : ""} executed
-                <span className="ml-1.5 text-gray-600">
+                <span className="ml-1.5" style={{ color: "var(--text-disabled)" }}>
                   ({message.toolExecutions.filter((e) => {
                     const isErr = typeof e.output === "object" && e.output !== null && "error" in (e.output as Record<string, unknown>);
                     return !isErr;
@@ -332,18 +336,18 @@ export default function MessageBubble({ message, onApprove, onChoiceSelect, show
           </div>
         )}
 
-        {/* Phase gate approval button — only for phases requiring user sign-off */}
+        {/* Phase gate approval button */}
         {message.phaseGate && !message.approved && !message.autoApproved && onApprove && (
-          <div className="mt-3 pt-3 border-t border-gray-700/40">
+          <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--border-subtle)" }}>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => { setApproving(true); onApprove(message.phaseGate!); }}
                 disabled={approving}
-                className={`flex items-center gap-2 px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors ${
-                  approving
-                    ? "bg-gray-600 cursor-not-allowed opacity-60"
-                    : "bg-green-600 hover:bg-green-500"
-                }`}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                style={{
+                  background: approving ? "var(--surface-elevated)" : "var(--color-success)",
+                  color: approving ? "var(--text-disabled)" : "#0A0A0B",
+                }}
               >
                 {approving ? (
                   <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -358,33 +362,33 @@ export default function MessageBubble({ message, onApprove, onChoiceSelect, show
                 {approving ? "Approving..." : `Approve ${phaseLabel}`}
               </button>
               {!approving && (
-                <span className="text-[11px] text-gray-500">🔒 Click to approve and proceed to the next phase</span>
+                <span className="text-[11px]" style={{ color: "var(--text-disabled)" }}>🔒 Click to approve and proceed to the next phase</span>
               )}
             </div>
           </div>
         )}
 
-        {/* User-approved badge (green) */}
+        {/* User-approved badge */}
         {message.phaseGate && message.approved && !message.autoApproved && (
-          <div className="mt-3 pt-3 border-t border-gray-700/40">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 border border-green-500/30 rounded-lg w-fit">
-              <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-md w-fit" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
+              <svg className="w-4 h-4" style={{ color: "var(--color-success)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              <span className="text-xs text-green-300 font-medium">✅ {phaseLabel} Approved</span>
+              <span className="text-xs font-medium" style={{ color: "var(--color-success)" }}>✅ {phaseLabel} Approved</span>
             </div>
           </div>
         )}
 
-        {/* Auto-approved badge (blue) — phases that don't require user sign-off */}
+        {/* Auto-approved badge */}
         {message.phaseGate && message.autoApproved && (
-          <div className="mt-3 pt-3 border-t border-gray-700/40">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-lg w-fit">
-              <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-md w-fit" style={{ background: "rgba(76,125,255,0.06)", border: "1px solid rgba(76,125,255,0.15)" }}>
+              <svg className="w-4 h-4" style={{ color: "var(--color-info)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              <span className="text-xs text-blue-300 font-medium">⚡ {phaseLabel} Auto-approved</span>
-              <span className="text-[10px] text-gray-500">(no sign-off required)</span>
+              <span className="text-xs font-medium" style={{ color: "var(--color-info)" }}>⚡ {phaseLabel} Auto-approved</span>
+              <span className="text-[10px]" style={{ color: "var(--text-disabled)" }}>(no sign-off required)</span>
             </div>
           </div>
         )}

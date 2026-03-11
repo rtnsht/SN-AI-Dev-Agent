@@ -224,9 +224,6 @@ node scripts/validate.cjs REQ-XXX
 cd mcp-servicenow
 node deploy/deploy.js REQ-XXX
 
-# Import Flow Designer Update Set (see Section 13)
-node mcp-servicenow/lib/import-updateset.js <xml-file> --direct
-
 # Run tests
 cd mcp-servicenow
 node tests/test-connection.js
@@ -290,63 +287,7 @@ At the start of every session involving requirements:
 
 ---
 
-## 13. Flow Designer Deployment
-
-> ⚠️ **IMPORTANT: Flow Designer has complex internal requirements**
-
-Flow Designer flows require **snapshots** that are created by the Flow Designer engine. Direct REST API table inserts create records but the flow won't be functional until activated via the UI.
-
-### 13.1 Understanding Flow Designer Structure
-
-| Table | Purpose | Key Fields |
-|-------|---------|------------|
-| `sys_hub_flow` | Flow definition | name, internal_name, status, latest_snapshot, master_snapshot |
-| `sys_hub_trigger_instance` | Flow trigger | flow, trigger_definition, trigger_type |
-| `sys_hub_action_instance` | Action steps | flow, action_type, compiled_snapshot, order, ui_id |
-| `sys_hub_flow_stage` | Flow stages | flow, label, stage_id, order |
-| `sys_hub_flow_input` | Flow variables | Complex variable definitions |
-
-**Critical:** Flows require `latest_snapshot` and `master_snapshot` references created when you **Activate/Publish** a flow.
-
-### 13.2 Recommended Approach: REST API + Manual Activation
-
-**Step 1:** Create flow structure via REST API (creates draft flow):
-```bash
-cd mcp-servicenow
-node lib/create-flow-rest.js
-```
-
-**Step 2:** Open Flow Designer UI and:
-1. Configure trigger conditions
-2. Add/configure action steps
-3. Click **Activate** to publish (creates snapshots)
-
-### 13.3 Key Action Type IDs (for reference)
-
-| Action | Snapshot ID | Definition ID |
-|--------|-------------|---------------|
-| Create Catalog Task | `af51fd0e73141300612c273ffff6a785` | `f597c41073081300612c273ffff6a767` |
-| Log | `5bc1bcc6531003003bf1d9109ec587d4` | - |
-| Service Catalog Trigger | - | `c43a1011c36813002841b63b12d3ae15` |
-
-### 13.4 Alternative: Manual Flow Creation
-
-For complex flows, create manually in Flow Designer UI:
-1. Navigate to `Process Automation > Flow Designer`
-2. Create new flow with trigger and actions
-3. Activate the flow
-4. Capture in Update Set for version control
-
-### 13.5 Lessons Learned
-
-- **Snapshots are mandatory** - Flow engine requires compiled snapshots
-- **Action instances use snapshot IDs** - Not definition IDs
-- **UI activation required** - Creates internal metadata and snapshots
-- **Draft flows are accessible** - Can be opened and edited in UI
-
----
-
-## 14. Update Set Artifact Capture
+## 13. Update Set Artifact Capture
 
 > ⚠️ **IMPORTANT: REST API does NOT honor "current update set" session context like the UI does**
 
@@ -405,7 +346,7 @@ Artifacts created via REST API land in the "Default" update set instead of the i
 
 ---
 
-## 15. Live Session Telemetry
+## 14. Live Session Telemetry
 
 Every AI agent session generates a live-updating telemetry dashboard at `webapp/logs/telemetry-session-{suffix}.md`.
 
@@ -420,9 +361,8 @@ Every AI agent session generates a live-updating telemetry dashboard at `webapp/
 - **Phase transitions**: spec → design → scope_selection → implementation
 - **Round-by-round activity**: tools called, durations, tokens, stop reasons
 - **Tool usage stats**: per-tool call counts, success/failure rates, avg duration
-- **SDK deploy attempts**: code size, reinstall flag, success/failure
 - **Errors**: timestamped with tool name and message
-- **Session Updates**: conversational narration with intent-based tool descriptions, phase-aware context, deploy storytelling, error categorization, and efficiency assessment
+- **Session Updates**: conversational narration with intent-based tool descriptions, phase-aware context, error categorization, and efficiency assessment
 
 ### Key Files
 | File | Purpose |
@@ -433,7 +373,7 @@ Every AI agent session generates a live-updating telemetry dashboard at `webapp/
 
 ---
 
-## 16. AI Agent Type Coercion (Schema Hardening)
+## 15. AI Agent Type Coercion (Schema Hardening)
 
 AI agents frequently send string values where schemas expect `boolean`, `number`, or `object`. All MCP tool schemas use `z.preprocess()` to transparently coerce these inputs.
 
@@ -443,7 +383,7 @@ AI agents frequently send string values where schemas expect `boolean`, `number`
 - **JSON String → Object**: `'{"name":"x"}'` → `{name:"x"}`
 
 ### Files with Coercion
-`scripts.ts`, `records.ts`, `ui-policies.ts`, `notifications.ts`, `update-sets.ts`, `scheduled-jobs.ts`, `acls.ts`, `flow-designer.ts`
+`scripts.ts`, `records.ts`, `ui-policies.ts`, `notifications.ts`, `update-sets.ts`, `scheduled-jobs.ts`, `acls.ts`
 
 ### After Editing MCP Schemas
 ```bash
@@ -451,39 +391,4 @@ cd mcp-servicenow && rm -rf dist && npx tsc
 ```
 Then restart the webapp server.
 
----
 
-## 17. SDK Flow `now.config.json` Format
-
-The ServiceNow SDK expects `scope` and `scopeId` at the top level of `now.config.json`:
-```json
-{
-  "scope": "x_snc_yantra",
-  "scopeId": "2ea695fec3d7321034b6b1f1b40131f0"
-}
-```
-**Do NOT** use `host` / `auth` / `deploy` sections in this workspace config — the SDK build rejects them as unsupported properties.
-
-### SDK Flow Project Structure (App-Scoped Workspace)
-```
-sdk-flows/
-├── _template/               # Config templates for new workspaces
-├── apps/                    # Persistent workspace per scoped app
-│   └── {scope}/
-│       ├── now.config.json  # Instance + scope config
-│       ├── package.json     # Must use real app name, not flow name
-│       ├── keys/            # Per-flow keys.ts fragments (persisted)
-│       ├── node_modules/    # Symlink → ../../node_modules
-│       └── src/fluent/
-│           ├── {FlowName}.now.ts
-│           └── generated/keys.ts  # merged from all keys fragments for the app
-├── node_modules/            # Shared @servicenow/sdk (installed once)
-├── package.json             # SDK dependencies
-├── registry.json            # Tracks deployed flows for safe cleanup
-└── .gitignore
-```
-
-### SDK `--reinstall` Safety Warning
-- `now-sdk install` — normal incremental update path
-- `now-sdk install --reinstall` — **DANGEROUS**: can DELETE metadata on the instance not present in the local package.
-- **In this workspace, SDK flow deployment must NOT use `--reinstall`** because one scoped app may contain multiple SDK-managed flows.

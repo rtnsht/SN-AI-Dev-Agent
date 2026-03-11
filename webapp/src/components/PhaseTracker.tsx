@@ -12,51 +12,93 @@ interface Props {
   reqId: string | null;
 }
 
+/** Palantir-style phase index labels */
+const PHASE_INDEX: Record<SDLCPhase, string> = {
+  spec: "/0.1",
+  design: "/0.2",
+  scope_selection: "/0.3",
+  implementation: "/0.4",
+  testing: "/0.5",
+  deployment: "/0.6",
+};
+
 export default function PhaseTracker({ currentPhase, completedPhases, reqId }: Props) {
   if (!reqId || !currentPhase) return null;
 
   return (
-    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800/60 rounded-lg border border-gray-700/50">
-      <span className="text-[10px] text-gray-500 font-medium mr-1">{reqId}</span>
+    <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-md" style={{ background: "var(--surface-secondary)" }}>
+      {reqId && (
+        <span className="hidden sm:inline text-[10px] font-mono mr-1" style={{ color: "var(--text-disabled)" }}>{reqId}</span>
+      )}
       {SDLC_PHASES.map((phase, i) => {
         const isCompleted = completedPhases.includes(phase.key);
         const isCurrent = phase.key === currentPhase;
-        const isPast = isCompleted;
         const isFuture = !isCompleted && !isCurrent;
 
-        // Build tooltip: status + gate type
-        const statusText = isCompleted ? " ✓ Complete" : isCurrent ? " — In progress" : "";
-        const gateText = phase.requiresApproval
-          ? "🔒 Requires user approval"
-          : "⚡ Auto-proceeds (no sign-off required)";
-        const hoverTitle = `${phase.label}${statusText}\n${gateText}`;
+        const statusText = isCompleted ? "Complete" : isCurrent ? "In progress" : "Pending";
+        const gateText = phase.requiresApproval ? "Requires approval" : "Auto-proceeds";
+        const hoverTitle = `${PHASE_INDEX[phase.key]} ${phase.label} — ${statusText}\n${gateText}`;
+
+        // Status dot color
+        const dotColor = isCompleted
+          ? "var(--status-success)"
+          : isCurrent
+            ? "var(--status-progress)"
+            : "var(--status-todo)";
 
         return (
           <div key={phase.key} className="flex items-center">
             {i > 0 && (
-              <div className={`w-3 h-px mx-0.5 ${isPast ? "bg-green-500" : "bg-gray-700"}`} />
+              <div
+                className="w-3 sm:w-4 h-px mx-0.5"
+                style={{ background: isCompleted ? "var(--status-success)" : "var(--border-default)" }}
+              />
             )}
             <div
-              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
-                isCurrent
-                  ? "bg-blue-500/20 text-blue-300 border border-blue-500/40"
-                  : isCompleted
-                    ? "bg-green-500/10 text-green-400"
-                    : "text-gray-600"
+              className={`flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded transition-all ${
+                isCurrent ? "ring-1 ring-[rgba(76,125,255,0.3)]" : ""
               }`}
+              style={{
+                background: isCurrent ? "rgba(76,125,255,0.12)" : isCompleted ? "rgba(56,201,118,0.06)" : "transparent",
+              }}
               title={hoverTitle}
             >
-              {isCompleted && (
-                <svg className="w-2.5 h-2.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                </svg>
-              )}
-              {isCurrent && <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />}
-              {isFuture && <span className="w-1.5 h-1.5 bg-gray-700 rounded-full" />}
-              <span>{phase.label}</span>
-              {/* Small lock/bolt icon indicating gate type */}
-              {!isCompleted && !isCurrent && (
-                <span className="text-[8px] opacity-60">{phase.requiresApproval ? "🔒" : "⚡"}</span>
+              {/* Status dot */}
+              <span
+                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                style={{
+                  background: dotColor,
+                  ...(isCurrent ? { animation: "statusPulse 2s ease-in-out infinite" } : {}),
+                }}
+              />
+              {/* Phase index + label */}
+              <span className="hidden sm:flex items-baseline gap-1">
+                <span className="phase-label" style={{ fontSize: "9px", color: "var(--text-disabled)" }}>
+                  {PHASE_INDEX[phase.key]}
+                </span>
+                <span
+                  className="text-[10px] sm:text-[11px] font-medium"
+                  style={{
+                    color: isCurrent ? "var(--color-info)" : isCompleted ? "var(--color-success)" : "var(--text-disabled)",
+                  }}
+                >
+                  {phase.label}
+                </span>
+              </span>
+              {/* Mobile: abbreviated */}
+              <span
+                className="sm:hidden text-[9px] font-medium"
+                style={{
+                  color: isCurrent ? "var(--color-info)" : isCompleted ? "var(--color-success)" : "var(--text-disabled)",
+                }}
+              >
+                {phase.label.slice(0, 4)}
+              </span>
+              {/* Gate type indicator on desktop */}
+              {isFuture && (
+                <span className="hidden sm:inline text-[8px]" style={{ color: "var(--text-disabled)", opacity: 0.6 }}>
+                  {phase.requiresApproval ? "🔒" : "⚡"}
+                </span>
               )}
             </div>
           </div>

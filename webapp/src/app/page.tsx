@@ -6,8 +6,10 @@ import SettingsPanel from "@/components/SettingsPanel";
 import ChatWindow from "@/components/ChatWindow";
 import PhaseTracker from "@/components/PhaseTracker";
 import InfoModal from "@/components/InfoModal";
+import ThemeToggle from "@/components/ThemeToggle";
 import type { ChatMessage, ConnectionResult, UsageInfo, SDLCPhase, LiveStatus, AIProvider, ModelOption, FileAttachment } from "@/lib/types";
 import { parsePhaseGate, parseUserChoices, ANTHROPIC_MODELS, SDLC_PHASES, openRouterModelToOption } from "@/lib/types";
+import { APP_NAME, APP_LOGO, SHOW_INFO_BUTTON } from "@/lib/branding";
 
 export default function Home() {
   const [credentials, setCredentials] = useState({
@@ -51,6 +53,8 @@ export default function Home() {
   // Live status streaming (controlled via NEXT_PUBLIC_SHOW_LIVE_STATUS env)
   const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
   const [streamingEnabled, setStreamingEnabled] = useState(true);
+  // Agent activity log — accumulates liveStatus messages for streaming display
+  const [activityLog, setActivityLog] = useState<{ message: string; phase: string; timestamp: number; toolName?: string; toolInput?: Record<string, unknown>; done?: boolean }[]>([]);
   // Dynamic example prompts from instance data
   const [instancePrompts, setInstancePrompts] = useState<{ icon: string; text: string; desc: string }[] | null>(null);
   // Persistent session ID for logging - generated once per page load
@@ -66,6 +70,22 @@ export default function Home() {
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  // Accumulate liveStatus changes into the activity log (skip tool events — handled directly in stream parser)
+  useEffect(() => {
+    if (liveStatus && liveStatus.phase !== "tool") {
+      setActivityLog((prev) => {
+        // Avoid duplicate consecutive messages
+        if (prev.length > 0 && prev[prev.length - 1].message === liveStatus.message) return prev;
+        const entry = { message: liveStatus.message, phase: liveStatus.phase, timestamp: Date.now() };
+        // Keep last 100 entries to avoid unbounded growth
+        const updated = [...prev, entry];
+        return updated.length > 100 ? updated.slice(-100) : updated;
+      });
+    }
+  }, [liveStatus]);
+
+
 
   // Fetch server config on mount (API key + SN credentials)
   useEffect(() => {
@@ -221,7 +241,6 @@ export default function Home() {
             aiProvider,
             hasAdmin: data.hasAdmin,
             hasSecurityAdmin: data.hasSecurityAdmin,
-            nodeVersion: data.nodeVersion,
           }),
         }).catch(() => { /* non-critical */ });
 
@@ -393,9 +412,30 @@ export default function Home() {
                     if (event.type === "status") {
                       setLiveStatus({ message: event.message, phase: event.phase || "thinking" });
                     } else if (event.type === "tool_start") {
+                      // Parse input if it's a string (OpenRouter sends stringified JSON)
+                      let toolInput: Record<string, unknown> | undefined;
+                      try {
+                        toolInput = typeof event.input === "string" ? JSON.parse(event.input) : (event.input as Record<string, unknown>);
+                      } catch { toolInput = undefined; }
                       setLiveStatus({ message: `Executing: ${event.toolName}`, phase: "tool", toolName: event.toolName });
+                      setActivityLog((prev) => {
+                        const entry = { message: event.toolName, phase: "tool", timestamp: Date.now(), toolName: event.toolName, toolInput, done: false };
+                        const updated = [...prev, entry];
+                        return updated.length > 100 ? updated.slice(-100) : updated;
+                      });
                     } else if (event.type === "tool_end") {
-                      setLiveStatus({ message: `${event.toolName} completed (${event.durationMs}ms)`, phase: "tool", toolName: event.toolName });
+                      setLiveStatus({ message: `${event.toolName} completed`, phase: "tool", toolName: event.toolName });
+                      // Mark matching tool_start entry as done
+                      setActivityLog((prev) => {
+                        const updated = [...prev];
+                        for (let i = updated.length - 1; i >= 0; i--) {
+                          if (updated[i].toolName === event.toolName && !updated[i].done) {
+                            updated[i] = { ...updated[i], done: true };
+                            break;
+                          }
+                        }
+                        return updated;
+                      });
                     } else if (event.type === "done") {
                       finalData = { reply: event.reply, toolExecutions: event.toolExecutions };
                     } else if (event.type === "max_rounds_reached") {
@@ -703,8 +743,17 @@ export default function Home() {
     (choiceKey: string) => {
       // Find the last assistant message with unanswered choices and mark it
       const updated = [...messagesRef.current];
+      let choiceLabel = choiceKey; // fallback to key if label not found
       for (let i = updated.length - 1; i >= 0; i--) {
         if (updated[i].role === "assistant" && parseUserChoices(updated[i].content) && !updated[i].choicesAnswered) {
+          // Extract the label for the selected choice key
+          const choicesBlock = parseUserChoices(updated[i].content);
+          if (choicesBlock) {
+            const selected = choicesBlock.choices.find(c => c.key === choiceKey);
+            if (selected) {
+              choiceLabel = selected.label;
+            }
+          }
           updated[i] = { ...updated[i], choicesAnswered: true };
           break;
         }
@@ -712,8 +761,8 @@ export default function Home() {
       messagesRef.current = updated;
       setMessages(updated);
 
-      // Send the choice as a user message
-      setTimeout(() => handleSendRef.current(choiceKey), 50);
+      // Send the choice label as user message (display-friendly) but include key for AI processing
+      setTimeout(() => handleSendRef.current(choiceLabel !== choiceKey ? `${choiceLabel}` : choiceKey), 50);
     },
     [] // Uses refs — no stale closure risk
   );
@@ -726,6 +775,7 @@ export default function Home() {
     setCompletedPhases([]);
     setModelLocked(false);
     setPendingRetry(null);
+    setActivityLog([]);
   }, []);
 
   /** Disconnect and unlock fields so user can edit before reconnecting */
@@ -743,7 +793,7 @@ export default function Home() {
 
     // Header
     const now = new Date();
-    lines.push("# Yantra - AI Dev Agent - SN — Conversation Export");
+    lines.push(`# ${APP_NAME} — Conversation Export`);
     lines.push("");
     lines.push(`**Date:** ${now.toLocaleString()}`);
     if (connected && connInfo?.userInfo) {
@@ -810,7 +860,7 @@ export default function Home() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `yantra-ai-conversation-${now.toISOString().slice(0, 19).replace(/[T:]/g, "-")}.md`;
+    a.download = `${APP_NAME.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-conversation-${now.toISOString().slice(0, 19).replace(/[T:]/g, "-")}.md`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -818,12 +868,21 @@ export default function Home() {
   }, [messages, connected, connInfo, credentials, selectedModel]);
 
   return (
-    <div className="flex h-screen bg-gray-950 text-gray-100">
-      {/* Sidebar */}
+    <div className="flex h-screen relative" style={{ background: "var(--surface-app)", color: "var(--text-primary)" }}>
+      {/* Mobile backdrop */}
+      {showSettings && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden"
+          onClick={() => setShowSettings(false)}
+        />
+      )}
+
+      {/* ═══ Left Sidebar — Navigation / Settings ═══ */}
       <aside
         className={`${
-          showSettings ? "w-80" : "w-0"
-        } transition-all duration-300 overflow-hidden border-r border-gray-800 bg-gray-900 flex-shrink-0`}
+          showSettings ? "w-80 xl:w-[22rem] translate-x-0" : "w-0 -translate-x-full md:translate-x-0"
+        } fixed md:static inset-y-0 left-0 z-40 md:z-auto transition-all duration-300 overflow-hidden flex-shrink-0`}
+        style={{ background: "var(--surface-sidebar)", borderRight: "1px solid var(--border-default)" }}
       >
         <SettingsPanel
           credentials={credentials}
@@ -843,7 +902,6 @@ export default function Home() {
             if (pendingRetry) {
               const retry = pendingRetry;
               setPendingRetry(null);
-              // Auto-retry the failed message with the new API key (use ref to avoid stale closure)
               setTimeout(() => handleSendRef.current(retry.text, retry.images, retry.files), 150);
             }
           }}
@@ -858,62 +916,96 @@ export default function Home() {
         />
       </aside>
 
-      {/* Main area */}
+      {/* ═══ Center Panel — Primary Context ═══ */}
       <main className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
-        <header className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-900/50">
-          <div className="flex items-center gap-3">
+        {/* Header bar */}
+        <header
+          className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-2.5 sm:py-3"
+          style={{ background: "var(--surface-primary)", borderBottom: "1px solid var(--border-default)" }}
+        >
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            {/* Sidebar toggle */}
             <button
               onClick={() => setShowSettings(!showSettings)}
-              className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
-              title="Toggle settings"
+              className="p-2 rounded-md transition-colors flex-shrink-0"
+              style={{ color: "var(--text-secondary)" }}
+              onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-elevated)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+              title="Toggle settings (Cmd+1)"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
               </svg>
             </button>
-            <Image src="/yantra-logo.png" alt="Yantra - AI Dev Agent - SN" width={36} height={36} className="rounded-full" unoptimized />
-            <h1 className="text-lg font-semibold">Yantra - AI Dev Agent - SN</h1>
-            <button
-              onClick={() => setShowInfo(true)}
-              className="p-1.5 hover:bg-gray-800 rounded-lg transition-colors text-gray-400 hover:text-blue-400"
-              title="About this app — features & capabilities"
-            >
-              <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            </button>
+
+            {/* App identity */}
+            <Image src={APP_LOGO} alt={APP_NAME} width={32} height={32} className="rounded-md flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8" unoptimized />
+            <div className="min-w-0">
+              <h1 className="text-sm sm:text-[15px] font-semibold truncate" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>{APP_NAME}</h1>
+            </div>
+
+            {SHOW_INFO_BUTTON && (
+              <button
+                onClick={() => setShowInfo(true)}
+                className="p-1.5 rounded-md transition-colors flex-shrink-0"
+                style={{ color: "var(--text-disabled)" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-elevated)"; e.currentTarget.style.color = "var(--color-info)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-disabled)"; }}
+                title="About this app"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              </button>
+            )}
+
+            {/* Dark/Light mode toggle */}
+            <ThemeToggle />
+
+            {/* Connection badge */}
             {connected && connInfo && (
-              <span className="flex items-center gap-1.5 text-xs text-green-400 bg-green-400/10 px-2.5 py-1 rounded-full">
-                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+              <span
+                className="hidden sm:flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md"
+                style={{ background: "rgba(56,201,118,0.08)", color: "var(--color-success)" }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--status-success)", animation: "statusPulse 2s ease-in-out infinite" }} />
                 {connInfo.userInfo?.name || credentials.username} @ {credentials.instanceUrl.replace(/https?:\/\//, "").replace(/\.service-now\.com\/?$/, "")}
               </span>
             )}
+            {connected && connInfo && (
+              <span className="sm:hidden w-2 h-2 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} title={`${connInfo.userInfo?.name || credentials.username} @ ${credentials.instanceUrl}`} />
+            )}
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <PhaseTracker currentPhase={currentPhase} completedPhases={completedPhases} reqId={activeReqId} />
             {messages.length > 0 && (
               <>
                 <button
                   onClick={handleDownloadConversation}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-gray-200 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+                  className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-[11px] font-medium rounded-md transition-colors"
+                  style={{ background: "var(--surface-secondary)", color: "var(--text-secondary)" }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-elevated)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "var(--surface-secondary)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
                   title="Download conversation as Markdown"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                  Download
+                  <span className="hidden sm:inline">Export</span>
                 </button>
                 <button
                   onClick={handleNewChat}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-gray-200 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+                  className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-[11px] font-medium rounded-md transition-colors"
+                  style={{ background: "var(--surface-secondary)", color: "var(--text-secondary)" }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-elevated)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "var(--surface-secondary)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                  New Chat
+                  <span className="hidden sm:inline">New Chat</span>
                 </button>
               </>
             )}
           </div>
         </header>
 
-        {/* Chat */}
+        {/* ═══ Chat / Center content ═══ */}
         <ChatWindow
           messages={messages}
           isLoading={isLoading}
@@ -927,8 +1019,42 @@ export default function Home() {
           liveStatus={liveStatus}
           userName={connInfo?.userInfo?.name}
           instancePrompts={instancePrompts ?? undefined}
+          activityLog={activityLog}
         />
       </main>
+
+      {/* ═══ Right Panel — Metadata / Status (visible when connected + has context) ═══ */}
+      {connected && (currentPhase || completedPhases.length > 0 || messages.length > 2) && (
+        <aside
+          className="hidden lg:flex flex-col w-72 xl:w-80 flex-shrink-0 overflow-y-auto"
+          style={{ background: "var(--surface-primary)", borderLeft: "1px solid var(--border-default)" }}
+        >
+          <div className="p-4 space-y-4">
+            {/* Connection info */}
+            {connInfo && (
+              <div>
+                <div className="sidebar-group-label">Connection</div>
+                <div className="mt-2 space-y-2 text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full" style={{ background: "var(--status-success)" }} />
+                    <span>{connInfo.userInfo?.name || credentials.username}</span>
+                  </div>
+                  <div className="flex items-center gap-2" style={{ color: "var(--text-disabled)" }}>
+                    <span className="font-mono text-[10px]">{credentials.instanceUrl.replace(/https?:\/\//, "").replace(/\/$/, "")}</span>
+                  </div>
+                  {connInfo.roles && (
+                    <div className="flex items-center gap-2" style={{ color: "var(--text-disabled)" }}>
+                      <span>{connInfo.roles.length} role{connInfo.roles.length !== 1 ? "s" : ""}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+
+          </div>
+        </aside>
+      )}
 
       {/* Info modal */}
       <InfoModal open={showInfo} onClose={() => setShowInfo(false)} />
