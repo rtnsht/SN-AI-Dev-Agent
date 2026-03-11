@@ -113,36 +113,48 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Pass through images from each message (base64 data URIs)
-    const chatMessages: ChatMessage[] = messages.map((m: { role: string; content: string; images?: string[] }) => ({
+    // Pass through images and timestamps from each message (base64 data URIs)
+    const chatMessages: ChatMessage[] = messages.map((m: { role: string; content: string; images?: string[]; timestamp?: string }) => ({
       role: m.role as "user" | "assistant",
       content: m.content,
       ...(m.images?.length ? { images: m.images } : {}),
+      ...(m.timestamp ? { timestamp: m.timestamp } : {}),
     }));
 
     const selectedModel = model || "claude-sonnet-4-6";
     const imageCount = chatMessages.reduce((acc, m) => acc + (m.images?.length || 0), 0);
+
+    // Log per-message timestamps for audit trail
+    const messageTimestamps = chatMessages.map((m, i) => ({
+      index: i,
+      role: m.role,
+      timestamp: m.timestamp || null,
+      contentPreview: m.content?.slice(0, 80) || "",
+    }));
 
     logger.info(sessionId, "chat", "Starting chat request", {
       messageCount: chatMessages.length,
       imageCount,
       keyType: userSuppliedKey ? "user" : "server",
       model: selectedModel,
+      messageTimestamps,
     });
 
     const startTime = Date.now();
     const result = await chat(credentials, chatMessages, selectedModel, sessionId, phase);
     const durationMs = Date.now() - startTime;
 
+    const responseTimestamp = new Date().toISOString();
     logger.info(sessionId, "chat", "Chat request completed", {
       toolCount: result.toolExecutions?.length ?? 0,
       durationMs,
+      responseTimestamp,
     });
 
     // Don't end session - client may send more requests in this session
 
-    // Include usage info in response so frontend can display counter
-    return NextResponse.json({ ...result, usage: usageInfo });
+    // Include usage info and response timestamp so frontend can capture it
+    return NextResponse.json({ ...result, usage: usageInfo, responseTimestamp });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Internal server error";
     logger.error(sessionId, "chat", "Chat API error", {

@@ -347,6 +347,8 @@ export interface FileAttachment {
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  /** ISO 8601 timestamp when this message was created */
+  timestamp?: string;
   /** Base64 data-URI images attached to this message */
   images?: string[];
   /** Non-image file attachments (PDF, Word, Excel) */

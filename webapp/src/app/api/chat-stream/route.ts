@@ -105,20 +105,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const chatMessages: ChatMessage[] = messages.map((m: { role: string; content: string; images?: string[] }) => ({
+    const chatMessages: ChatMessage[] = messages.map((m: { role: string; content: string; images?: string[]; timestamp?: string }) => ({
       role: m.role as "user" | "assistant",
       content: m.content,
       ...(m.images?.length ? { images: m.images } : {}),
+      ...(m.timestamp ? { timestamp: m.timestamp } : {}),
     }));
 
     const selectedModel = model || "claude-sonnet-4-6";
     const imageCount = chatMessages.reduce((acc, m) => acc + (m.images?.length || 0), 0);
+
+    // Log per-message timestamps for audit trail
+    const messageTimestamps = chatMessages.map((m, i) => ({
+      index: i,
+      role: m.role,
+      timestamp: m.timestamp || null,
+      contentPreview: m.content?.slice(0, 80) || "",
+    }));
 
     logger.info(sessionId, "chat_stream", "Starting streaming chat request", {
       messageCount: chatMessages.length,
       imageCount,
       keyType: userSuppliedKey ? "user" : "server",
       model: selectedModel,
+      messageTimestamps,
     });
 
     const startTime = Date.now();

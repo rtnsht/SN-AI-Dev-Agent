@@ -194,6 +194,7 @@ export default function Home() {
           role: "system",
           type: "success",
           content: `Connected to **${instanceShort}** as **${data.userInfo?.name || credentials.username}**`,
+          timestamp: new Date().toISOString(),
         });
 
         // Role check
@@ -202,24 +203,28 @@ export default function Home() {
             role: "system",
             type: "warning",
             content: `⚠️ **Limited Access** — User \`${credentials.username}\` does not have \`admin\` or \`security_admin\` roles. The agent will only be able to advise and operate based on the access this user has. Some operations (creating business rules, ACLs, modifying system tables) may fail due to insufficient permissions.`,
+            timestamp: new Date().toISOString(),
           });
         } else if (!data.hasAdmin) {
           sysMsgs.push({
             role: "system",
             type: "warning",
             content: `⚠️ **Partial Access** — User \`${credentials.username}\` has \`security_admin\` but not \`admin\` role. Some configuration operations may be restricted.`,
+            timestamp: new Date().toISOString(),
           });
         } else if (!data.hasSecurityAdmin) {
           sysMsgs.push({
             role: "system",
             type: "info",
             content: `ℹ️ User \`${credentials.username}\` has \`admin\` but not \`security_admin\` role. ACL and security policy modifications may require elevated privileges.`,
+            timestamp: new Date().toISOString(),
           });
         } else {
           sysMsgs.push({
             role: "system",
             type: "success",
             content: `✅ Full access — User has both \`admin\` and \`security_admin\` roles.`,
+            timestamp: new Date().toISOString(),
           });
         }
 
@@ -258,12 +263,12 @@ export default function Home() {
           .then((d) => { if (d.prompts?.length) setInstancePrompts(d.prompts); })
           .catch(() => { /* non-critical — defaults will be used */ });
       } else {
-        const errMsgs = [...messagesRef.current, { role: "system" as const, type: "error" as const, content: `Connection failed: ${data.message || "Unknown error"}` }];
+        const errMsgs = [...messagesRef.current, { role: "system" as const, type: "error" as const, content: `Connection failed: ${data.message || "Unknown error"}`, timestamp: new Date().toISOString() }];
         messagesRef.current = errMsgs;
         setMessages(errMsgs);
       }
     } catch (err) {
-      const errMsgs = [...messagesRef.current, { role: "system" as const, type: "error" as const, content: `Connection error: ${err instanceof Error ? err.message : String(err)}` }];
+      const errMsgs = [...messagesRef.current, { role: "system" as const, type: "error" as const, content: `Connection error: ${err instanceof Error ? err.message : String(err)}`, timestamp: new Date().toISOString() }];
       messagesRef.current = errMsgs;
       setMessages(errMsgs);
     } finally {
@@ -281,6 +286,7 @@ export default function Home() {
       const userMsg: ChatMessage = {
         role: "user",
         content: text,
+        timestamp: new Date().toISOString(),
         ...(images?.length ? { images } : {}),
         ...(files?.length ? { files } : {}),
         ...(hidden ? { hidden: true } : {}),
@@ -305,6 +311,7 @@ export default function Home() {
           .map((m) => ({
             role: m.role,
             content: m.content,
+            ...(m.timestamp ? { timestamp: m.timestamp } : {}),
             ...(m.images?.length ? { images: m.images } : {}),
             ...(m.files?.length ? { files: m.files } : {}),
           }));
@@ -312,7 +319,7 @@ export default function Home() {
         // Safety check: ensure we have messages to send
         if (apiMessages.length === 0) {
           console.error("[handleSend] No user/assistant messages to send. Messages:", newMessages);
-          setMessages((prev) => [...prev, { role: "system", type: "error", content: "Internal error: No messages to send. Please try again." }]);
+          setMessages((prev) => [...prev, { role: "system", type: "error", content: "Internal error: No messages to send. Please try again.", timestamp: new Date().toISOString() }]);
           setIsLoading(false);
           return;
         }
@@ -355,6 +362,7 @@ export default function Home() {
                     content: allowUserApiKeys
                       ? `**API rate limit hit** -- The server's Claude API key hit its token limit. Enter your own API key in Settings to continue. Your conversation is preserved and will auto-retry.`
                       : `**API rate limit hit** -- The server's Claude API key hit its token limit. Please try again later.`,
+                    timestamp: new Date().toISOString(),
                   },
                 ]);
               } else {
@@ -372,11 +380,12 @@ export default function Home() {
                     content: allowUserApiKeys
                       ? `**Rate limit reached** -- You've used all ${errorData.usage?.max ?? 10} free requests for this ${errorData.usage?.windowHours ?? 4}-hour window.\n\nTo continue chatting, **enter your own API key** in the Settings panel on the left. Your key is sent per-request over HTTPS and never stored.`
                       : `**Rate limit reached** -- You've used all ${errorData.usage?.max ?? 10} requests for this ${errorData.usage?.windowHours ?? 4}-hour window. Please try again later.`,
+                    timestamp: new Date().toISOString(),
                   },
                 ]);
               }
             } else {
-              setMessages((prev) => [...prev, { role: "system", type: "error", content: `Error: ${errorData.error || errorData.message || "Request failed"}` }]);
+              setMessages((prev) => [...prev, { role: "system", type: "error", content: `Error: ${errorData.error || errorData.message || "Request failed"}`, timestamp: new Date().toISOString() }]);
             }
 
             setIsLoading(false);
@@ -386,7 +395,7 @@ export default function Home() {
           const reader = res.body?.getReader();
           if (!reader) {
             setLiveStatus(null);
-            setMessages((prev) => [...prev, { role: "system", type: "error", content: "Streaming not supported" }]);
+            setMessages((prev) => [...prev, { role: "system", type: "error", content: "Streaming not supported", timestamp: new Date().toISOString() }]);
             setIsLoading(false);
             return;
           }
@@ -444,6 +453,7 @@ export default function Home() {
                         role: "assistant",
                         content: event.reply,
                         toolExecutions: event.toolExecutions,
+                        timestamp: new Date().toISOString(),
                       };
                       const updatedMsgs = [...messagesRef.current, partialMsg];
                       messagesRef.current = updatedMsgs;
@@ -470,7 +480,7 @@ export default function Home() {
                         const rateLimitedModel = parts[1] || "the selected model";
                         errorContent = `**Rate limited** -- The model \`${rateLimitedModel}\` is temporarily rate-limited by its upstream provider after multiple retry attempts.\n\n**What you can do:**\n- **Switch to a different model** from the model selector\n- **Wait a few minutes** and try again\n- **Add your own API key** on [OpenRouter](https://openrouter.ai/settings/integrations) for higher limits`;
                       }
-                      setMessages((prev) => [...prev, { role: "system", type: "error", content: errorContent }]);
+                      setMessages((prev) => [...prev, { role: "system", type: "error", content: errorContent, timestamp: new Date().toISOString() }]);
                       setIsLoading(false);
                       return;
                     }
@@ -487,7 +497,7 @@ export default function Home() {
           setLiveStatus(null);
 
           if (!finalData) {
-            setMessages((prev) => [...prev, { role: "system", type: "error", content: "No response received from streaming API" }]);
+            setMessages((prev) => [...prev, { role: "system", type: "error", content: "No response received from streaming API", timestamp: new Date().toISOString() }]);
             setIsLoading(false);
             return;
           }
@@ -521,6 +531,7 @@ export default function Home() {
             role: "assistant",
             content: data.reply,
             toolExecutions: data.toolExecutions,
+            timestamp: new Date().toISOString(),
             phaseGate: phaseGate || undefined,
             approved: isAutoApprove && phaseGate ? true : undefined,
             autoApproved: isAutoApprove && phaseGate ? true : undefined,
@@ -590,6 +601,7 @@ export default function Home() {
             role: "assistant",
             content: data.reply,
             toolExecutions: data.toolExecutions,
+            timestamp: new Date().toISOString(),
             phaseGate: phaseGate || undefined,
             // Auto-approve gates that don't require user sign-off
             approved: isAutoApprove && phaseGate ? true : undefined,
@@ -604,6 +616,7 @@ export default function Home() {
               role: "system",
               type: "info",
               content: `⚡ **${phaseGate.charAt(0).toUpperCase() + phaseGate.slice(1)}** phase auto-approved (no sign-off required). Proceeding...`,
+              timestamp: new Date().toISOString(),
             });
           }
 
@@ -614,6 +627,7 @@ export default function Home() {
               content: allowUserApiKeys
                 ? `⏳ **${data.usage.remaining} free request${data.usage.remaining === 1 ? "" : "s"} remaining** out of ${data.usage.max} per ${data.usage.windowHours} hours. Enter your own Claude API key in Settings to continue chatting with no limits.`
                 : `⏳ **${data.usage.remaining} request${data.usage.remaining === 1 ? "" : "s"} remaining** out of ${data.usage.max} per ${data.usage.windowHours} hours.`,
+              timestamp: new Date().toISOString(),
             });
           }
           // Update both state and ref together before potential auto-approve setTimeout
@@ -641,6 +655,7 @@ export default function Home() {
                 content: allowUserApiKeys
                   ? `🔑 **API rate limit hit** — The server's Claude API key hit its token limit. Enter your own API key in Settings to continue. Your conversation is preserved and will auto-retry.`
                   : `🔑 **API rate limit hit** — The server's Claude API key hit its token limit. Please try again later.`,
+                timestamp: new Date().toISOString(),
               },
             ]);
           } else {
@@ -658,13 +673,14 @@ export default function Home() {
                 content: allowUserApiKeys
                   ? `🚫 **Rate limit reached** — You've used all ${data.usage?.max ?? 10} free requests for this ${data.usage?.windowHours ?? 4}-hour window.\n\nTo continue chatting, **enter your own Claude API key** in the Settings panel on the left. Your key is sent per-request over HTTPS and never stored.`
                   : `🚫 **Rate limit reached** — You've used all ${data.usage?.max ?? 10} requests for this ${data.usage?.windowHours ?? 4}-hour window. Please try again later.`,
+                timestamp: new Date().toISOString(),
               },
             ]);
           }
         } else {
           setMessages((prev) => [
             ...prev,
-            { role: "system", type: "error", content: `Error: ${data.error}` },
+            { role: "system", type: "error", content: `Error: ${data.error}`, timestamp: new Date().toISOString() },
           ]);
         }
       } catch (err) {
@@ -672,12 +688,12 @@ export default function Home() {
         if (err instanceof DOMException && err.name === "AbortError") {
           setMessages((prev) => [
             ...prev,
-            { role: "system", type: "info", content: "⏹ Request cancelled." },
+            { role: "system", type: "info", content: "⏹ Request cancelled.", timestamp: new Date().toISOString() },
           ]);
         } else {
           setMessages((prev) => [
             ...prev,
-            { role: "system", type: "error", content: `Network error: ${err instanceof Error ? err.message : String(err)}` },
+            { role: "system", type: "error", content: `Network error: ${err instanceof Error ? err.message : String(err)}`, timestamp: new Date().toISOString() },
           ]);
         }
       } finally {
@@ -727,7 +743,7 @@ export default function Home() {
       // Inject system confirmation and update messagesRef immediately
       const withSystemMsg = [
         ...messagesRef.current,
-        { role: "system" as const, type: "success" as const, content: `✅ **${phase.charAt(0).toUpperCase() + phase.slice(1)}** phase approved. Proceeding...` },
+        { role: "system" as const, type: "success" as const, content: `✅ **${phase.charAt(0).toUpperCase() + phase.slice(1)}** phase approved. Proceeding...`, timestamp: new Date().toISOString() },
       ];
       messagesRef.current = withSystemMsg;
       setMessages(withSystemMsg);
