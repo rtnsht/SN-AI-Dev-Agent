@@ -180,6 +180,7 @@ export interface HelperApiStatus {
 export interface HelperApisInfo {
   uiPolicyActionHelper?: HelperApiStatus;
   updateSetHelper?: HelperApiStatus;
+  addToUpdateSetHelper?: HelperApiStatus;
 }
 
 export interface ConnectionResult {

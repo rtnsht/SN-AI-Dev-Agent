@@ -1,260 +1,212 @@
-# SN AI Dev Agent
+# r — SN AI Dev Agent for ServiceNow
 
-**AI-Powered ServiceNow Development Framework with Spec-Driven Methodology**
+**Say it. Ship it.** Build, test, and deploy ServiceNow solutions through natural language — powered by AI with a spec-driven methodology.
 
-An end-to-end automation framework that enables AI agents to develop, test, and deploy ServiceNow solutions following a structured, auditable process. Built for use with AI coding assistants like Augment.
-
----
-
-## 🎯 What This Project Does
-
-This framework provides:
-
-1. **Spec-Driven Development** - Formal requirements → design → implementation → testing → deployment workflow
-2. **MCP Server Integration** - Model Context Protocol server exposing ServiceNow APIs as AI-callable tools
-3. **Automated Deployment** - Scripts to deploy artifacts directly to ServiceNow instances
-4. **Phase Gate Validation** - Configurable checkpoints ensuring quality at each stage
-5. **Evidence Capture** - Test results and deployment records for audit trails
+A full-stack framework that pairs a **Next.js web app** with an **80+ tool MCP engine** to let AI agents develop on ServiceNow instances end-to-end: from writing specs and designs to deploying business rules, client scripts, UI policies, flows, and more — all through conversation.
 
 ---
 
-## 🏗️ Project Structure
+## How It Works
 
 ```
-SN-AI-Dev-Agent/
-│
-├── requirements/                    # 📋 SPEC-DRIVEN DEVELOPMENT
-│   ├── manifest.json               # Central registry of all requirements
-│   ├── config.properties           # Phase gate settings (warn/block)
-│   ├── validate.js                 # Validation script
-│   ├── _templates/                 # Document templates
-│   │   ├── 1-spec-template.md
-│   │   ├── 2-design-template.md
-│   │   ├── 3-test-plan-template.md
-│   │   ├── 4-test-results-template.md
-│   │   └── 5-deployment-template.md
-│   ├── lib/
-│   │   └── atf-runner.js           # ATF test integration
-│   ├── REQ-001/                    # Example: Dynamic Assignment Orchestrator
-│   │   ├── 1-spec.md               # Functional specification
-│   │   ├── 2-design.md             # Technical design
-│   │   ├── 3-implementation/       # Code artifacts
-│   │   │   ├── script-includes/
-│   │   │   └── business-rules/
-│   │   ├── 4-testing/              # Test documentation
-│   │   │   ├── test-plan.md
-│   │   │   ├── test-results.md
-│   │   │   └── evidence/
-│   │   └── 5-deployment.md         # Deployment record
-│   └── REQ-002/                    # Example: Deduplication Engine
-│
-├── mcp-servicenow/                  # 🔌 MCP SERVER
-│   ├── src/
-│   │   ├── index.ts                # MCP server entry point
-│   │   ├── tools/                  # ServiceNow API tools
-│   │   │   ├── records.ts          # CRUD operations
-│   │   │   ├── scripts.ts          # Script Includes, Business Rules
-│   │   │   ├── update-sets.ts      # Update set management
-│   │   │   └── ...
-│   │   └── req-001/                # Requirement-specific deploy scripts
-│   │   └── req-002/
-│   ├── test-connection.js          # Connection testing
-│   └── discover-scopes.js          # Scope discovery
-│
-├── src/                             # 🛠️ CORE FRAMEWORK (CLI)
-│   ├── cli.js                      # Command-line interface
-│   └── core/                       # Pipeline modules
-│
-└── templates/                       # 📝 CODE TEMPLATES
-    ├── business_rule.template.js
-    ├── script_include.template.js
-    └── client_script.template.js
+You describe what you need
+    ↓
+AI writes a spec → you approve
+    ↓
+AI writes a design → you approve
+    ↓
+AI builds & deploys to your instance
+    ↓
+AI tests and captures evidence
 ```
+
+Every phase has a **gate** — the AI stops and waits for your approval before moving forward. Nothing ships without your sign-off.
 
 ---
 
-## 🔄 Development Workflow
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         SPEC-DRIVEN DEVELOPMENT FLOW                        │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐                  │
-│  │  1. SPEC     │───▶│  2. DESIGN   │───▶│  3. IMPLEMENT│                  │
-│  │              │    │              │    │              │                  │
-│  │  • Gather    │    │  • Component │    │  • Generate  │                  │
-│  │    requirements│  │    architecture│  │    code      │                  │
-│  │  • Write     │    │  • API design│    │  • Deploy to │                  │
-│  │    spec.md   │    │  • Write     │    │    instance  │                  │
-│  │  • Get       │    │    design.md │    │              │                  │
-│  │    approval  │    │  • Get       │    │              │                  │
-│  │              │    │    approval  │    │              │                  │
-│  └──────────────┘    └──────────────┘    └──────────────┘                  │
-│         │                   │                   │                          │
-│         │    ◀── Phase Gate ──▶    ◀── Phase Gate ──▶                      │
-│         │                   │                   │                          │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐                  │
-│  │  4. TEST     │◀───│  5. DEPLOY   │◀───│  (continues) │                  │
-│  │              │    │              │    │              │                  │
-│  │  • Write     │    │  • Create    │    │              │                  │
-│  │    test plan │    │    update set│    │              │                  │
-│  │  • Execute   │    │  • Push to   │    │              │                  │
-│  │    tests     │    │    instance  │    │              │                  │
-│  │  • Capture   │    │  • Document  │    │              │                  │
-│  │    evidence  │    │    deployment│    │              │                  │
-│  └──────────────┘    └──────────────┘    └──────────────┘                  │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 🚀 Getting Started
+## Quick Start
 
 ### Prerequisites
 
 - Node.js 18+
-- ServiceNow instance (PDI or developer instance)
-- VS Code with Augment extension (recommended)
+- A ServiceNow instance (PDI or developer instance)
 
-### 1. Clone and Install
+### 1. Install
 
 ```bash
-git clone https://github.com/your-repo/SN-AI-Dev-Agent.git
+git clone https://github.com/shunyaByteR/SN-AI-Dev-Agent.git
 cd SN-AI-Dev-Agent
 
-# Install MCP server dependencies
-cd mcp-servicenow
-npm install
-cd ..
+# Install MCP engine
+cd mcp-servicenow && npm install && cd ..
+
+# Install webapp
+cd webapp && npm install && cd ..
 ```
 
-### 2. Configure ServiceNow Connection
+### 2. Configure
 
 ```bash
-# Copy example env file
-cp mcp-servicenow/.env.example mcp-servicenow/.env
-
-# Edit with your credentials
+cp webapp/.env.example webapp/.env
 ```
 
+Edit `webapp/.env` with your credentials:
+
 ```env
+# ServiceNow instance
 SN_INSTANCE_URL=https://your-instance.service-now.com
 SN_USERNAME=admin
 SN_PASSWORD=your-password
+
+# AI provider (pick one)
+ANTHROPIC_API_KEY=sk-ant-...
+# or
+OPENROUTER_API_KEY=sk-or-...
 ```
 
-### 3. Test Connection
+### 3. Build & Run
 
 ```bash
-cd mcp-servicenow
-node test-connection.js
+# Compile the MCP engine
+cd mcp-servicenow && rm -rf dist && npx tsc && cd ..
+
+# Start the webapp
+cd webapp && npm run dev
 ```
 
-### 4. Configure MCP in VS Code
+Open **http://localhost:3000**, connect your instance, and start building.
 
-Add to your VS Code settings or `.vscode/mcp.json`:
+---
 
-```json
-{
-  "servers": {
-    "servicenow": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["mcp-servicenow/dist/index.js"]
-    }
-  }
-}
+## Project Structure
+
+```
+SN-AI-Dev-Agent/
+├── webapp/                    # Next.js web application
+│   ├── src/
+│   │   ├── app/              # Pages & API routes
+│   │   ├── components/       # Chat UI, settings, theme
+│   │   └── lib/              # SN engine, logger, branding
+│   └── .env                  # Configuration
+│
+├── mcp-servicenow/            # MCP tool engine (TypeScript)
+│   ├── src/
+│   │   ├── client/           # ServiceNow REST client
+│   │   ├── tools/            # 34 tool modules (80+ tools)
+│   │   ├── deployer/         # Helper API auto-deployment
+│   │   └── types/            # Shared types
+│   └── dist/                 # Compiled output
+│
+├── specs/                     # Requirement specifications
+│   ├── manifest.json         # Requirement registry
+│   ├── config.properties     # Phase gate settings
+│   └── REQ-XXX/              # Per-requirement folders
+│       ├── 1-spec.md
+│       ├── 2-design.md
+│       ├── 3-implementation/
+│       ├── 4-testing/
+│       └── 5-deployment.md
+│
+├── templates/                 # Document & code templates
+├── scripts/                   # Validation & utility scripts
+└── docs/                      # Architecture documentation
 ```
 
 ---
 
-## 📋 How to Use (with AI Assistant)
+## Key Features
 
-### Creating a New Requirement
+### Web Application
+- **Chat interface** — Conversational AI development with streaming responses
+- **Multi-provider AI** — Anthropic (Claude) and OpenRouter with model selection
+- **Dark/light theme** — Configurable branding, colors, and logo
+- **Live agent activity** — Timeline-style tool execution visualization
+- **Session telemetry** — JSONL logging with live markdown dashboards
+- **Phase tracking** — Visual SDLC pipeline (Spec → Design → Scope → Implement)
+- **Voice input** — Speech-to-text for hands-free prompting
+- **File attachments** — Upload images and documents for context
 
-1. **Tell the AI your requirement:**
-   ```
-   "Create a new requirement REQ-003 for an SLA breach notification system"
-   ```
+### MCP Tool Engine (80+ Tools)
 
-2. **AI will:**
-   - Create `requirements/REQ-003/` folder structure
-   - Generate spec from template
-   - Ask clarifying questions
-   - Get your approval before proceeding
+| Category | Tools | Examples |
+|----------|-------|---------|
+| **Records** | CRUD, query, bulk ops | `sn_query_records`, `sn_create_record` |
+| **Scripts** | Business rules, script includes, client scripts | `sn_create_business_rule`, `sn_create_script_include` |
+| **UI** | UI policies, UI policy actions, catalog items | `sn_create_ui_policy`, `sn_create_catalog_item` |
+| **Update Sets** | Create, capture, verify, move artifacts | `sn_create_update_set`, `sn_verify_update_set_capture` |
+| **Flows** | Flow designer scaffolding and management | `sn_scaffold_flow`, `sn_get_flow` |
+| **ACLs** | Access control rules | `sn_create_acl` |
+| **Notifications** | Email notifications and events | `sn_create_notification` |
+| **Scheduled Jobs** | Scheduled script executions | `sn_create_scheduled_job` |
+| **Analysis** | Instance health, anti-patterns, conflicts | `sn_analyze_instance`, `sn_detect_anti_patterns` |
+| **Quality** | Code quality, dead code, OOTB overrides | `sn_analyze_code_quality`, `sn_find_dead_code` |
 
-3. **Review and approve the spec** (AI waits for your sign-off)
+### Update Set Capture (Three-Layer Defense)
 
-4. **AI creates technical design** → You approve
+Artifacts created via REST API normally land in the Default update set. Yantra uses three layers to ensure reliable capture:
 
-5. **AI generates code** and deploys to your instance
+1. **Session-based** — `GlideUpdateSet().set()` via helper API
+2. **Post-creation move** — Multi-strategy `sys_update_xml` search and move
+3. **GlideUpdateManager2** — Server-side `saveRecord()` fallback for any table type
 
-6. **AI runs tests** and captures evidence
+### Helper APIs (Auto-Deployed)
 
-### Validating a Requirement
+On first connection, three Scripted REST APIs are automatically deployed to your instance:
 
-```bash
-node requirements/validate.js REQ-001
-```
-
-Output:
-```
-Validating REQ-001: Dynamic Assignment Orchestrator
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ Spec exists and approved
-✅ Design exists and approved
-✅ Implementation files exist
-✅ Test plan exists
-✅ Test results exist (5/5 passed)
-✅ Deployment record exists
-
-Status: READY FOR PRODUCTION
-```
-
-### Deploying a Requirement
-
-```bash
-cd mcp-servicenow
-node src/req-001/deploy-req-001.js
-```
+| API | Purpose |
+|-----|---------|
+| **UIPolicyActionHelper** | Create UI Policy Actions with proper reference fields |
+| **UpdateSetHelper** | Set current update set for artifact capture |
+| **AddToUpdateSetHelper** | Layer 3 fallback via GlideUpdateManager2 |
 
 ---
 
-##  Available MCP Tools
+## Configuration
 
-The MCP server exposes these ServiceNow operations:
+### Environment Variables (`webapp/.env`)
 
-| Tool | Description |
-|------|-------------|
-| `sn_query_records` | Query any table with encoded queries |
-| `sn_get_record` | Get a single record by sys_id |
-| `sn_create_record` | Create a new record |
-| `sn_update_record` | Update an existing record |
-| `sn_create_script_include` | Create Script Include |
-| `sn_create_business_rule` | Create Business Rule |
-| `sn_create_update_set` | Create Update Set |
-| `sn_test_connection` | Test instance connectivity |
-| ... and more |
+| Variable | Description |
+|----------|-------------|
+| `SN_INSTANCE_URL` | ServiceNow instance URL |
+| `SN_USERNAME` / `SN_PASSWORD` | Instance credentials |
+| `ANTHROPIC_API_KEY` | Anthropic API key |
+| `OPENROUTER_API_KEY` | OpenRouter API key (alternative) |
+| `NEXT_PUBLIC_APP_NAME` | App display name |
+| `NEXT_PUBLIC_APP_TAGLINE` | Tagline shown in UI |
+| `NEXT_PUBLIC_HERO_TAGLINE` | Large hero text on empty chat |
+| `NEXT_PUBLIC_PRIMARY_COLOR` | Theme primary color |
+| `RATE_LIMIT_MAX_REQUESTS` | Max requests per window |
 
----
-
-## 🛡️ Phase Gate Configuration
-
-Edit `requirements/config.properties`:
+### Phase Gates (`specs/config.properties`)
 
 ```properties
-# Phase gate behavior: warn | block
-spec.approval.required=block      # Must have approved spec
-design.approval.required=block    # Must have approved design
-testing.required=warn             # Warn if no tests (don't block)
+spec.approval.required=block      # Must approve spec before design
+design.approval.required=block    # Must approve design before implementation
+testing.required=warn             # Warn if no tests
 evidence.required=warn            # Warn if no evidence
 ```
 
 ---
 
-## 📄 License
+## Development
+
+```bash
+# Rebuild MCP engine after changes
+cd mcp-servicenow && rm -rf dist && npx tsc
+
+# Type-check webapp
+cd webapp && npx tsc --noEmit
+
+# Run webapp in dev mode
+cd webapp && npm run dev
+
+# Validate a requirement
+node scripts/validate.cjs REQ-XXX
+```
+
+---
+
+## License
 
 MIT
 

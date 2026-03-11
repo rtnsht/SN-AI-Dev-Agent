@@ -160,6 +160,59 @@ body {
   50% { opacity: 0.5; }
 }
 
+/* ── Agent Activity — shimmer accent bar ── */
+.agent-activity-container {
+  position: relative;
+  backdrop-filter: blur(8px);
+}
+.agent-activity-shimmer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--color-primary) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: activityShimmer 2s ease-in-out infinite;
+  opacity: 0.6;
+}
+@keyframes activityShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ── Agent Activity — ripple around active node ── */
+@keyframes activityRipple {
+  0% { transform: scale(1); opacity: 0.3; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* ── Agent Activity — orbit glow on header indicator ── */
+.agent-activity-orbit {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.agent-activity-orbit::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1.5px solid var(--color-primary);
+  opacity: 0.25;
+  animation: orbitPulse 2s ease-in-out infinite;
+}
+@keyframes orbitPulse {
+  0%, 100% { transform: scale(1); opacity: 0.25; }
+  50% { transform: scale(1.4); opacity: 0; }
+}
+
 /* ── Hero tagline (Perplexity-style) ── */
 .hero-tagline {
   font-family: Georgia, "Times New Roman", serif;

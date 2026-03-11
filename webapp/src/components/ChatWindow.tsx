@@ -240,19 +240,18 @@ function processActivityLog(entries: ActivityLogEntry[]): ActivityLogEntry[] {
     // Skip noisy status messages that duplicate tool events
     const msg = entry.message;
     if (msg.startsWith("Executing:") || msg.includes("completed")) continue;
-    // Collapse "Starting..." and "Round N: Analyzing request..." into one thinking line
+    // Collapse "Starting..." and "Round N: Analyzing request..." — only keep the first one
     if (msg === "Starting..." || /^Round \d+/.test(msg)) {
-      // Only add if last entry isn't already a thinking line
       const last = result[result.length - 1];
       if (last?.phase === "thinking") continue;
-      result.push({ ...entry, message: "Analyzing your request..." });
+      result.push({ ...entry, message: "Reasoning" });
       continue;
     }
     // Collapse "Generating response..." messages
     if (msg === "Generating response...") {
       const last = result[result.length - 1];
-      if (last?.message === "Preparing response...") continue;
-      result.push({ ...entry, message: "Preparing response..." });
+      if (last?.message === "Composing response") continue;
+      result.push({ ...entry, message: "Composing response" });
       continue;
     }
     // Keep other status messages as-is
@@ -261,10 +260,11 @@ function processActivityLog(entries: ActivityLogEntry[]): ActivityLogEntry[] {
   return result;
 }
 
-/** Claude-style inline agent activity — clean, conversational, no icons */
+/** Elegant inline agent activity — timeline-style with visual hierarchy */
 function InlineAgentActivity({ activityLog, liveStatus, onCancel }: { activityLog: ActivityLogEntry[]; liveStatus: LiveStatus | null; onCancel: () => void }) {
   const [expanded, setExpanded] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const startTime = useRef(Date.now());
 
   // Auto-scroll to latest entry
   useEffect(() => {
@@ -275,6 +275,7 @@ function InlineAgentActivity({ activityLog, liveStatus, onCancel }: { activityLo
 
   const processed = processActivityLog(activityLog);
   const toolCount = processed.filter(e => e.phase === "tool").length;
+  const elapsed = Math.round((Date.now() - startTime.current) / 1000);
 
   // Header text: latest tool's friendly label or latest status
   const latestEntry = processed[processed.length - 1];
@@ -283,86 +284,123 @@ function InlineAgentActivity({ activityLog, liveStatus, onCancel }: { activityLo
     : "Thinking...";
 
   return (
-    <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--border-default)", background: "var(--surface-secondary)" }}>
-      {/* Collapsible header */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left transition-colors"
-        style={{ background: "var(--surface-secondary)" }}
-        onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-elevated)")}
-        onMouseLeave={e => (e.currentTarget.style.background = "var(--surface-secondary)")}
-      >
-        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: "var(--color-primary)", animation: "statusPulse 1.5s ease-in-out infinite" }} />
-        <span className="flex-1 text-xs truncate" style={{ color: "var(--text-secondary)" }}>
-          {headerText}
-          {toolCount > 0 && <span className="ml-2" style={{ color: "var(--text-disabled)" }}>· {toolCount} tool{toolCount !== 1 ? "s" : ""}</span>}
-        </span>
-        <svg
-          className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${expanded ? "rotate-0" : "-rotate-90"}`}
-          style={{ color: "var(--text-disabled)" }}
-          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+    <div className="agent-activity-container rounded-xl overflow-hidden" style={{ background: "var(--surface-secondary)", border: "1px solid color-mix(in srgb, var(--color-primary) 15%, var(--border-default))" }}>
+      {/* Header bar with shimmer accent */}
+      <div className="relative">
+        <div className="agent-activity-shimmer" />
+        <div
+          onClick={() => setExpanded(!expanded)}
+          className="relative w-full flex items-center gap-3 px-4 py-3 text-left transition-colors z-[1] cursor-pointer"
+          style={{ background: "transparent" }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={e => { if (e.key === "Enter" || e.key === " ") setExpanded(!expanded); }}
         >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
+          {/* Animated orbital indicator */}
+          <span className="agent-activity-orbit flex-shrink-0">
+            <span className="w-2 h-2 rounded-full block" style={{ background: "var(--color-primary)" }} />
+          </span>
+          <div className="flex-1 min-w-0">
+            <span className="text-[13px] font-medium truncate block" style={{ color: "var(--text-primary)" }}>
+              {headerText}
+            </span>
+            <span className="text-[10px] mt-0.5 block" style={{ color: "var(--text-disabled)" }}>
+              {toolCount > 0 ? `${toolCount} tool${toolCount !== 1 ? "s" : ""} used` : "Processing"}
+              {elapsed > 0 && ` · ${elapsed}s`}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={(e) => { e.stopPropagation(); onCancel(); }}
+              className="flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-md transition-all"
+              style={{ color: "var(--text-disabled)", background: "var(--surface-elevated)", border: "1px solid var(--border-default)" }}
+              onMouseEnter={e => { e.currentTarget.style.color = "var(--color-error, #ef4444)"; e.currentTarget.style.borderColor = "color-mix(in srgb, var(--color-error, #ef4444) 40%, transparent)"; }}
+              onMouseLeave={e => { e.currentTarget.style.color = "var(--text-disabled)"; e.currentTarget.style.borderColor = "var(--border-default)"; }}
+              title="Stop generation"
+            >
+              <svg className="w-3 h-3" viewBox="0 0 12 12" fill="currentColor"><rect x="2" y="2" width="8" height="8" rx="1.5" /></svg>
+              Stop
+            </button>
+            <svg
+              className={`w-3.5 h-3.5 transition-transform duration-200 ${expanded ? "rotate-0" : "-rotate-90"}`}
+              style={{ color: "var(--text-disabled)" }}
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </div>
+      </div>
 
-      {/* Step list */}
+      {/* Timeline step list */}
       {expanded && (
         <div
           ref={scrollRef}
-          className="overflow-y-auto py-1"
-          style={{ maxHeight: "220px", borderTop: "1px solid var(--border-default)" }}
+          className="overflow-y-auto"
+          style={{ maxHeight: "240px" }}
         >
-          {processed.map((entry, idx) => {
-            const isLast = idx === processed.length - 1;
-            const isActive = isLast && !!liveStatus;
-            const isDone = entry.phase === "tool" ? entry.done !== false : !isActive;
-            const label = entry.toolName ? friendlyToolLabel(entry.toolName, entry.toolInput) : entry.message;
-
-            return (
+          <div className="relative px-4 py-2">
+            {/* Vertical timeline line */}
+            {processed.length > 1 && (
               <div
-                key={idx}
-                className="flex items-center gap-2.5 px-4 py-1 text-xs"
-                style={{ color: isActive ? "var(--text-primary)" : "var(--text-disabled)" }}
-              >
-                {/* Indicator: pulsing dot for active, checkmark for done */}
-                {isActive && !isDone ? (
-                  <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--color-primary)", animation: "statusPulse 1s ease-in-out infinite" }} />
+                className="absolute left-[25px] top-3 bottom-3 w-px"
+                style={{ background: "color-mix(in srgb, var(--color-primary) 12%, transparent)" }}
+              />
+            )}
+            {processed.map((entry, idx) => {
+              const isLast = idx === processed.length - 1;
+              const isActive = isLast && !!liveStatus;
+              const isDone = entry.phase === "tool" ? entry.done !== false : !isActive;
+              const label = entry.toolName ? friendlyToolLabel(entry.toolName, entry.toolInput) : entry.message;
+              const isTool = entry.phase === "tool";
+
+              return (
+                <div
+                  key={idx}
+                  className="relative flex items-start gap-3 py-[5px] transition-opacity duration-300"
+                  style={{ opacity: isActive ? 1 : isDone ? 0.7 : 0.4 }}
+                >
+                  {/* Timeline node */}
+                  <div className="relative z-[1] flex-shrink-0 mt-[2px]">
+                    {isActive && !isDone ? (
+                      <span className="flex items-center justify-center w-[14px] h-[14px]">
+                        <span className="absolute w-[14px] h-[14px] rounded-full" style={{ background: "var(--color-primary)", opacity: 0.15, animation: "activityRipple 1.5s ease-out infinite" }} />
+                        <span className="w-[6px] h-[6px] rounded-full" style={{ background: "var(--color-primary)" }} />
+                      </span>
+                    ) : (
+                      <span className="flex items-center justify-center w-[14px] h-[14px]">
+                        {isTool ? (
+                          <svg className="w-[12px] h-[12px]" style={{ color: "var(--color-primary)", opacity: 0.5 }} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <span className="w-[5px] h-[5px] rounded-full" style={{ background: "var(--text-disabled)", opacity: 0.5 }} />
+                        )}
+                      </span>
+                    )}
+                  </div>
+                  {/* Label */}
+                  <span
+                    className={`text-[12px] truncate min-w-0 ${isTool ? "font-medium" : ""}`}
+                    style={{ color: isActive ? "var(--text-primary)" : isTool ? "var(--text-secondary)" : "var(--text-disabled)" }}
+                  >
+                    {label}
                   </span>
-                ) : (
-                  <svg className="w-4 h-4 flex-shrink-0" style={{ color: "var(--text-disabled)", opacity: 0.6 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                )}
-                <span className="truncate min-w-0">{label}</span>
+                </div>
+              );
+            })}
+            {processed.length === 0 && (
+              <div className="flex items-center gap-3 py-[5px]">
+                <span className="flex items-center justify-center w-[14px] h-[14px] flex-shrink-0">
+                  <span className="absolute w-[14px] h-[14px] rounded-full" style={{ background: "var(--color-primary)", opacity: 0.15, animation: "activityRipple 1.5s ease-out infinite" }} />
+                  <span className="w-[6px] h-[6px] rounded-full" style={{ background: "var(--color-primary)" }} />
+                </span>
+                <span className="text-[12px]" style={{ color: "var(--text-secondary)" }}>Thinking...</span>
               </div>
-            );
-          })}
-          {processed.length === 0 && (
-            <div className="flex items-center gap-2.5 px-4 py-1 text-xs" style={{ color: "var(--text-disabled)" }}>
-              <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--color-primary)", animation: "statusPulse 1s ease-in-out infinite" }} />
-              </span>
-              <span>Thinking...</span>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
-
-      {/* Stop button */}
-      <div className="flex items-center justify-end px-3 py-1.5" style={{ borderTop: "1px solid var(--border-default)" }}>
-        <button
-          onClick={onCancel}
-          className="flex items-center gap-1 px-2 py-0.5 text-xs text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40 rounded-md transition-colors"
-          title="Cancel request"
-        >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-          Stop
-        </button>
-      </div>
     </div>
   );
 }

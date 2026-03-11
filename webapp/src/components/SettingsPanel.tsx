@@ -364,6 +364,16 @@ export default function SettingsPanel({
                       </span>
                     </div>
                   )}
+                  {connInfo.helperApis.addToUpdateSetHelper && (
+                    <div className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ background: connInfo.helperApis.addToUpdateSetHelper.deployed ? "var(--status-success)" : "var(--status-progress)" }} />
+                      <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>
+                        Add to Update Set: <span style={{ color: connInfo.helperApis.addToUpdateSetHelper.deployed ? "var(--color-success)" : "var(--color-warning)" }}>
+                          {connInfo.helperApis.addToUpdateSetHelper.deployed ? "Ready" : "Not deployed"}
+                        </span>
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
