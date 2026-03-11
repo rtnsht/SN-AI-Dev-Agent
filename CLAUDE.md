@@ -147,6 +147,7 @@ SN-AI-Dev-Agent/
 │   └── utils/
 │
 └── docs/                        # 📚 DOCUMENTATION
+    ├── architecture.md          # Full technical architecture doc
     └── BROWNFIELD-ENHANCEMENT-PLAN.md
 ```
 
@@ -391,4 +392,61 @@ cd mcp-servicenow && rm -rf dist && npx tsc
 ```
 Then restart the webapp server.
 
+---
+
+## 16. Inline Agent Activity (Chat Thinking Block)
+
+Agent activity is displayed **inline in the chat flow** as a collapsible thinking block during AI processing. There is no sidebar Agent Activity panel.
+
+### Key Design
+- **No emojis/icons** — only pulsing dot (active step) and ✓ checkmark (completed step) in muted gray
+- **Conversational labels** — tool names are mapped to friendly text (e.g., `sn_get_business_rules` + `{table:"incident"}` → "Business rules on incident")
+- **Collapsible** — header shows latest step + tool count, chevron toggles step list
+- **Deduplication** — "Starting...", "Round N: Analyzing..." merged into single "Analyzing your request..."
+
+### Key Files
+| File | Purpose |
+|------|---------|
+| `webapp/src/components/ChatWindow.tsx` | `InlineAgentActivity` component, `friendlyToolLabel()`, `processActivityLog()` |
+| `webapp/src/app/page.tsx` | Captures `tool_start` events with `toolName` + `toolInput` into `activityLog[]` |
+
+---
+
+## 17. Theme System & Branding
+
+### Theme Toggle
+- Dark/light mode via `ThemeProvider.tsx` + `ThemeToggle.tsx` (sun/moon button in header)
+- Persists to `localStorage`; defaults to dark
+- CSS vars defined per theme in `globals.css` via `[data-theme="light"]` / `[data-theme="dark"]`
+
+### Branding Configuration
+All values configurable via `NEXT_PUBLIC_*` env vars in `webapp/.env`:
+
+| Env Var | Default |
+|---------|---------|
+| `NEXT_PUBLIC_APP_NAME` | "Yantra - AI Dev Agent - SN" |
+| `NEXT_PUBLIC_APP_TAGLINE` | "Say it. Ship it." |
+| `NEXT_PUBLIC_APP_LOGO` | "/yantra-logo.png" |
+| `NEXT_PUBLIC_PRIMARY_COLOR` | "blue" (or any preset: purple, green, teal, red, orange, indigo, or hex) |
+| `NEXT_PUBLIC_ACCENT_COLOR` | "purple" |
+
+### Key Files
+| File | Purpose |
+|------|---------|
+| `webapp/src/lib/branding.ts` | Color presets (dark + light), env var resolution, CSS var exports |
+| `webapp/src/components/ThemeProvider.tsx` | React context, theme state, CSS var injection |
+| `webapp/src/components/ThemeToggle.tsx` | Toggle button UI |
+
+---
+
+## 18. UI Layout Notes
+
+### Right Sidebar
+Shows **only Connection info** (user, instance URL, roles). Pipeline Status and Agent Activity have been removed from the sidebar.
+
+### Chat Avatars
+User and AI avatars are **hidden** from the chat UI. The `userName` data is still available in the backend for telemetry/logging.
+
+### Header Bar
+Contains: Settings toggle, app title, connection badge, PhaseTracker (SDLC pipeline), theme toggle, Export button, New Chat button.
 

@@ -1,6 +1,6 @@
 # SN AI Dev Agent — Technical Architecture
 
-> **Version:** 2.3 | **Date:** 2026-03-05 | **Branch:** `sndevaiagentwebapp-refactor-06march-testing`
+> **Version:** 2.4 | **Date:** 2026-03-11 | **Branch:** `sndevaiagentwebapp-launchv0.1`
 
 ---
 
@@ -96,12 +96,14 @@ graph TB
         TITLE["SN AI Dev Agent"]
         CONN_BADGE["🟢 Connected Badge"]
         TRACKER["PhaseTracker.tsx<br/>Spec → Design → Impl → Test → Deploy"]
+        THEME["ThemeToggle.tsx<br/>☀️/🌙 Dark/Light Mode"]
         NEW_BTN["+ New Chat"]
     end
 
     subgraph CHAT["ChatWindow.tsx"]
         EXAMPLES["Dynamic Example Prompt Cards<br/>(instance-aware, randomized from SN data)"]
         MSGLIST["Message List (scrollable)"]
+        ACTIVITY["InlineAgentActivity<br/>(collapsible thinking block,<br/>conversational tool labels,<br/>pulsing dot / checkmark)"]
         INPUT["Chat Input (textarea)<br/>Shift+Enter to send · Enter for new line"]
         CANCEL["■ Stop Button (cancels in-flight request)"]
         IMAGES["Image Paste/Upload/Drag-Drop"]
@@ -110,8 +112,8 @@ graph TB
     end
 
     subgraph MSG["MessageBubble.tsx"]
-        USER_MSG["User Message (blue)<br/>Avatar: first initial of authenticated user"]
-        AI_MSG["AI Message (markdown)"]
+        USER_MSG["User Message (blue, no avatar)"]
+        AI_MSG["AI Message (markdown, no avatar)"]
         SYS_MSG["System Message (colored banner)"]
         TOOL_CARD["Tool Execution Cards<br/>(collapsible, with timing)"]
         GATE_BTN["✅ Approve Phase Button"]
@@ -412,9 +414,11 @@ SN-AI-Dev-Agent/
 │   │   │       └── openrouter-models/ ← GET /api/openrouter-models (filtered)
 │   │   ├── components/
 │   │   │   ├── SettingsPanel.tsx     ← Credentials, API key, usage meter
-│   │   │   ├── ChatWindow.tsx       ← Message list, input, dynamic prompts, hidden msg filter
-│   │   │   ├── MessageBubble.tsx    ← Message rendering, tool cards, approve btn, user initial avatar
-│   │   │   └── PhaseTracker.tsx     ← SDLC phase stepper in header
+│   │   │   ├── ChatWindow.tsx       ← Message list, input, dynamic prompts, inline agent activity
+│   │   │   ├── MessageBubble.tsx    ← Message rendering, tool cards, approve btn (no avatars)
+│   │   │   ├── PhaseTracker.tsx     ← SDLC phase stepper in header
+│   │   │   ├── ThemeProvider.tsx    ← Dark/light mode context provider + CSS var injection
+│   │   │   └── ThemeToggle.tsx      ← Sun/moon toggle button for theme switching
 │   │   └── lib/
 │   │       ├── sn-engine.ts         ← Orchestrator (6 shared helpers + 4 LLM callers)
 │   │       ├── system-prompt.ts     ← Stable prefix + dynamic context (cache-split) + confidentiality guardrails
@@ -423,6 +427,7 @@ SN-AI-Dev-Agent/
 │   │       ├── rate-limiter.ts      ← IP-based sliding window rate limiter
 │   │       ├── logger.ts            ← Structured session logging (JSONL)
 │   │       ├── telemetry-generator.ts ← Live telemetry dashboard (parses JSONL → markdown)
+│   │       ├── branding.ts          ← Centralized branding config (env-driven colors, app name, logo)
 │   │       └── types.ts             ← Shared types, phase gate parser
 │   ├── package.json
 │   └── .env.example                 ← CLAUDE_API_KEY, RATE_LIMIT_MAX, etc.
@@ -755,7 +760,10 @@ All filtering is metadata-based — no hardcoded model IDs. New models automatic
 | **Voice input (Web Speech API)** | Browser-native `SpeechRecognition`, no server cost | Free, real-time; hidden on unsupported browsers |
 | **Dynamic example prompts** | Instance-aware starter cards from SN metadata | Queries custom tables, business rules, catalog items, update sets; randomized pool of 4; falls back to hardcoded defaults |
 | **Confidentiality guardrails** | `<confidentiality>` section in system prompt | Prevents AI from revealing architecture, tech stack, model identity, or internal implementation |
-| **Authenticated user avatar** | First initial of SN user's display name | Passed via `connInfo.userInfo.name` through `ChatWindow` to `MessageBubble`; falls back to "U" |
+| **No avatars** | Removed AI/user avatar squares from chat UI | Cleaner aesthetic; userName still available in backend for telemetry |
+| **Inline agent activity** | Collapsible thinking block in chat flow | Replaced sidebar Agent Activity panel; conversational tool labels with artifact context |
+| **Theme toggle** | `ThemeProvider` + `ThemeToggle` | Dark/light mode with per-theme branding color sets; persists via localStorage |
+| **Centralized branding** | `branding.ts` + env vars | App name, logo, colors all configurable via `NEXT_PUBLIC_*` env vars; 7 color presets + custom hex |
 | **Verbose logging (env-controlled)** | `VERBOSE_LOGGING` env var | Debug-level insight without production noise |
 
 ---
@@ -927,7 +935,7 @@ If asked, the AI responds with a neutral redirect: "I'm a ServiceNow AI Dev Assi
 
 ---
 
-## 17. Hidden Messages & Authenticated Avatar
+## 17. Hidden Messages & UI Avatars
 
 ### 17.1 Hidden Messages
 
@@ -937,12 +945,9 @@ The `ChatMessage` type includes an optional `hidden: boolean` flag. Messages mar
 
 Currently used for auto-resume "Continue from where you left off" messages that are system-generated and should not appear as user messages.
 
-### 17.2 Authenticated User Avatar
+### 17.2 Avatars (Removed)
 
-The user avatar in `MessageBubble` displays the first initial of the authenticated ServiceNow user's display name instead of a generic "U":
-
-- `connInfo.userInfo.name` is passed from `page.tsx` → `ChatWindow` → `MessageBubble` as `userName`
-- Renders `userName.charAt(0).toUpperCase()` or falls back to "U" if not connected
+As of v2.4, user and AI avatar squares are **hidden from the UI**. Messages display without avatar indicators for a cleaner, minimal chat aesthetic. The `userName` prop is still passed through the component chain (`page.tsx` → `ChatWindow` → `MessageBubble`) and available in the backend for logging/telemetry.
 
 ---
 
@@ -1160,4 +1165,117 @@ const coerceJsonObject = z.preprocess(
 - Covers the three most common AI agent mistakes: string→boolean, string→number, string→object
 
 ---
+
+
+
+## 21. Inline Agent Activity (Conversational Thinking Block)
+
+> **Added:** 2026-03-11 | **Replaces:** Sidebar Agent Activity panel
+
+### Overview
+
+During AI processing, a collapsible inline block appears in the chat flow showing what the agent is doing. This replaces the previous sidebar-based Agent Activity panel.
+
+### Visual Design
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ ●  UI policies on incident · 5 tools                   ▾   │
+│─────────────────────────────────────────────────────────────│
+│  ✓  Analyzing your request                                  │
+│  ✓  Checking instance info                                  │
+│  ✓  Business rules on incident                              │
+│  ✓  Client scripts on incident                              │
+│  ●  UI policies on incident                                 │
+│─────────────────────────────────────────────────────────────│
+│                                               ■ Stop        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+- **No emojis or icons** — only pulsing dot (active) and ✓ checkmark (done)
+- **Collapsible** via chevron toggle; auto-scrolls to latest entry
+- **Max 220px height** with overflow scroll
+
+### Data Flow
+
+1. `page.tsx` receives `tool_start` SSE events with `toolName` and `input` data
+2. `tool_start` entries pushed to `activityLog[]` with `toolName`, `toolInput`, `done: false`
+3. `tool_end` events mark matching entry as `done: true`
+4. Status events (non-tool) accumulated separately, skipping tool phase
+5. `activityLog` passed as prop to `ChatWindow` → `InlineAgentActivity`
+
+### Friendly Tool Label Mapping
+
+`friendlyToolLabel(toolName, input)` converts raw tool names + input into conversational text:
+
+| Pattern | Display |
+|---------|---------|
+| `sn_get_business_rules` + `{table:"incident"}` | *Business rules on incident* |
+| `sn_create_business_rule` + `{name:"ValidateX", table:"incident"}` | *Creating business rule: ValidateX on incident* |
+| `sn_get_table_schema` + `{table:"incident"}` | *Reading incident table schema* |
+| `sn_analyze_instance` | *Analyzing instance* |
+| Unknown `sn_*` tool | *Humanized Tool Name* (fallback) |
+
+### Event Deduplication
+
+`processActivityLog()` cleans raw events before display:
+
+| Raw Event | Result |
+|-----------|--------|
+| `"Starting..."` / `"Round N: Analyzing..."` | Merged → *"Analyzing your request..."* |
+| `"Generating response..."` | → *"Preparing response..."* |
+| `"Executing: sn_get_*"` / `"completed"` | Skipped (redundant with tool entries) |
+
+### Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `InlineAgentActivity` | `ChatWindow.tsx` | Renders the collapsible thinking block |
+| `friendlyToolLabel()` | `ChatWindow.tsx` | Maps tool names → conversational labels |
+| `processActivityLog()` | `ChatWindow.tsx` | Deduplicates and cleans raw activity entries |
+
+---
+
+## 22. Theme System (Dark/Light Mode)
+
+> **Added:** 2026-03-10
+
+### Architecture
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| `ThemeProvider` | `ThemeProvider.tsx` | React context; manages theme state, injects CSS vars, persists to localStorage |
+| `ThemeToggle` | `ThemeToggle.tsx` | Sun/moon icon button in header bar |
+| `branding.ts` | `webapp/src/lib/branding.ts` | Color presets for both themes; env-var driven |
+
+### Theme Persistence
+
+1. On load: reads `localStorage.getItem("theme")`, falls back to `"dark"`
+2. `ThemeProvider` sets `data-theme` on `<html>` and injects CSS custom properties
+3. `globals.css` defines surface/text/border colors with `[data-theme="light"]` and `[data-theme="dark"]` rulesets
+
+### Branding Configuration
+
+| Env Var | Default | Purpose |
+|---------|---------|---------|
+| `NEXT_PUBLIC_APP_NAME` | "Yantra - AI Dev Agent - SN" | App title |
+| `NEXT_PUBLIC_APP_TAGLINE` | "Say it. Ship it." | Welcome tagline |
+| `NEXT_PUBLIC_APP_LOGO` | "/yantra-logo.png" | Logo image |
+| `NEXT_PUBLIC_PRIMARY_COLOR` | "blue" | Primary color (preset or hex) |
+| `NEXT_PUBLIC_ACCENT_COLOR` | "purple" | Accent color (preset or hex) |
+
+**Color presets:** `blue`, `purple`, `green`, `teal`, `red`, `orange`, `indigo` — each with dark (bright/desaturated) and light (deep/rich) variants. Custom hex auto-derives hover states.
+
+---
+
+## 23. Right Sidebar Changes
+
+> **Updated:** 2026-03-11
+
+The right sidebar has been simplified to show **only Connection info**:
+
+| Removed | Reason |
+|---------|--------|
+| Pipeline Status | Duplicate of header PhaseTracker |
+| Agent Activity | Moved inline to chat (Section 21) |
 
