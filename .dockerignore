@@ -1,0 +1,43 @@
+# Dependencies
+node_modules
+**/node_modules
+
+# Build outputs (rebuilt in container)
+mcp-servicenow/dist
+webapp/.next
+webapp/tsconfig.tsbuildinfo
+
+# Environment files (secrets — never bake into image)
+.env
+.env.local
+.env.*.local
+webapp/.env
+webapp/.env.local
+
+# Logs & telemetry (ephemeral)
+webapp/logs/*.txt
+webapp/logs/*.md
+
+# Dev / IDE
+.git
+.gitignore
+*.md
+!webapp/README.md
+.vscode
+.idea
+*.swp
+*.swo
+
+# Temp & misc
+temp-assets
+blog
+docs
+specs
+templates
+scripts
+src
+config
+CLAUDE.md
+CLAUDE-backup.md
+PROJECT-TRACKER.md
+
