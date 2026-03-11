@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- V2: Negative space "r" — dark badge with glowing letter -->
+  <defs>
+    <linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a1a2e"/>
+      <stop offset="100%" stop-color="#16213e"/>
+    </linearGradient>
+    <linearGradient id="g2a" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#4C7DFF"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded square background -->
+  <rect x="16" y="16" width="480" height="480" rx="96" fill="url(#g2)"/>
+  <!-- Outer border glow -->
+  <rect x="16" y="16" width="480" height="480" rx="96" stroke="url(#g2a)" stroke-width="3" fill="none" opacity="0.4"/>
+  <!-- Stylized "r" with elegant curve -->
+  <path d="M195 380 V210 Q195 160 245 148 Q285 138 340 165" 
+        stroke="url(#g2a)" stroke-width="44" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Accent node -->
+  <circle cx="340" cy="165" r="16" fill="#a78bfa"/>
+  <circle cx="340" cy="165" r="7" fill="#1a1a2e"/>
+  <!-- Bottom accent line — subtle circuit trace -->
+  <line x1="195" y1="380" x2="260" y2="380" stroke="#4C7DFF" stroke-width="3" stroke-linecap="round" opacity="0.3"/>
+</svg>
+

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import Image from "next/image";
-import { APP_NAME, APP_LOGO } from "@/lib/branding";
+import { APP_NAME, APP_LOGO, APP_SUBTITLE } from "@/lib/branding";
 
 const FEATURES = [
   {
@@ -101,7 +101,7 @@ export default function InfoModal({ open, onClose }: Props) {
             <Image src={APP_LOGO} alt={APP_NAME} width={36} height={36} className="rounded-md flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9" unoptimized />
             <div className="min-w-0">
               <h2 className="text-base sm:text-lg font-semibold truncate" style={{ color: "var(--text-primary)" }}>{APP_NAME}</h2>
-              <p className="text-[10px] sm:text-xs mt-0.5" style={{ color: "var(--text-disabled)" }}>What you can do with this app</p>
+              <p className="text-[10px] sm:text-xs mt-0.5" style={{ color: "var(--text-disabled)" }}>{APP_SUBTITLE || "What you can do with this app"}</p>
             </div>
           </div>
           <button

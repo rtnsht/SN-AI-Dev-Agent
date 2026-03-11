@@ -5,11 +5,12 @@
  */
 
 // ── App Identity ────────────────────────────────────────────────────────────
-export const APP_NAME        = process.env.NEXT_PUBLIC_APP_NAME        || "Yantra - AI Dev Agent - SN";
-export const APP_TAGLINE     = process.env.NEXT_PUBLIC_APP_TAGLINE     || "Say it. Ship it.";
-export const APP_SUBTITLE    = process.env.NEXT_PUBLIC_APP_SUBTITLE    || "Spec-driven \u00b7 Human-approved \u00b7 AI-powered";
-export const APP_DESCRIPTION = process.env.NEXT_PUBLIC_APP_DESCRIPTION || "Say it. Ship it. — Spec-driven. Human-approved. AI-powered ServiceNow development.";
-export const APP_LOGO        = process.env.NEXT_PUBLIC_APP_LOGO        || "/yantra-logo.png";
+export const APP_NAME        = process.env.NEXT_PUBLIC_APP_NAME        || "";
+export const APP_TAGLINE     = process.env.NEXT_PUBLIC_APP_TAGLINE     || "";
+export const APP_SUBTITLE    = process.env.NEXT_PUBLIC_APP_SUBTITLE    || "";
+export const APP_DESCRIPTION = process.env.NEXT_PUBLIC_APP_DESCRIPTION || "";
+export const APP_LOGO        = process.env.NEXT_PUBLIC_APP_LOGO        || "";
+export const APP_HERO_TAGLINE = process.env.NEXT_PUBLIC_HERO_TAGLINE   || "";
 export const SHOW_INFO_BUTTON = process.env.NEXT_PUBLIC_SHOW_INFO_BUTTON !== "false"; // default: true
 
 // ── Color Presets ───────────────────────────────────────────────────────────

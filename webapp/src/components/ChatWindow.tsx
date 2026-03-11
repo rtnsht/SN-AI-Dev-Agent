@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, type RefObject } from "react";
-import Image from "next/image";
 import type { ChatMessage, SDLCPhase, LiveStatus, FileAttachment } from "@/lib/types";
 import MessageBubble from "./MessageBubble";
-import { APP_NAME, APP_LOGO, APP_TAGLINE, APP_SUBTITLE } from "@/lib/branding";
+import { APP_NAME, APP_HERO_TAGLINE, APP_SUBTITLE } from "@/lib/branding";
 
 /* ── Web Speech API type shim ── */
 interface SpeechRecognitionEvent extends Event {
@@ -38,12 +37,47 @@ function getSpeechRecognition(): SpeechRecognitionCtor | null {
 
 const MAX_RECORDING_MS = 2 * 60 * 1000; // 2 minute hard cap
 
-const DEFAULT_PROMPTS = [
-  { icon: "🏗️", text: "Build a high-priority incident justification feature that requires managers to provide a business reason when setting incident priority to P1", desc: "Full SDLC requirement" },
-  { icon: "📦", text: "Create a catalog item for requesting a new laptop with approval workflow", desc: "Full SDLC requirement" },
-  { icon: "🔍", text: "Analyze my instance health and show me any anti-patterns", desc: "Instance analysis" },
-  { icon: "📊", text: "List all custom business rules on the incident table", desc: "Quick query" },
-];
+
+
+/** Suggestion tab categories */
+const SUGGESTION_TABS = [
+  { key: "foryou", label: "For you", icon: "sparkles" },
+  { key: "build", label: "Build a feature", icon: "folder" },
+  { key: "explore", label: "Explore instance", icon: "code" },
+  { key: "quick", label: "Quick queries", icon: "list" },
+] as const;
+
+type TabKey = typeof SUGGESTION_TABS[number]["key"];
+
+/** Categorized suggestions */
+const SUGGESTION_DATA: Record<TabKey, string[]> = {
+  foryou: [
+    "Build a high-priority incident justification feature with manager approval",
+    "Create a catalog item for requesting a new laptop with approval workflow",
+    "Analyze my instance health and show me any anti-patterns",
+    "List all custom business rules on the incident table",
+  ],
+  build: [
+    "Build an onboarding workflow that provisions accounts across IT systems",
+    "Create a change request template with risk assessment and CAB approval",
+    "Add a custom field to incident that tracks customer sentiment",
+    "Build a knowledge article approval workflow with draft and publish states",
+  ],
+  explore: [
+    "Show me all active business rules on the incident table",
+    "Audit my ACLs and find any overly permissive rules",
+    "List all scheduled jobs and their run frequencies",
+    "Find unused script includes in my instance",
+  ],
+  quick: [
+    "How many open incidents are assigned to my group?",
+    "What update sets are in progress right now?",
+    "Show the schema for the cmdb_ci_server table",
+    "List all notification email templates for incidents",
+  ],
+};
+
+
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB per image
 const MAX_IMAGES = 5;
@@ -338,9 +372,12 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
   const [images, setImages] = useState<string[]>([]);
   const [files, setFiles] = useState<FileAttachment[]>([]);
   const [dragOver, setDragOver] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabKey>("foryou");
+  const [showAttachDropdown, setShowAttachDropdown] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
+  const attachDropdownRef = useRef<HTMLDivElement>(null);
 
   /* ── Voice input state ── */
   const [isRecording, setIsRecording] = useState(false);
@@ -365,6 +402,17 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
       if (maxTimerRef.current) clearTimeout(maxTimerRef.current);
     };
   }, []);
+
+  /** Close attach dropdown on outside click */
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (attachDropdownRef.current && !attachDropdownRef.current.contains(e.target as Node)) {
+        setShowAttachDropdown(false);
+      }
+    };
+    if (showAttachDropdown) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showAttachDropdown]);
 
   const stopRecording = useCallback(() => {
     recognitionRef.current?.stop();
@@ -558,335 +606,298 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
 
   const showEmptyState = messages.every((m) => m.role === "system");
 
-  return (
-    <div className="flex-1 flex flex-col min-h-0" style={{ background: "var(--surface-app)" }}>
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-2 sm:px-6 py-4 sm:py-6">
-        <div className="max-w-3xl mx-auto space-y-4 sm:space-y-5">
-          {showEmptyState && (
-            <div className="flex-1 flex items-center justify-center h-full">
-              <div className="text-center max-w-lg mx-auto px-2">
-                <div className="w-24 h-24 sm:w-40 sm:h-40 mx-auto -mb-1 flex items-center justify-center">
-                  <Image src={APP_LOGO} alt={APP_NAME} width={160} height={160} className="rounded-xl" unoptimized />
-                </div>
-                <h2 className="text-display mb-1" style={{ color: "var(--text-primary)", fontSize: "clamp(20px, 4vw, 32px)" }}>
-                  {APP_TAGLINE}
-                </h2>
-                <p className="phase-label mb-3 sm:mb-4" style={{ fontSize: "11px" }}>
-                  {APP_SUBTITLE}
-                </p>
-                <p className="text-small mb-4 sm:mb-6" style={{ color: "var(--text-disabled)" }}>
-                  {connected
-                    ? `You're connected! Describe what you need — ${APP_NAME} builds, tests, and deploys it on your ServiceNow instance.`
-                    : `Open the settings panel, connect your instance, and tell ${APP_NAME} what to build.`}
-                </p>
-                {connected && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {(instancePrompts && instancePrompts.length > 0 ? instancePrompts : DEFAULT_PROMPTS).map((p, i) => (
-                      <button
-                        key={i}
-                        onClick={() => onSend(p.text)}
-                        className="text-left p-3 rounded-md transition-all group overflow-hidden"
-                        style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-default)" }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--border-emphasis)"; e.currentTarget.style.background = "var(--surface-elevated)"; }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.background = "var(--surface-secondary)"; }}
-                      >
-                        <span className="text-lg">{p.icon}</span>
-                        <p className="text-[12px] mt-1 transition-colors line-clamp-2 break-words" style={{ color: "var(--text-secondary)" }}>{p.text}</p>
-                        <p className="text-[10px] mt-0.5 truncate" style={{ color: "var(--text-disabled)" }}>{p.desc}</p>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+  /* ── Resolve which suggestions to show based on active tab ── */
+  const currentSuggestions = activeTab === "foryou" && instancePrompts && instancePrompts.length > 0
+    ? instancePrompts.map((p) => p.text)
+    : SUGGESTION_DATA[activeTab];
+
+  /* ── Tab icon helper ── */
+  const tabIcon = (icon: string) => {
+    switch (icon) {
+      case "sparkles": return <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" /></svg>;
+      case "folder": return <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" /></svg>;
+      case "code": return <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" /></svg>;
+      case "list": return <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.25 6.75h12M8.25 12h12M8.25 17.25h12M3.75 6.75h.007v.008H3.75V6.75zm0 5.25h.007v.008H3.75V12zm0 5.25h.007v.008H3.75v-.008z" /></svg>;
+      default: return null;
+    }
+  };
+
+  /* ── Shared input bar (used in both hero and bottom) ── */
+  const renderInputBar = (inHero: boolean) => (
+    <div
+      className={`hero-input-container ${inHero ? "w-full" : ""} ${isRecording ? "recording" : ""}`}
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={handleDrop}
+    >
+      {/* Image previews */}
+      {images.length > 0 && (
+        <div className="flex gap-2 mb-2 flex-wrap">
+          {images.map((img, i) => (
+            <div key={i} className="relative group">
+              <img src={img} alt={`Attachment ${i + 1}`} className="h-14 w-14 object-cover rounded-lg" style={{ border: "1px solid var(--border-emphasis)" }} />
+              <button onClick={() => removeImage(i)} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 hover:bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" title="Remove">×</button>
             </div>
-          )}
-
-          {messages.filter((msg) => !msg.hidden).map((msg, i) => (
-            <MessageBubble
-              key={i}
-              message={msg}
-              onApprove={onApprove}
-              onChoiceSelect={onChoiceSelect}
-              showToolDetails={showToolDetails}
-              userName={userName}
-            />
           ))}
-
-          {isLoading && (
-            <InlineAgentActivity
-              activityLog={activityLog}
-              liveStatus={liveStatus ?? null}
-              onCancel={onCancel}
-            />
-          )}
-
-          <div ref={bottomRef} />
         </div>
-      </div>
+      )}
+      {/* Document file previews */}
+      {files.length > 0 && (
+        <div className="flex gap-2 mb-2 flex-wrap">
+          {files.map((f, i) => (
+            <div key={i} className="relative group flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-emphasis)" }}>
+              <span className="text-base">{fileIcon(f.name)}</span>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[11px] truncate max-w-[120px]" style={{ color: "var(--text-primary)" }}>{f.name}</span>
+                <span className="text-[10px]" style={{ color: "var(--text-disabled)" }}>{formatSize(f.size)}</span>
+              </div>
+              <button onClick={() => removeFile(i)} className="absolute -top-1.5 -right-1.5 w-5 h-5 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: "var(--color-danger)" }} title="Remove">x</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* Drag overlay */}
+      {dragOver && (
+        <div className="mb-2 py-3 rounded-lg text-center text-xs" style={{ border: "2px dashed rgba(76,125,255,0.4)", color: "var(--color-info)" }}>
+          Drop images or documents here
+        </div>
+      )}
+      {isRecording ? (
+        /* ════ RECORDING MODE — full takeover ════ */
+        <>
+          {/* Transcript area (live text as it comes in) */}
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Listening..."
+            rows={1}
+            className="w-full bg-transparent text-sm focus:outline-none resize-none overflow-y-auto"
+            style={{ color: "var(--text-primary)", maxHeight: inHero ? "120px" : "50vh", opacity: input ? 1 : 0.5 }}
+          />
+          {/* Recording controls row */}
+          <div className="flex items-center gap-3 mt-3">
+            {/* Waveform visualizer */}
+            <div className="flex items-center gap-[2px] h-6">
+              {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                <span
+                  key={i}
+                  className="w-[2.5px] rounded-full"
+                  style={{
+                    background: "var(--text-disabled)",
+                    animation: `voiceBar 0.7s ease-in-out ${i * 0.09}s infinite alternate`,
+                    height: "30%",
+                  }}
+                />
+              ))}
+            </div>
+            {/* Timer */}
+            <span className="font-mono tabular-nums text-xs" style={{ color: "var(--text-disabled)" }}>
+              {Math.floor(recordingSeconds / 60).toString().padStart(2, "0")}:{(recordingSeconds % 60).toString().padStart(2, "0")}
+            </span>
 
-      {/* Input */}
-      <div
-        className="p-2 sm:p-4 transition-colors"
-        style={{
-          borderTop: "1px solid var(--border-default)",
-          background: dragOver ? "rgba(76,125,255,0.04)" : "var(--surface-primary)",
-        }}
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={handleDrop}
-      >
-        <div className="max-w-3xl mx-auto">
-          {/* Image previews */}
-          {images.length > 0 && (
-            <div className="flex gap-2 mb-2 flex-wrap">
-              {images.map((img, i) => (
-                <div key={i} className="relative group">
-                  <img src={img} alt={`Attachment ${i + 1}`} className="h-16 w-16 object-cover rounded-md" style={{ border: "1px solid var(--border-emphasis)" }} />
-                  <button
-                    onClick={() => removeImage(i)}
-                    className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 hover:bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Remove image"
-                  >
-                    ×
+            <div className="flex-1" />
+
+            {/* Cancel (discard) */}
+            <button
+              onClick={() => { stopRecording(); setInput(""); }}
+              className="text-xs px-3 py-1 rounded-full transition-colors"
+              style={{ color: "var(--text-secondary)", background: "var(--surface-elevated)" }}
+              title="Cancel recording"
+            >
+              Cancel
+            </button>
+            {/* Stop & keep */}
+            <button
+              onClick={stopRecording}
+              className="w-9 h-9 rounded-full flex items-center justify-center transition-all voice-stop-btn"
+              title="Done"
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2" /></svg>
+            </button>
+          </div>
+        </>
+      ) : (
+        /* ════ NORMAL INPUT MODE ════ */
+        <>
+          {/* Textarea row */}
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            placeholder={connected ? "What should we work on next?" : "Connect your instance first →"}
+            disabled={!connected || isLoading}
+            rows={1}
+            className="w-full bg-transparent text-sm focus:outline-none disabled:opacity-50 resize-none overflow-y-auto"
+            style={{ color: "var(--text-primary)", maxHeight: inHero ? "120px" : "50vh" }}
+          />
+          {/* Bottom row: + button, mic, send */}
+          <div className="flex items-center gap-1 mt-2">
+            {/* + Attach button with dropdown */}
+            <div className="relative" ref={attachDropdownRef}>
+              <button
+                onClick={() => setShowAttachDropdown((v) => !v)}
+                disabled={!connected || isLoading}
+                className="w-8 h-8 rounded-full flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                style={{ border: "1px solid var(--border-emphasis)", color: "var(--text-secondary)" }}
+                title="Attach file"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+              </button>
+              {showAttachDropdown && (
+                <div className="attach-dropdown">
+                  <button className="attach-dropdown-item" onClick={() => { fileInputRef.current?.click(); setShowAttachDropdown(false); }}>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" /></svg>
+                    Image
+                  </button>
+                  <button className="attach-dropdown-item" onClick={() => { docInputRef.current?.click(); setShowAttachDropdown(false); }}>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+                    Document
                   </button>
                 </div>
-              ))}
-              {images.length < MAX_IMAGES && (
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="h-16 w-16 rounded-md flex items-center justify-center transition-colors"
-                  style={{ border: "1px dashed var(--border-emphasis)", color: "var(--text-disabled)" }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--text-secondary)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border-emphasis)"; e.currentTarget.style.color = "var(--text-disabled)"; }}
-                  title="Add another image"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                </button>
               )}
             </div>
-          )}
+            <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { if (e.target.files) addImageFiles(e.target.files); e.target.value = ""; }} />
+            <input ref={docInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" multiple className="hidden" onChange={(e) => { if (e.target.files) addDocFiles(e.target.files); e.target.value = ""; }} />
 
-          {/* Document file previews */}
-          {files.length > 0 && (
-            <div className="flex gap-2 mb-2 flex-wrap">
-              {files.map((f, i) => (
-                <div key={i} className="relative group flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-emphasis)" }}>
-                  <span className="text-lg">{fileIcon(f.name)}</span>
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-[11px] truncate max-w-[120px]" style={{ color: "var(--text-primary)" }}>{f.name}</span>
-                    <span className="text-[10px]" style={{ color: "var(--text-disabled)" }}>{formatSize(f.size)}</span>
-                  </div>
-                  <button
-                    onClick={() => removeFile(i)}
-                    className="absolute -top-1.5 -right-1.5 w-5 h-5 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    style={{ background: "var(--color-danger)" }}
-                    title="Remove file"
-                  >
-                    x
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+            <div className="flex-1" />
 
-          {/* Drag overlay hint */}
-          {dragOver && (
-            <div className="mb-2 py-3 rounded-md text-center text-xs" style={{ border: "2px dashed rgba(76,125,255,0.4)", color: "var(--color-info)" }}>
-              Drop images or documents here
-            </div>
-          )}
-
-          {/* Recording indicator -- prominent bar with clear controls */}
-          {isRecording && (
-            <div className="flex items-center gap-3 mb-2 px-4 py-2.5 rounded-md" style={{ background: "rgba(249,115,115,0.06)", border: "1px solid rgba(249,115,115,0.2)" }}>
-              {/* Pulsing red dot */}
-              <span className="relative flex h-3 w-3 flex-shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
-              </span>
-              {/* Timer */}
-              <span className="font-mono tabular-nums text-sm text-red-200 font-medium">
-                {Math.floor(recordingSeconds / 60).toString().padStart(2, "0")}:{(recordingSeconds % 60).toString().padStart(2, "0")}
-              </span>
-              {/* Waveform animation bars */}
-              <div className="flex items-center gap-[3px] h-5">
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <span
-                    key={i}
-                    className="w-[3px] bg-red-400/80 rounded-full"
-                    style={{
-                      animation: `voiceBar 0.8s ease-in-out ${i * 0.12}s infinite alternate`,
-                      height: "40%",
-                    }}
-                  />
-                ))}
-              </div>
-              <span className="text-xs text-red-300/80 ml-1">Listening...</span>
-              {/* Remaining time */}
-              <span className="ml-auto text-red-400/50 text-[10px] tabular-nums">
-                {Math.floor((MAX_RECORDING_MS / 1000 - recordingSeconds) / 60)}:{((MAX_RECORDING_MS / 1000 - recordingSeconds) % 60).toString().padStart(2, "0")} left
-              </span>
-              {/* Stop button */}
-              <button
-                onClick={stopRecording}
-                className="ml-1 px-3 py-1 bg-red-600 hover:bg-red-500 text-white text-xs font-medium rounded-lg transition-colors flex-shrink-0"
-              >
-                Stop
-              </button>
-            </div>
-          )}
-
-          <div className="flex gap-2 items-end">
-            {/* Image upload button */}
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={!connected || isLoading || images.length >= MAX_IMAGES}
-              className="p-3 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
-              style={{ color: "var(--text-secondary)" }}
-              onMouseEnter={e => { if (!e.currentTarget.disabled) { e.currentTarget.style.background = "var(--surface-elevated)"; e.currentTarget.style.color = "var(--text-primary)"; }}}
-              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-secondary)"; }}
-              title="Attach image (paste or drag also works)"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => { if (e.target.files) addImageFiles(e.target.files); e.target.value = ""; }}
-            />
-            {/* Document upload button */}
-            <button
-              onClick={() => docInputRef.current?.click()}
-              disabled={!connected || isLoading || files.length >= MAX_FILES}
-              className="p-3 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
-              style={{ color: "var(--text-secondary)" }}
-              onMouseEnter={e => { if (!e.currentTarget.disabled) { e.currentTarget.style.background = "var(--surface-elevated)"; e.currentTarget.style.color = "var(--text-primary)"; }}}
-              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-secondary)"; }}
-              title="Attach document (PDF, Word, Excel)"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-              </svg>
-            </button>
-            <input
-              ref={docInputRef}
-              type="file"
-              accept=".pdf,.doc,.docx,.xls,.xlsx"
-              multiple
-              className="hidden"
-              onChange={(e) => { if (e.target.files) addDocFiles(e.target.files); e.target.value = ""; }}
-            />
-
-            {/* Auto-growing textarea */}
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
-              placeholder={connected ? "Ask me anything about your ServiceNow instance..." : "Connect first →"}
-              disabled={!connected || isLoading}
-              rows={1}
-              className="flex-1 px-3 sm:px-4 py-2.5 sm:py-3 rounded-md text-sm focus:outline-none focus:ring-2 disabled:opacity-50 resize-none overflow-y-auto"
-              style={{
-                background: "var(--surface-secondary)",
-                border: "1px solid var(--border-emphasis)",
-                color: "var(--text-primary)",
-                maxHeight: "50vh",
-                /* focus ring handled by focus:ring-2 + custom color */
-                "--tw-ring-color": "var(--color-info)",
-              } as React.CSSProperties}
-            />
-
-            {/* Voice input button */}
+            {/* Mic button */}
             {speechSupported && (
               <button
                 onClick={toggleRecording}
                 disabled={!connected || isLoading}
-                className="flex items-center gap-1.5 rounded-md transition-all flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
-                style={{
-                  padding: isRecording ? "10px 12px" : "12px",
-                  background: isRecording ? "var(--color-danger)" : "transparent",
-                  color: isRecording ? "white" : "var(--text-secondary)",
-                }}
-                title={isRecording ? "Stop recording" : "Voice input (speech-to-text)"}
+                className="w-8 h-8 rounded-full flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                style={{ color: "var(--text-disabled)" }}
+                title="Voice input"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  {isRecording ? (
-                    <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none" />
-                  ) : (
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4M12 15a3 3 0 003-3V5a3 3 0 00-6 0v7a3 3 0 003 3z" />
-                  )}
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4M12 15a3 3 0 003-3V5a3 3 0 00-6 0v7a3 3 0 003 3z" />
                 </svg>
-                {isRecording && <span className="text-xs font-medium">Stop</span>}
               </button>
             )}
-            {!speechSupported && (
-              <div className="p-3 flex-shrink-0 cursor-not-allowed" style={{ color: "var(--text-disabled)" }} title="Voice input not supported. Use Chrome or Edge.">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4M12 15a3 3 0 003-3V5a3 3 0 00-6 0v7a3 3 0 003 3z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3l18 18" />
-                </svg>
-              </div>
-            )}
 
-            {/* Send / Stop button */}
+            {/* Send / Stop */}
             {isLoading ? (
-              <button
-                onClick={onCancel}
-                className="p-3 rounded-md transition-colors flex-shrink-0"
-                style={{ background: "var(--color-danger)", color: "white" }}
-                title="Cancel request"
-              >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <rect x="6" y="6" width="12" height="12" rx="2" />
-                </svg>
+              <button onClick={onCancel} className="w-8 h-8 rounded-full flex items-center justify-center transition-colors" style={{ background: "var(--color-danger)", color: "white" }} title="Cancel">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
               </button>
             ) : (
               <button
                 onClick={handleSubmit}
                 disabled={!connected || (!input.trim() && images.length === 0 && files.length === 0)}
-                className="p-3 rounded-md transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="w-8 h-8 rounded-full flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 style={{
-                  background: (connected && (input.trim() || images.length > 0 || files.length > 0)) ? "var(--color-primary)" : "var(--surface-elevated)",
-                  color: (connected && (input.trim() || images.length > 0 || files.length > 0)) ? "white" : "var(--text-disabled)",
+                  background: (connected && (input.trim() || images.length > 0 || files.length > 0)) ? "var(--text-primary)" : "var(--surface-elevated)",
+                  color: (connected && (input.trim() || images.length > 0 || files.length > 0)) ? "var(--surface-app)" : "var(--text-disabled)",
                 }}
                 title="Send (Enter)"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" /></svg>
               </button>
             )}
           </div>
-          {/* Keyboard hints */}
-          <div className="hidden sm:flex gap-2 mt-2">
-            <div className="w-[44px] flex-shrink-0" />
-            <div className="flex-1 flex items-center justify-center gap-5 px-4 py-1.5 rounded-md text-xs" style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-subtle)" }}>
-              <span className="flex items-center gap-1.5 font-medium" style={{ color: "var(--color-info)" }}>
-                <kbd className="px-1.5 py-0.5 rounded text-[11px] font-mono font-bold" style={{ background: "rgba(76,125,255,0.1)", border: "1px solid rgba(76,125,255,0.2)", color: "var(--color-info)" }}>Enter</kbd>
-                <span className="ml-0.5">to Send</span>
-              </span>
-              <span style={{ color: "var(--border-emphasis)" }}>│</span>
-              <span className="flex items-center gap-1.5 font-medium" style={{ color: "var(--text-secondary)" }}>
-                <kbd className="px-1.5 py-0.5 rounded text-[11px] font-mono font-bold" style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)" }}>⇧ Shift</kbd>
-                <span style={{ color: "var(--text-disabled)" }}>+</span>
-                <kbd className="px-1.5 py-0.5 rounded text-[11px] font-mono font-bold" style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)" }}>Enter</kbd>
-                <span className="ml-0.5">for New Line</span>
-              </span>
-              <span style={{ color: "var(--border-emphasis)" }}>│</span>
-              <span className="font-medium" style={{ color: "var(--text-secondary)" }}>Paste or drag images/docs</span>
-            </div>
-            <div className="w-[44px] flex-shrink-0" />
+        </>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0" style={{ background: "var(--surface-app)" }}>
+      {showEmptyState ? (
+        /* ════ HERO EMPTY STATE (Perplexity-style) ════ */
+        <div className="flex-1 flex flex-col items-center justify-center px-4">
+          <div className="w-full max-w-2xl mx-auto">
+            {/* Tagline */}
+            <h1 className="hero-tagline text-center mb-2">
+              {APP_HERO_TAGLINE}
+            </h1>
+            {APP_SUBTITLE && (
+              <p className="text-center mb-8 text-sm" style={{ color: "var(--text-disabled)", letterSpacing: "0.04em" }}>
+                {APP_SUBTITLE}
+              </p>
+            )}
+            {!APP_SUBTITLE && <div className="mb-8" />}
+
+            {/* Input bar (centered in hero) */}
+            {renderInputBar(true)}
+
+            {/* Suggestion tabs */}
+            {connected && (
+              <div className="mt-6">
+                <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+                  {SUGGESTION_TABS.map((tab) => (
+                    <button
+                      key={tab.key}
+                      className={`suggestion-tab ${activeTab === tab.key ? "active" : ""}`}
+                      onClick={() => setActiveTab(tab.key)}
+                    >
+                      {tabIcon(tab.icon)}
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Suggestion list */}
+                <div className="mt-3 space-y-0.5">
+                  {currentSuggestions.map((text, i) => (
+                    <button
+                      key={`${activeTab}-${i}`}
+                      className="suggestion-item"
+                      onClick={() => onSend(text)}
+                    >
+                      {text}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!connected && (
+              <p className="text-center mt-6 text-sm" style={{ color: "var(--text-disabled)" }}>
+                Open settings and connect your ServiceNow instance to get started.
+              </p>
+            )}
           </div>
         </div>
-      </div>
+      ) : (
+        /* ════ CHAT MODE ════ */
+        <>
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto px-2 sm:px-6 py-4 sm:py-6">
+            <div className="max-w-3xl mx-auto space-y-4 sm:space-y-5">
+              {messages.filter((msg) => !msg.hidden).map((msg, i) => (
+                <MessageBubble
+                  key={i}
+                  message={msg}
+                  onApprove={onApprove}
+                  onChoiceSelect={onChoiceSelect}
+                  showToolDetails={showToolDetails}
+                  userName={userName}
+                />
+              ))}
+              {isLoading && (
+                <InlineAgentActivity
+                  activityLog={activityLog}
+                  liveStatus={liveStatus ?? null}
+                  onCancel={onCancel}
+                />
+              )}
+              <div ref={bottomRef} />
+            </div>
+          </div>
+
+          {/* Bottom input bar */}
+          <div className="p-2 sm:p-4" style={{ borderTop: "1px solid var(--border-default)", background: "var(--surface-primary)" }}>
+            <div className="max-w-3xl mx-auto">
+              {renderInputBar(false)}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

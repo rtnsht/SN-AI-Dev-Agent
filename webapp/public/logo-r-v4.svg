@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- V4: Monogram "r" carved out of a solid square — bold, architectural -->
+  <defs>
+    <linearGradient id="g4" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#e2e8f0"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="72" fill="#0f172a"/>
+  <!-- Bold "r" in white — chunky, confident -->
+  <path d="M180 395 V195 Q180 135 255 125 Q320 118 370 150"
+        stroke="url(#g4)" stroke-width="56" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Subtle shadow line -->
+  <path d="M180 395 V195 Q180 135 255 125 Q320 118 370 150"
+        stroke="#1e293b" stroke-width="60" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.3"
+        transform="translate(3,3)"/>
+  <!-- Redraw on top for crispness -->
+  <path d="M180 395 V195 Q180 135 255 125 Q320 118 370 150"
+        stroke="url(#g4)" stroke-width="56" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>
+

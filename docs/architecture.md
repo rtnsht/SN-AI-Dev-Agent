@@ -917,7 +917,7 @@ On connection, the app fetches instance metadata in the background and generates
 
 ### 15.3 Fallback
 
-If the fetch fails or returns empty (e.g., network error, insufficient permissions), the UI silently falls back to the hardcoded `DEFAULT_PROMPTS` array. No error is shown to the user.
+If the fetch fails or returns empty (e.g., network error, insufficient permissions), the UI silently falls back to the hardcoded `SUGGESTION_DATA.foryou` array. No error is shown to the user.
 
 ---
 
@@ -1269,6 +1269,7 @@ During AI processing, a collapsible inline block appears in the chat flow showin
 |---------|---------|---------|
 | `NEXT_PUBLIC_APP_NAME` | "Yantra - AI Dev Agent - SN" | App title |
 | `NEXT_PUBLIC_APP_TAGLINE` | "Say it. Ship it." | Welcome tagline |
+| `NEXT_PUBLIC_HERO_TAGLINE` | "Yantra works for you." | Hero tagline on empty chat state |
 | `NEXT_PUBLIC_APP_LOGO` | "/yantra-logo.png" | Logo image |
 | `NEXT_PUBLIC_PRIMARY_COLOR` | "blue" | Primary color (preset or hex) |
 | `NEXT_PUBLIC_ACCENT_COLOR` | "purple" | Accent color (preset or hex) |

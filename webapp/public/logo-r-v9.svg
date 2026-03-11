@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- V9: Hexagon badge with angular "r" — dev/engineering feel -->
+  <defs>
+    <linearGradient id="g9" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#ef4444"/>
+    </linearGradient>
+    <linearGradient id="g9bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#18181b"/>
+      <stop offset="100%" stop-color="#0f0f12"/>
+    </linearGradient>
+  </defs>
+  <!-- Hexagon -->
+  <polygon points="256,20 468,140 468,372 256,492 44,372 44,140"
+           fill="url(#g9bg)" stroke="url(#g9)" stroke-width="4"/>
+  <!-- Angular "r" — sharper corners for engineering feel -->
+  <path d="M195 385 L195 200 L195 160 L260 140 L350 160"
+        stroke="url(#g9)" stroke-width="40" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Corner accent -->
+  <circle cx="350" cy="160" r="12" fill="#f59e0b"/>
+  <circle cx="350" cy="160" r="5" fill="#18181b"/>
+  <!-- Inner hex outline -->
+  <polygon points="256,60 438,162 438,350 256,452 74,350 74,162"
+           fill="none" stroke="url(#g9)" stroke-width="1" opacity="0.15"/>
+</svg>
+

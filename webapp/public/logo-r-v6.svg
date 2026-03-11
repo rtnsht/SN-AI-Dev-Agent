@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- V6: Outline "r" — ultra-minimal, line art style -->
+  <defs>
+    <linearGradient id="g6" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+  </defs>
+  <!-- Thin circle outline -->
+  <circle cx="256" cy="256" r="240" stroke="url(#g6)" stroke-width="4" fill="none"/>
+  <!-- "r" as thin elegant stroke -->
+  <path d="M200 380 V200 Q200 148 260 135 Q315 124 365 155"
+        stroke="url(#g6)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- No fill, no nodes — pure line art -->
+</svg>
+
