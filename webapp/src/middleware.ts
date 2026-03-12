@@ -27,6 +27,12 @@ const PUBLIC_PATHS = [
   "/auth/set-password",
   "/api/auth/",
   "/api/config",
+  "/api/test-connection",
+  "/api/session-start",
+  "/api/instance-prompts",
+  "/api/openrouter-models",
+  "/api/chat-stream",
+  "/api/chat",
 ];
 
 /** Check if a path is public (no auth needed) */
