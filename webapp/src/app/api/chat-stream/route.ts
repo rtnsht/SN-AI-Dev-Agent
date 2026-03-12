@@ -133,17 +133,41 @@ export async function POST(request: NextRequest) {
 
     const startTime = Date.now();
 
+    // AbortController to propagate client disconnect into the generator
+    const abortController = new AbortController();
+    request.signal.addEventListener("abort", () => abortController.abort(), { once: true });
+
     // Create a ReadableStream for Server-Sent Events
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder();
         let toolCount = 0;
+        let controllerClosed = false;
+
+        const safeEnqueue = (chunk: Uint8Array) => {
+          if (controllerClosed) return;
+          try {
+            controller.enqueue(chunk);
+          } catch {
+            controllerClosed = true;
+          }
+        };
+
+        const safeClose = () => {
+          if (controllerClosed) return;
+          try {
+            controller.close();
+            controllerClosed = true;
+          } catch {
+            controllerClosed = true;
+          }
+        };
 
         try {
-          for await (const event of chatStream(credentials, chatMessages, selectedModel, 30, sessionId, phase)) {
+          for await (const event of chatStream(credentials, chatMessages, selectedModel, 30, sessionId, phase, abortController.signal)) {
             if (event.type === "tool_end") toolCount++;
             const data = `data: ${JSON.stringify(event)}\n\n`;
-            controller.enqueue(encoder.encode(data));
+            safeEnqueue(encoder.encode(data));
           }
 
           const durationMs = Date.now() - startTime;
@@ -157,10 +181,10 @@ export async function POST(request: NextRequest) {
             type: "error",
             message: errorMsg,
           })}\n\n`;
-          controller.enqueue(encoder.encode(errorEvent));
+          safeEnqueue(encoder.encode(errorEvent));
           // Don't end session on stream error - client may retry
         } finally {
-          controller.close();
+          safeClose();
         }
       },
     });

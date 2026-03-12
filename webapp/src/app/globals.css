@@ -101,7 +101,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: var(--font-geist-mono);
   --color-primary: var(--color-primary);
   --color-primary-hover: var(--color-primary-hover);
@@ -112,7 +112,7 @@
 body {
   background: var(--surface-app);
   color: var(--text-primary);
-  font-family: var(--font-geist-sans), Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -213,15 +213,136 @@ body {
   50% { transform: scale(1.4); opacity: 0; }
 }
 
-/* ── Hero tagline (Perplexity-style) ── */
+/* ── Hero logo ── */
+.hero-logo-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: box-shadow var(--transition-normal), filter var(--transition-normal);
+}
+/* Dark mode: soft primary glow around the logo */
+.hero-logo-container {
+  box-shadow: 0 0 48px color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+/* Light mode: subtle shadow + slight brightness boost so orbitals pop on white page */
+[data-theme="light"] .hero-logo-container {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  filter: brightness(1.1) contrast(1.05);
+}
+.hero-logo {
+  object-fit: contain;
+  filter: drop-shadow(0 0 20px color-mix(in srgb, var(--color-primary) 30%, transparent));
+}
+
+/* ── Hero tagline ── */
 .hero-tagline {
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(28px, 5vw, 44px);
-  font-weight: 400;
-  line-height: 1.2;
-  letter-spacing: -0.01em;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: clamp(20px, 3.5vw, 32px);
+  font-weight: 300;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
   color: var(--text-primary);
-  opacity: 0.9;
+  opacity: 0.85;
+}
+
+/* ── Hero feature description block — glowing revolving border ── */
+.hero-features-block {
+  position: relative;
+  overflow: hidden;
+  border: none !important;
+  background: var(--surface-secondary) !important;
+}
+/* Revolving glow border — conic gradient that rotates */
+.hero-features-block::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--glow-angle, 0deg),
+    transparent 0%,
+    var(--color-primary) 10%,
+    color-mix(in srgb, var(--color-accent-from, var(--color-primary)) 80%, transparent) 20%,
+    transparent 40%,
+    transparent 60%,
+    color-mix(in srgb, var(--color-primary) 50%, transparent) 75%,
+    transparent 90%
+  );
+  animation: glowRotate 6s linear infinite;
+  z-index: -1;
+}
+/* Inner fill to mask the gradient — leaves only the border visible */
+.hero-features-block::after {
+  content: "";
+  position: absolute;
+  inset: 1.5px;
+  border-radius: inherit;
+  background: var(--surface-secondary);
+  z-index: -1;
+}
+@keyframes glowRotate {
+  from { --glow-angle: 0deg; }
+  to { --glow-angle: 360deg; }
+}
+@property --glow-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+/* Outer ambient glow */
+.hero-features-block {
+  box-shadow: 0 0 30px color-mix(in srgb, var(--color-primary) 8%, transparent),
+              0 0 60px color-mix(in srgb, var(--color-primary) 4%, transparent);
+}
+.hero-feature-dot {
+  transition: background var(--transition-normal);
+}
+
+/* ── Connected state: glowing input bar wrapper ── */
+.hero-input-glow {
+  position: relative;
+  border-radius: 16px;
+  overflow: visible;
+}
+.hero-input-glow::before,
+.hero-input-glow::after {
+  overflow: hidden;
+  pointer-events: none;
+}
+.hero-input-glow::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--glow-angle, 0deg),
+    transparent 0%,
+    var(--color-primary) 12%,
+    color-mix(in srgb, var(--color-accent-from, var(--color-primary)) 80%, transparent) 24%,
+    transparent 45%,
+    transparent 55%,
+    color-mix(in srgb, var(--color-primary) 60%, transparent) 70%,
+    transparent 90%
+  );
+  animation: glowRotate 5s linear infinite;
+  z-index: 0;
+}
+.hero-input-glow::after {
+  content: "";
+  position: absolute;
+  inset: 1.5px;
+  border-radius: inherit;
+  background: var(--surface-secondary);
+  z-index: 0;
+}
+.hero-input-glow > * {
+  position: relative;
+  z-index: 1;
+}
+.hero-input-glow {
+  box-shadow: 0 0 24px color-mix(in srgb, var(--color-primary) 12%, transparent),
+              0 0 48px color-mix(in srgb, var(--color-primary) 6%, transparent);
 }
 
 /* ── Hero input container (Perplexity-style) ── */
@@ -381,4 +502,18 @@ body {
 /* ── Panel separator ── */
 .panel-border {
   border-color: var(--border-default);
+}
+
+
+/* ── Mobile two-step flow: connection panel slide-up ── */
+.mobile-connect-panel {
+  transform: translateY(100%);
+  opacity: 0;
+  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.25s ease;
+  pointer-events: none;
+}
+.mobile-connect-panel-visible {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
 }

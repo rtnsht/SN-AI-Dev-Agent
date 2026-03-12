@@ -1959,6 +1959,19 @@ export function getAnthropicToolDefinitions() {
 
 export type SDLCToolPhase = 'spec' | 'design' | 'scope_selection' | 'implementation' | 'testing' | 'deployment';
 
+/** Per-phase round limits — lightweight phases get fewer rounds to prevent loops */
+export const PHASE_ROUND_LIMITS: Record<SDLCToolPhase, number> = {
+  spec: 15,
+  design: 20,
+  scope_selection: 5,   // Scope is a 2-3 tool call phase — hard cap prevents the loop seen in session xyhkmn8
+  implementation: 30,
+  testing: 20,
+  deployment: 15,
+};
+
+/** Default round limit when no phase is set */
+export const DEFAULT_ROUND_LIMIT = 30;
+
 /** Core tools included in every phase */
 const CORE_TOOL_NAMES = new Set([
   // Connection & instance info
@@ -1970,6 +1983,19 @@ const CORE_TOOL_NAMES = new Set([
   // Update set read (always needed for context)
   'sn_list_update_sets', 'sn_get_update_set', 'sn_get_update_set_contents',
 ]);
+
+/**
+ * Per-phase core tool overrides — phases that don't need the full core set
+ * can exclude tools that cause the AI to waste rounds on unnecessary queries.
+ */
+const CORE_TOOL_EXCLUDES: Partial<Record<SDLCToolPhase, Set<string>>> = {
+  scope_selection: new Set([
+    // AI doesn't need schema inspection during scope selection — already done in design
+    'sn_get_tables', 'sn_get_table_schema',
+    // Instance init/info already gathered — no need to re-query
+    'sn_get_instance_info', 'sn_initialize_instance',
+  ]),
+};
 
 /** Phase-specific tool names (in addition to core) */
 const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
@@ -1997,6 +2023,8 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
   scope_selection: new Set([
     // Scope selection tools
     'sn_get_custom_apps', 'sn_get_scope_selection_options', 'sn_create_custom_app',
+    // Update set tools (needed to create/set update set as part of scope finalization)
+    'sn_create_update_set', 'sn_set_current_update_set',
     // Flow read (to verify what exists)
     'sn_list_flows', 'sn_get_flow', 'sn_list_subflows', 'sn_list_custom_actions',
   ]),
@@ -2099,7 +2127,7 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
 
 /**
  * Get tool definitions filtered by SDLC phase (Anthropic format).
- * Returns core tools + phase-specific tools.
+ * Returns core tools + phase-specific tools, minus any phase-specific exclusions.
  * If phase is null/undefined, returns ALL tools (backwards compatible).
  */
 export function getAnthropicToolDefinitionsForPhase(phase?: SDLCToolPhase | null) {
@@ -2108,8 +2136,14 @@ export function getAnthropicToolDefinitionsForPhase(phase?: SDLCToolPhase | null
   const phaseNames = PHASE_TOOL_NAMES[phase];
   if (!phaseNames) return getAnthropicToolDefinitions();
 
+  const excludes = CORE_TOOL_EXCLUDES[phase];
+
   return ALL_TOOLS
-    .filter(t => CORE_TOOL_NAMES.has(t.name) || phaseNames.has(t.name))
+    .filter(t => {
+      if (phaseNames.has(t.name)) return true;
+      if (CORE_TOOL_NAMES.has(t.name)) return !excludes || !excludes.has(t.name);
+      return false;
+    })
     .map(tool => ({
       name: tool.name,
       description: tool.description,

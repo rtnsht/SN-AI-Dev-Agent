@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect, useCallback, type RefObject } from "react";
 import type { ChatMessage, SDLCPhase, LiveStatus, FileAttachment } from "@/lib/types";
 import MessageBubble from "./MessageBubble";
-import { APP_NAME, APP_HERO_TAGLINE, APP_SUBTITLE } from "@/lib/branding";
+import Image from "next/image";
+import { APP_NAME, APP_LOGO, APP_HERO_TAGLINE, APP_SUBTITLE, APP_TAGLINE, HERO_FEATURES } from "@/lib/branding";
 
 /* ── Web Speech API type shim ── */
 interface SpeechRecognitionEvent extends Event {
@@ -141,6 +142,15 @@ export interface ActivityLogEntry {
   toolName?: string;
   toolInput?: Record<string, unknown>;
   done?: boolean;
+  /** Task planner: group this entry under a task */
+  taskId?: number;
+  taskName?: string;
+}
+
+/** Structured task plan from the planner */
+export interface TaskPlanDisplay {
+  analysis: string;
+  tasks: { id: number; name: string; type: string; tools: { name: string; args: Record<string, unknown> }[] }[];
 }
 
 /** Convert raw tool name + input into a friendly conversational label */
@@ -226,12 +236,21 @@ interface Props {
   instancePrompts?: { icon: string; text: string; desc: string }[];
   /** Agent activity log entries for inline display */
   activityLog?: ActivityLogEntry[];
+  /** Structured task plan from the planner */
+  taskPlan?: TaskPlanDisplay | null;
+  /** Mobile: callback when user taps "Get Started" on hero screen */
+  onGetStarted?: () => void;
 }
 
 /** Deduplicate and clean activity log for display — merge status noise, keep tool entries */
 function processActivityLog(entries: ActivityLogEntry[]): ActivityLogEntry[] {
   const result: ActivityLogEntry[] = [];
   for (const entry of entries) {
+    // Task entries always shown
+    if (entry.phase === "task" && entry.taskId != null) {
+      result.push(entry);
+      continue;
+    }
     // Tool entries always shown (with friendly labels)
     if (entry.phase === "tool" && entry.toolName) {
       result.push(entry);
@@ -240,6 +259,9 @@ function processActivityLog(entries: ActivityLogEntry[]): ActivityLogEntry[] {
     // Skip noisy status messages that duplicate tool events
     const msg = entry.message;
     if (msg.startsWith("Executing:") || msg.includes("completed")) continue;
+    // Skip planner status messages that are redundant with task events
+    if (msg === "Planning execution..." || msg === "Executing plan...") continue;
+    if (msg.startsWith("Task:")) continue; // Covered by task entries
     // Collapse "Starting..." and "Round N: Analyzing request..." — only keep the first one
     if (msg === "Starting..." || /^Round \d+/.test(msg)) {
       const last = result[result.length - 1];
@@ -260,6 +282,77 @@ function processActivityLog(entries: ActivityLogEntry[]): ActivityLogEntry[] {
   return result;
 }
 
+/** Group activity entries by task for two-level rendering */
+interface TaskGroup {
+  taskEntry: ActivityLogEntry;
+  toolEntries: ActivityLogEntry[];
+}
+
+function groupByTask(entries: ActivityLogEntry[]): { tasks: TaskGroup[]; ungrouped: ActivityLogEntry[] } {
+  const tasks: TaskGroup[] = [];
+  const ungrouped: ActivityLogEntry[] = [];
+  let currentTask: TaskGroup | null = null;
+
+  for (const entry of entries) {
+    if (entry.phase === "task" && entry.taskId != null) {
+      // Start a new task group
+      currentTask = { taskEntry: entry, toolEntries: [] };
+      tasks.push(currentTask);
+    } else if (entry.phase === "tool" && currentTask && entry.taskId === currentTask.taskEntry.taskId) {
+      // Tool belongs to current task
+      currentTask.toolEntries.push(entry);
+    } else if (entry.phase === "tool" && currentTask) {
+      // Tool with matching or no taskId — add to current task if it's still being built
+      currentTask.toolEntries.push(entry);
+    } else {
+      // Non-task, non-grouped-tool entry
+      ungrouped.push(entry);
+    }
+  }
+
+  return { tasks, ungrouped };
+}
+
+/** Single timeline entry — used for flat rendering (no planner) */
+function TimelineEntry({ entry, isLast, liveStatus }: { entry: ActivityLogEntry; isLast: boolean; liveStatus: LiveStatus | null }) {
+  const isActive = isLast && !!liveStatus;
+  const isDone = entry.phase === "tool" ? entry.done !== false : !isActive;
+  const label = entry.toolName ? friendlyToolLabel(entry.toolName, entry.toolInput) : entry.message;
+  const isTool = entry.phase === "tool";
+
+  return (
+    <div
+      className="relative flex items-start gap-3 py-[5px] transition-opacity duration-300"
+      style={{ opacity: isActive ? 1 : isDone ? 0.7 : 0.4 }}
+    >
+      <div className="relative z-[1] flex-shrink-0 mt-[2px]">
+        {isActive && !isDone ? (
+          <span className="flex items-center justify-center w-[14px] h-[14px]">
+            <span className="absolute w-[14px] h-[14px] rounded-full" style={{ background: "var(--color-primary)", opacity: 0.15, animation: "activityRipple 1.5s ease-out infinite" }} />
+            <span className="w-[6px] h-[6px] rounded-full" style={{ background: "var(--color-primary)" }} />
+          </span>
+        ) : (
+          <span className="flex items-center justify-center w-[14px] h-[14px]">
+            {isTool ? (
+              <svg className="w-[12px] h-[12px]" style={{ color: "var(--color-primary)", opacity: 0.5 }} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            ) : (
+              <span className="w-[5px] h-[5px] rounded-full" style={{ background: "var(--text-disabled)", opacity: 0.5 }} />
+            )}
+          </span>
+        )}
+      </div>
+      <span
+        className={`text-[12px] truncate min-w-0 ${isTool ? "font-medium" : ""}`}
+        style={{ color: isActive ? "var(--text-primary)" : isTool ? "var(--text-secondary)" : "var(--text-disabled)" }}
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
+
 /** Elegant inline agent activity — timeline-style with visual hierarchy */
 function InlineAgentActivity({ activityLog, liveStatus, onCancel }: { activityLog: ActivityLogEntry[]; liveStatus: LiveStatus | null; onCancel: () => void }) {
   const [expanded, setExpanded] = useState(true);
@@ -275,13 +368,20 @@ function InlineAgentActivity({ activityLog, liveStatus, onCancel }: { activityLo
 
   const processed = processActivityLog(activityLog);
   const toolCount = processed.filter(e => e.phase === "tool").length;
+  const taskCount = processed.filter(e => e.phase === "task").length;
   const elapsed = Math.round((Date.now() - startTime.current) / 1000);
 
-  // Header text: latest tool's friendly label or latest status
+  // Determine if we have task-grouped entries (planner was used)
+  const hasTasks = taskCount > 0;
+
+  // Header text: latest tool's friendly label, task name, or latest status
   const latestEntry = processed[processed.length - 1];
   const headerText = latestEntry
-    ? (latestEntry.toolName ? friendlyToolLabel(latestEntry.toolName, latestEntry.toolInput) : latestEntry.message)
+    ? (latestEntry.taskName ? `Task: ${latestEntry.taskName}` : latestEntry.toolName ? friendlyToolLabel(latestEntry.toolName, latestEntry.toolInput) : latestEntry.message)
     : "Thinking...";
+
+  // Group tool entries under their parent task (for two-level rendering)
+  const taskGroups = hasTasks ? groupByTask(processed) : null;
 
   return (
     <div className="agent-activity-container rounded-xl overflow-hidden" style={{ background: "var(--surface-secondary)", border: "1px solid color-mix(in srgb, var(--color-primary) 15%, var(--border-default))" }}>
@@ -305,7 +405,9 @@ function InlineAgentActivity({ activityLog, liveStatus, onCancel }: { activityLo
               {headerText}
             </span>
             <span className="text-[10px] mt-0.5 block" style={{ color: "var(--text-disabled)" }}>
-              {toolCount > 0 ? `${toolCount} tool${toolCount !== 1 ? "s" : ""} used` : "Processing"}
+              {hasTasks
+                ? `${taskCount} task${taskCount !== 1 ? "s" : ""}${toolCount > 0 ? ` · ${toolCount} tool${toolCount !== 1 ? "s" : ""}` : ""}`
+                : toolCount > 0 ? `${toolCount} tool${toolCount !== 1 ? "s" : ""} used` : "Processing"}
               {elapsed > 0 && ` · ${elapsed}s`}
             </span>
           </div>
@@ -347,48 +449,82 @@ function InlineAgentActivity({ activityLog, liveStatus, onCancel }: { activityLo
                 style={{ background: "color-mix(in srgb, var(--color-primary) 12%, transparent)" }}
               />
             )}
-            {processed.map((entry, idx) => {
-              const isLast = idx === processed.length - 1;
-              const isActive = isLast && !!liveStatus;
-              const isDone = entry.phase === "tool" ? entry.done !== false : !isActive;
-              const label = entry.toolName ? friendlyToolLabel(entry.toolName, entry.toolInput) : entry.message;
-              const isTool = entry.phase === "tool";
 
-              return (
-                <div
-                  key={idx}
-                  className="relative flex items-start gap-3 py-[5px] transition-opacity duration-300"
-                  style={{ opacity: isActive ? 1 : isDone ? 0.7 : 0.4 }}
-                >
-                  {/* Timeline node */}
-                  <div className="relative z-[1] flex-shrink-0 mt-[2px]">
-                    {isActive && !isDone ? (
-                      <span className="flex items-center justify-center w-[14px] h-[14px]">
-                        <span className="absolute w-[14px] h-[14px] rounded-full" style={{ background: "var(--color-primary)", opacity: 0.15, animation: "activityRipple 1.5s ease-out infinite" }} />
-                        <span className="w-[6px] h-[6px] rounded-full" style={{ background: "var(--color-primary)" }} />
-                      </span>
-                    ) : (
-                      <span className="flex items-center justify-center w-[14px] h-[14px]">
-                        {isTool ? (
-                          <svg className="w-[12px] h-[12px]" style={{ color: "var(--color-primary)", opacity: 0.5 }} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                          </svg>
-                        ) : (
-                          <span className="w-[5px] h-[5px] rounded-full" style={{ background: "var(--text-disabled)", opacity: 0.5 }} />
-                        )}
-                      </span>
-                    )}
-                  </div>
-                  {/* Label */}
-                  <span
-                    className={`text-[12px] truncate min-w-0 ${isTool ? "font-medium" : ""}`}
-                    style={{ color: isActive ? "var(--text-primary)" : isTool ? "var(--text-secondary)" : "var(--text-disabled)" }}
-                  >
-                    {label}
-                  </span>
-                </div>
-              );
-            })}
+            {/* ── Two-level rendering: tasks → tools grouped underneath ── */}
+            {taskGroups ? (
+              <>
+                {/* Ungrouped entries (thinking, status) before tasks */}
+                {taskGroups.ungrouped.map((entry, idx) => (
+                  <TimelineEntry key={`ug-${idx}`} entry={entry} isLast={false} liveStatus={liveStatus} />
+                ))}
+                {/* Task groups with nested tools */}
+                {taskGroups.tasks.map((group, tIdx) => {
+                  const isLastTask = tIdx === taskGroups.tasks.length - 1;
+                  const taskDone = group.taskEntry.done !== false;
+                  const taskActive = isLastTask && !taskDone && !!liveStatus;
+                  return (
+                    <div key={`task-${group.taskEntry.taskId}`} className="mb-1">
+                      {/* Task header */}
+                      <div
+                        className="relative flex items-start gap-3 py-[5px] transition-opacity duration-300"
+                        style={{ opacity: taskActive ? 1 : taskDone ? 0.8 : 0.5 }}
+                      >
+                        <div className="relative z-[1] flex-shrink-0 mt-[2px]">
+                          {taskActive ? (
+                            <span className="flex items-center justify-center w-[14px] h-[14px]">
+                              <span className="absolute w-[14px] h-[14px] rounded-full" style={{ background: "var(--color-primary)", opacity: 0.15, animation: "activityRipple 1.5s ease-out infinite" }} />
+                              <span className="w-[6px] h-[6px] rounded-full" style={{ background: "var(--color-primary)" }} />
+                            </span>
+                          ) : taskDone ? (
+                            <span className="flex items-center justify-center w-[14px] h-[14px]">
+                              <svg className="w-[12px] h-[12px]" style={{ color: "var(--color-primary)", opacity: 0.6 }} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            </span>
+                          ) : (
+                            <span className="flex items-center justify-center w-[14px] h-[14px]">
+                              <span className="w-[6px] h-[6px] rounded-full border" style={{ borderColor: "var(--text-disabled)" }} />
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[12px] font-medium truncate min-w-0" style={{ color: taskActive ? "var(--text-primary)" : taskDone ? "var(--text-secondary)" : "var(--text-disabled)" }}>
+                          {group.taskEntry.taskName || group.taskEntry.message}
+                        </span>
+                      </div>
+                      {/* Nested tool entries under this task */}
+                      {group.toolEntries.map((toolEntry, tIdx2) => (
+                        <div
+                          key={`tool-${tIdx}-${tIdx2}`}
+                          className="relative flex items-start gap-2 py-[3px] pl-8 transition-opacity duration-300"
+                          style={{ opacity: toolEntry.done !== false ? 0.6 : 0.4 }}
+                        >
+                          <span className="flex items-center justify-center w-[10px] h-[10px] flex-shrink-0 mt-[2px]">
+                            {toolEntry.done !== false ? (
+                              <svg className="w-[10px] h-[10px]" style={{ color: "var(--color-primary)", opacity: 0.4 }} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            ) : (
+                              <span className="w-[4px] h-[4px] rounded-full" style={{ background: "var(--text-disabled)", opacity: 0.4 }} />
+                            )}
+                          </span>
+                          <span className="text-[11px] truncate min-w-0" style={{ color: "var(--text-disabled)" }}>
+                            {friendlyToolLabel(toolEntry.toolName!, toolEntry.toolInput)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </>
+            ) : (
+              /* ── Flat rendering: original behavior when no planner ── */
+              <>
+                {processed.map((entry, idx) => (
+                  <TimelineEntry key={idx} entry={entry} isLast={idx === processed.length - 1} liveStatus={liveStatus} />
+                ))}
+              </>
+            )}
+
             {processed.length === 0 && (
               <div className="flex items-center gap-3 py-[5px]">
                 <span className="flex items-center justify-center w-[14px] h-[14px] flex-shrink-0">
@@ -405,7 +541,7 @@ function InlineAgentActivity({ activityLog, liveStatus, onCancel }: { activityLo
   );
 }
 
-export default function ChatWindow({ messages, isLoading, onSend, onCancel, onApprove, onChoiceSelect, connected, inputRef, showToolDetails = true, liveStatus, userName, instancePrompts, activityLog = [] }: Props) {
+export default function ChatWindow({ messages, isLoading, onSend, onCancel, onApprove, onChoiceSelect, connected, inputRef, showToolDetails = true, liveStatus, userName, instancePrompts, activityLog = [], taskPlan, onGetStarted }: Props) {
   const [input, setInput] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [files, setFiles] = useState<FileAttachment[]>([]);
@@ -846,58 +982,159 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
   return (
     <div className="flex-1 flex flex-col min-h-0" style={{ background: "var(--surface-app)" }}>
       {showEmptyState ? (
-        /* ════ HERO EMPTY STATE (Perplexity-style) ════ */
-        <div className="flex-1 flex flex-col items-center justify-center px-4">
-          <div className="w-full max-w-2xl mx-auto">
-            {/* Tagline */}
-            <h1 className="hero-tagline text-center mb-2">
-              {APP_HERO_TAGLINE}
-            </h1>
-            {APP_SUBTITLE && (
-              <p className="text-center mb-8 text-sm" style={{ color: "var(--text-disabled)", letterSpacing: "0.04em" }}>
-                {APP_SUBTITLE}
-              </p>
-            )}
-            {!APP_SUBTITLE && <div className="mb-8" />}
+        /* ════ EMPTY STATE — two modes: disconnected (full hero) vs connected (ready-to-chat) ════ */
+        <div className="flex-1 flex flex-col items-center justify-start sm:justify-center px-4 py-4 sm:py-8 overflow-y-auto">
+          <div className="w-full max-w-2xl lg:max-w-3xl xl:max-w-4xl mx-auto flex flex-col items-center">
 
-            {/* Input bar (centered in hero) */}
-            {renderInputBar(true)}
-
-            {/* Suggestion tabs */}
-            {connected && (
-              <div className="mt-6">
-                <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-                  {SUGGESTION_TABS.map((tab) => (
-                    <button
-                      key={tab.key}
-                      className={`suggestion-tab ${activeTab === tab.key ? "active" : ""}`}
-                      onClick={() => setActiveTab(tab.key)}
-                    >
-                      {tabIcon(tab.icon)}
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Suggestion list */}
-                <div className="mt-3 space-y-0.5">
-                  {currentSuggestions.map((text, i) => (
-                    <button
-                      key={`${activeTab}-${i}`}
-                      className="suggestion-item"
-                      onClick={() => onSend(text)}
-                    >
-                      {text}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
+            {/* ── DISCONNECTED: Full branded hero landing page ── */}
             {!connected && (
-              <p className="text-center mt-6 text-sm" style={{ color: "var(--text-disabled)" }}>
-                Open settings and connect your ServiceNow instance to get started.
-              </p>
+              <>
+                {/* Logo */}
+                {APP_LOGO && (
+                  <div className="hero-logo-container mb-3 sm:mb-5">
+                    <Image
+                      src={APP_LOGO}
+                      alt={APP_NAME || "App Logo"}
+                      width={180}
+                      height={180}
+                      className="hero-logo w-20 h-20 sm:w-40 sm:h-40 md:w-[180px] md:h-[180px]"
+                      unoptimized
+                      priority
+                    />
+                  </div>
+                )}
+
+                {/* App Name */}
+                {APP_NAME && (
+                  <h1
+                    className="text-2xl sm:text-3xl md:text-4xl font-semibold text-center mb-1 tracking-tight"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    {APP_NAME}
+                  </h1>
+                )}
+
+                {/* Tagline */}
+                {(APP_TAGLINE || APP_HERO_TAGLINE) && (
+                  <p className="hero-tagline text-center mb-1" style={{ fontSize: "clamp(18px, 3vw, 28px)" }}>
+                    {APP_HERO_TAGLINE || APP_TAGLINE}
+                  </p>
+                )}
+
+                {/* Subtitle */}
+                {APP_SUBTITLE && (
+                  <p className="text-center mb-6 text-xs sm:text-sm" style={{ color: "var(--text-disabled)", letterSpacing: "0.04em" }}>
+                    {APP_SUBTITLE}
+                  </p>
+                )}
+                {!APP_SUBTITLE && <div className="mb-6" />}
+
+                {/* Feature Description Pills */}
+                {HERO_FEATURES.length > 0 && (
+                  <div className="hero-features-block w-full mb-8 rounded-xl px-4 sm:px-6 py-5 sm:py-6">
+                    <div className="relative z-[1] space-y-4 sm:space-y-5">
+                      {HERO_FEATURES.map((feature, i) => (
+                        <div key={i} className="flex gap-3.5 items-start">
+                          <span
+                            className="hero-feature-dot flex-shrink-0 mt-[8px] w-2.5 h-2.5 rounded-full"
+                            style={{
+                              background: i === 0 ? "var(--color-primary)" : i === 1 ? "var(--color-accent-from, var(--color-primary))" : "var(--text-disabled)",
+                              boxShadow: i < 2 ? `0 0 8px ${i === 0 ? "var(--color-primary)" : "var(--color-accent-from, var(--color-primary))"}` : "none",
+                            }}
+                          />
+                          <div className="min-w-0">
+                            <p className="text-[14px] sm:text-[15px] font-semibold tracking-tight" style={{ color: "var(--text-primary)" }}>
+                              {feature.title}
+                            </p>
+                            <p className="text-[12px] sm:text-[13px] mt-1 leading-relaxed" style={{ color: "var(--text-secondary)", opacity: 0.85 }}>
+                              {feature.desc}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Input bar (disabled — hidden on mobile pre-connect) */}
+                <div className="hidden sm:block w-full">{renderInputBar(true)}</div>
+
+                {/* Mobile: Get Started CTA button */}
+                {onGetStarted && (
+                  <button
+                    onClick={onGetStarted}
+                    className="sm:hidden w-full mt-6 py-3.5 px-6 text-base font-semibold rounded-xl transition-all active:scale-[0.98]"
+                    style={{ background: "var(--color-primary)", color: "white", boxShadow: "0 4px 16px color-mix(in srgb, var(--color-primary) 35%, transparent)" }}
+                  >
+                    Get Started
+                  </button>
+                )}
+
+                {/* Desktop: Connect prompt */}
+                <p className="hidden sm:block text-center mt-6 text-sm" style={{ color: "var(--text-disabled)" }}>
+                  Open settings and connect your instance to get started.
+                </p>
+              </>
+            )}
+
+            {/* ── CONNECTED: Clean ready-to-chat state with glowing input ── */}
+            {connected && (
+              <>
+                {/* Compact logo + greeting */}
+                {APP_LOGO && (
+                  <div className="hero-logo-container mb-4">
+                    <Image
+                      src={APP_LOGO}
+                      alt={APP_NAME || "App Logo"}
+                      width={80}
+                      height={80}
+                      className="hero-logo w-16 h-16 sm:w-20 sm:h-20"
+                      unoptimized
+                    />
+                  </div>
+                )}
+                <h2
+                  className="text-xl sm:text-2xl font-semibold text-center mb-1 tracking-tight"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  {APP_HERO_TAGLINE || APP_TAGLINE || "What should we build?"}
+                </h2>
+                <p className="text-center mb-6 text-xs sm:text-sm" style={{ color: "var(--text-disabled)" }}>
+                  {APP_SUBTITLE || "Describe what you need and let's get started."}
+                </p>
+
+                {/* Glowing input bar */}
+                <div className="hero-input-glow w-full">
+                  {renderInputBar(true)}
+                </div>
+
+                {/* Suggestion tabs */}
+                <div className="mt-6 w-full">
+                  <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+                    {SUGGESTION_TABS.map((tab) => (
+                      <button
+                        key={tab.key}
+                        className={`suggestion-tab ${activeTab === tab.key ? "active" : ""}`}
+                        onClick={() => setActiveTab(tab.key)}
+                      >
+                        {tabIcon(tab.icon)}
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-3 space-y-0.5">
+                    {currentSuggestions.map((text, i) => (
+                      <button
+                        key={`${activeTab}-${i}`}
+                        className="suggestion-item"
+                        onClick={() => onSend(text)}
+                      >
+                        {text}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -906,7 +1143,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
         <>
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-2 sm:px-6 py-4 sm:py-6">
-            <div className="max-w-3xl mx-auto space-y-4 sm:space-y-5">
+            <div className="max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto space-y-4 sm:space-y-5">
               {messages.filter((msg) => !msg.hidden).map((msg, i) => (
                 <MessageBubble
                   key={i}
@@ -930,7 +1167,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
 
           {/* Bottom input bar */}
           <div className="p-2 sm:p-4" style={{ borderTop: "1px solid var(--border-default)", background: "var(--surface-primary)" }}>
-            <div className="max-w-3xl mx-auto">
+            <div className="max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto">
               {renderInputBar(false)}
             </div>
           </div>
