@@ -11,6 +11,33 @@ import type { ChatMessage, ConnectionResult, UsageInfo, SDLCPhase, LiveStatus, A
 import { parsePhaseGate, parseUserChoices, ANTHROPIC_MODELS, SDLC_PHASES, openRouterModelToOption } from "@/lib/types";
 import { APP_NAME, APP_LOGO, SHOW_INFO_BUTTON } from "@/lib/branding";
 
+/* ── Session persistence keys (sessionStorage) ──────────────── */
+const SK = {
+  MESSAGES: "ai-messages",
+  CONN_INFO: "ai-conn-info",
+  CREDS: "ai-creds",
+  PROVIDER: "ai-provider",
+  MODEL: "ai-model",
+  MODEL_LOCKED: "ai-model-locked",
+  REQ_ID: "ai-req-id",
+  PHASE: "ai-phase",
+  COMPLETED_PHASES: "ai-completed-phases",
+  SESSION_ID: "ai-session-id",
+} as const;
+
+const ALL_SESSION_KEYS = Object.values(SK);
+
+/** Strip heavy base64 data from messages before storing (images + file data) */
+function stripHeavyData(messages: ChatMessage[]): ChatMessage[] {
+  return messages.map((m) => ({
+    ...m,
+    images: m.images?.length ? m.images.map(() => "[image]") : undefined,
+    files: m.files?.length
+      ? m.files.map((f) => ({ ...f, data: "" }))
+      : undefined,
+  }));
+}
+
 export default function Home() {
   const [credentials, setCredentials] = useState({
     instanceUrl: "",
@@ -59,8 +86,18 @@ export default function Home() {
   const [taskPlan, setTaskPlan] = useState<{ analysis: string; tasks: { id: number; name: string; type: string; tools: { name: string; args: Record<string, unknown> }[] }[] } | null>(null);
   // Dynamic example prompts from instance data
   const [instancePrompts, setInstancePrompts] = useState<{ icon: string; text: string; desc: string }[] | null>(null);
-  // Persistent session ID for logging - generated once per page load
-  const [clientSessionId] = useState(() => `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`);
+  // Mobile two-step flow: 'hero' = landing page, 'connect' = full-screen connection panel
+  const [mobileStep, setMobileStep] = useState<"hero" | "connect">("hero");
+  // Persistent session ID for logging — survives refresh via sessionStorage
+  const [clientSessionId] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = sessionStorage.getItem(SK.SESSION_ID);
+      if (saved) return saved;
+    }
+    const id = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    if (typeof window !== "undefined") sessionStorage.setItem(SK.SESSION_ID, id);
+    return id;
+  });
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   // Ref to always access the latest handleSend (avoids stale closure in handleApprove setTimeout)
@@ -87,7 +124,98 @@ export default function Home() {
     }
   }, [liveStatus]);
 
+  // ── beforeunload warning — prevent accidental data loss ──
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (messages.length > 0) e.preventDefault();
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [messages.length]);
 
+  // ── Restore session from sessionStorage on mount ──
+  const [sessionRestored, setSessionRestored] = useState(false);
+  useEffect(() => {
+    try {
+      const savedMessages = sessionStorage.getItem(SK.MESSAGES);
+      if (!savedMessages) return;
+      const parsed: ChatMessage[] = JSON.parse(savedMessages);
+      if (!Array.isArray(parsed) || parsed.length === 0) return;
+
+      // Restore messages
+      messagesRef.current = parsed;
+      setMessages(parsed);
+
+      // Restore connection metadata (not connected — user must re-auth)
+      const savedConnInfo = sessionStorage.getItem(SK.CONN_INFO);
+      if (savedConnInfo) setConnInfo(JSON.parse(savedConnInfo));
+
+      // Restore credentials (instanceUrl + username only)
+      const savedCreds = sessionStorage.getItem(SK.CREDS);
+      if (savedCreds) {
+        const { instanceUrl, username } = JSON.parse(savedCreds);
+        setCredentials((prev) => ({ ...prev, instanceUrl: instanceUrl || prev.instanceUrl, username: username || prev.username }));
+      }
+
+      // Restore model/provider
+      const savedProvider = sessionStorage.getItem(SK.PROVIDER);
+      if (savedProvider) setAiProvider(savedProvider as AIProvider);
+      const savedModel = sessionStorage.getItem(SK.MODEL);
+      if (savedModel) setSelectedModel(savedModel);
+      const savedLocked = sessionStorage.getItem(SK.MODEL_LOCKED);
+      if (savedLocked === "true") setModelLocked(true);
+
+      // Restore SDLC phases
+      const savedReqId = sessionStorage.getItem(SK.REQ_ID);
+      if (savedReqId) setActiveReqId(savedReqId);
+      const savedPhase = sessionStorage.getItem(SK.PHASE);
+      if (savedPhase) setCurrentPhase(savedPhase as SDLCPhase);
+      const savedCompleted = sessionStorage.getItem(SK.COMPLETED_PHASES);
+      if (savedCompleted) setCompletedPhases(JSON.parse(savedCompleted));
+
+      // Show settings panel so user can re-enter password
+      setShowSettings(true);
+      setSessionRestored(true);
+
+      // Inject a restore notice
+      const notice: ChatMessage = {
+        role: "system",
+        type: "info",
+        content: "Previous session restored. Please reconnect to continue.",
+        timestamp: new Date().toISOString(),
+      };
+      messagesRef.current = [...parsed, notice];
+      setMessages((prev) => [...prev, notice]);
+    } catch {
+      // Corrupt storage — ignore and start fresh
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Persist state to sessionStorage on change ──
+  useEffect(() => {
+    try { sessionStorage.setItem(SK.MESSAGES, JSON.stringify(stripHeavyData(messages))); } catch { /* quota */ }
+  }, [messages]);
+  useEffect(() => {
+    if (connInfo) sessionStorage.setItem(SK.CONN_INFO, JSON.stringify(connInfo));
+  }, [connInfo]);
+  useEffect(() => {
+    sessionStorage.setItem(SK.CREDS, JSON.stringify({ instanceUrl: credentials.instanceUrl, username: credentials.username }));
+  }, [credentials.instanceUrl, credentials.username]);
+  useEffect(() => { sessionStorage.setItem(SK.PROVIDER, aiProvider); }, [aiProvider]);
+  useEffect(() => { sessionStorage.setItem(SK.MODEL, selectedModel); }, [selectedModel]);
+  useEffect(() => { sessionStorage.setItem(SK.MODEL_LOCKED, String(modelLocked)); }, [modelLocked]);
+  useEffect(() => {
+    if (activeReqId) sessionStorage.setItem(SK.REQ_ID, activeReqId);
+    else sessionStorage.removeItem(SK.REQ_ID);
+  }, [activeReqId]);
+  useEffect(() => {
+    if (currentPhase) sessionStorage.setItem(SK.PHASE, currentPhase);
+    else sessionStorage.removeItem(SK.PHASE);
+  }, [currentPhase]);
+  useEffect(() => {
+    sessionStorage.setItem(SK.COMPLETED_PHASES, JSON.stringify(completedPhases));
+  }, [completedPhases]);
 
   // Fetch server config on mount (API key + SN credentials)
   useEffect(() => {
@@ -187,6 +315,7 @@ export default function Home() {
         setConnected(true);
         setConnInfo(data);
         setShowSettings(false);
+        setMobileStep("hero"); // dismiss mobile full-screen connection panel
 
         // Inject system messages into chat
         const sysMsgs: ChatMessage[] = [];
@@ -837,6 +966,8 @@ export default function Home() {
     setPendingRetry(null);
     setActivityLog([]);
     setTaskPlan(null);
+    // Clear persisted session state
+    ALL_SESSION_KEYS.forEach((k) => sessionStorage.removeItem(k));
   }, []);
 
   /** Disconnect and unlock fields so user can edit before reconnecting */
@@ -928,53 +1059,51 @@ export default function Home() {
     URL.revokeObjectURL(url);
   }, [messages, connected, connInfo, credentials, selectedModel]);
 
+  /** Shared SettingsPanel props (reused for sidebar + mobile full-screen) */
+  const settingsPanelProps = {
+    credentials, setCredentials, connected, connInfo, isConnecting,
+    onConnect: handleConnect, onReconnect: handleReconnect,
+    serverApiKeyConfigured, serverOpenRouterKeyConfigured, serverSnCredsConfigured,
+    usage, rateLimitHit,
+    onApiKeyProvided: () => {
+      setRateLimitHit(false);
+      if (pendingRetry) {
+        const retry = pendingRetry;
+        setPendingRetry(null);
+        setTimeout(() => handleSendRef.current(retry.text, retry.images, retry.files), 150);
+      }
+    },
+    aiProvider, setAiProvider, selectedModel, setSelectedModel,
+    modelOptions: openRouterModels, modelsLoading, modelLocked, allowUserApiKeys,
+  };
+
   return (
     <div className="flex h-screen relative" style={{ background: "var(--surface-app)", color: "var(--text-primary)" }}>
-      {/* Mobile backdrop */}
+
+      {/* ═══ Mobile full-screen connection panel (< sm, step 2) ═══ */}
+      <div
+        className={`sm:hidden fixed inset-0 z-50 mobile-connect-panel ${mobileStep === "connect" && !connected ? "mobile-connect-panel-visible" : ""}`}
+        style={{ background: "var(--surface-sidebar)" }}
+      >
+        <SettingsPanel {...settingsPanelProps} onBack={() => setMobileStep("hero")} />
+      </div>
+
+      {/* Mobile backdrop (for sidebar toggle on md screens — unchanged) */}
       {showSettings && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 hidden sm:block md:hidden"
           onClick={() => setShowSettings(false)}
         />
       )}
 
-      {/* ═══ Left Sidebar — Navigation / Settings ═══ */}
+      {/* ═══ Left Sidebar — Navigation / Settings (sm+ only) ═══ */}
       <aside
-        className={`${
+        className={`hidden sm:block ${
           showSettings ? "w-80 xl:w-[22rem] translate-x-0" : "w-0 -translate-x-full md:translate-x-0"
         } fixed md:static inset-y-0 left-0 z-40 md:z-auto transition-all duration-300 overflow-hidden flex-shrink-0`}
         style={{ background: "var(--surface-sidebar)", borderRight: "1px solid var(--border-default)" }}
       >
-        <SettingsPanel
-          credentials={credentials}
-          setCredentials={setCredentials}
-          connected={connected}
-          connInfo={connInfo}
-          isConnecting={isConnecting}
-          onConnect={handleConnect}
-          onReconnect={handleReconnect}
-          serverApiKeyConfigured={serverApiKeyConfigured}
-          serverOpenRouterKeyConfigured={serverOpenRouterKeyConfigured}
-          serverSnCredsConfigured={serverSnCredsConfigured}
-          usage={usage}
-          rateLimitHit={rateLimitHit}
-          onApiKeyProvided={() => {
-            setRateLimitHit(false);
-            if (pendingRetry) {
-              const retry = pendingRetry;
-              setPendingRetry(null);
-              setTimeout(() => handleSendRef.current(retry.text, retry.images, retry.files), 150);
-            }
-          }}
-          aiProvider={aiProvider}
-          setAiProvider={setAiProvider}
-          selectedModel={selectedModel}
-          setSelectedModel={setSelectedModel}
-          modelOptions={openRouterModels}
-          modelsLoading={modelsLoading}
-          modelLocked={modelLocked}
-          allowUserApiKeys={allowUserApiKeys}
-        />
+        <SettingsPanel {...settingsPanelProps} />
       </aside>
 
       {/* ═══ Center Panel — Primary Context ═══ */}
@@ -1004,19 +1133,6 @@ export default function Home() {
             <div className="min-w-0">
               <h1 className="text-sm sm:text-[15px] font-semibold truncate" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>{APP_NAME}</h1>
             </div>
-
-            {SHOW_INFO_BUTTON && (
-              <button
-                onClick={() => setShowInfo(true)}
-                className="p-1.5 rounded-md transition-colors flex-shrink-0"
-                style={{ color: "var(--text-disabled)" }}
-                onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-elevated)"; e.currentTarget.style.color = "var(--color-info)"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-disabled)"; }}
-                title="About this app"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              </button>
-            )}
 
             {/* Dark/Light mode toggle */}
             <ThemeToggle />
@@ -1082,6 +1198,7 @@ export default function Home() {
           instancePrompts={instancePrompts ?? undefined}
           activityLog={activityLog}
           taskPlan={taskPlan}
+          onGetStarted={() => setMobileStep("connect")}
         />
       </main>
 

@@ -32,6 +32,8 @@ interface Props {
   modelLocked: boolean;
   /** When false, the user API key input is hidden entirely (server-only mode) */
   allowUserApiKeys?: boolean;
+  /** Mobile full-screen mode: back button callback */
+  onBack?: () => void;
 }
 
 const INPUT_CLS = "w-full px-3 py-2.5 rounded-md text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-info)] focus:border-transparent";
@@ -41,7 +43,7 @@ export default function SettingsPanel({
   serverApiKeyConfigured, serverOpenRouterKeyConfigured, serverSnCredsConfigured,
   usage, rateLimitHit, onApiKeyProvided,
   aiProvider, setAiProvider, selectedModel, setSelectedModel, modelOptions, modelsLoading = false,
-  modelLocked, allowUserApiKeys = true
+  modelLocked, allowUserApiKeys = true, onBack
 }: Props) {
   const update = (field: keyof Credentials, value: string) =>
     setCredentials({ ...credentials, [field]: value });
@@ -55,6 +57,18 @@ export default function SettingsPanel({
     <div className="p-4 h-full flex flex-col" style={{ background: "var(--surface-sidebar)" }}>
       {/* Header */}
       <div className="flex items-center gap-2.5 mb-6">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="p-1.5 rounded-md transition-colors flex-shrink-0 -ml-1"
+            style={{ color: "var(--text-secondary)" }}
+            onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-elevated)")}
+            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+            title="Back"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+          </button>
+        )}
         <Image src={APP_LOGO} alt="App Logo" width={32} height={32} className="rounded-md" unoptimized />
         <div>
           <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Connection</h2>

@@ -238,6 +238,8 @@ interface Props {
   activityLog?: ActivityLogEntry[];
   /** Structured task plan from the planner */
   taskPlan?: TaskPlanDisplay | null;
+  /** Mobile: callback when user taps "Get Started" on hero screen */
+  onGetStarted?: () => void;
 }
 
 /** Deduplicate and clean activity log for display — merge status noise, keep tool entries */
@@ -539,7 +541,7 @@ function InlineAgentActivity({ activityLog, liveStatus, onCancel }: { activityLo
   );
 }
 
-export default function ChatWindow({ messages, isLoading, onSend, onCancel, onApprove, onChoiceSelect, connected, inputRef, showToolDetails = true, liveStatus, userName, instancePrompts, activityLog = [], taskPlan }: Props) {
+export default function ChatWindow({ messages, isLoading, onSend, onCancel, onApprove, onChoiceSelect, connected, inputRef, showToolDetails = true, liveStatus, userName, instancePrompts, activityLog = [], taskPlan, onGetStarted }: Props) {
   const [input, setInput] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [files, setFiles] = useState<FileAttachment[]>([]);
@@ -981,21 +983,21 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
     <div className="flex-1 flex flex-col min-h-0" style={{ background: "var(--surface-app)" }}>
       {showEmptyState ? (
         /* ════ EMPTY STATE — two modes: disconnected (full hero) vs connected (ready-to-chat) ════ */
-        <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 overflow-y-auto">
-          <div className="w-full max-w-2xl mx-auto flex flex-col items-center">
+        <div className="flex-1 flex flex-col items-center justify-start sm:justify-center px-4 py-4 sm:py-8 overflow-y-auto">
+          <div className="w-full max-w-2xl lg:max-w-3xl xl:max-w-4xl mx-auto flex flex-col items-center">
 
             {/* ── DISCONNECTED: Full branded hero landing page ── */}
             {!connected && (
               <>
                 {/* Logo */}
                 {APP_LOGO && (
-                  <div className="hero-logo-container mb-5">
+                  <div className="hero-logo-container mb-3 sm:mb-5">
                     <Image
                       src={APP_LOGO}
                       alt={APP_NAME || "App Logo"}
                       width={180}
                       height={180}
-                      className="hero-logo w-32 h-32 sm:w-40 sm:h-40 md:w-[180px] md:h-[180px]"
+                      className="hero-logo w-20 h-20 sm:w-40 sm:h-40 md:w-[180px] md:h-[180px]"
                       unoptimized
                       priority
                     />
@@ -1054,11 +1056,22 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
                   </div>
                 )}
 
-                {/* Input bar (disabled) */}
-                {renderInputBar(true)}
+                {/* Input bar (disabled — hidden on mobile pre-connect) */}
+                <div className="hidden sm:block w-full">{renderInputBar(true)}</div>
 
-                {/* Connect prompt */}
-                <p className="text-center mt-6 text-sm" style={{ color: "var(--text-disabled)" }}>
+                {/* Mobile: Get Started CTA button */}
+                {onGetStarted && (
+                  <button
+                    onClick={onGetStarted}
+                    className="sm:hidden w-full mt-6 py-3.5 px-6 text-base font-semibold rounded-xl transition-all active:scale-[0.98]"
+                    style={{ background: "var(--color-primary)", color: "white", boxShadow: "0 4px 16px color-mix(in srgb, var(--color-primary) 35%, transparent)" }}
+                  >
+                    Get Started
+                  </button>
+                )}
+
+                {/* Desktop: Connect prompt */}
+                <p className="hidden sm:block text-center mt-6 text-sm" style={{ color: "var(--text-disabled)" }}>
                   Open settings and connect your instance to get started.
                 </p>
               </>
@@ -1130,7 +1143,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
         <>
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-2 sm:px-6 py-4 sm:py-6">
-            <div className="max-w-3xl mx-auto space-y-4 sm:space-y-5">
+            <div className="max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto space-y-4 sm:space-y-5">
               {messages.filter((msg) => !msg.hidden).map((msg, i) => (
                 <MessageBubble
                   key={i}
@@ -1154,7 +1167,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
 
           {/* Bottom input bar */}
           <div className="p-2 sm:p-4" style={{ borderTop: "1px solid var(--border-default)", background: "var(--surface-primary)" }}>
-            <div className="max-w-3xl mx-auto">
+            <div className="max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto">
               {renderInputBar(false)}
             </div>
           </div>

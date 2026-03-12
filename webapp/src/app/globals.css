@@ -101,7 +101,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: var(--font-geist-mono);
   --color-primary: var(--color-primary);
   --color-primary-hover: var(--color-primary-hover);
@@ -112,7 +112,7 @@
 body {
   background: var(--surface-app);
   color: var(--text-primary);
-  font-family: var(--font-sans), Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -237,7 +237,7 @@ body {
 
 /* ── Hero tagline ── */
 .hero-tagline {
-  font-family: var(--font-sans), Inter, -apple-system, sans-serif;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: clamp(20px, 3.5vw, 32px);
   font-weight: 300;
   line-height: 1.3;
@@ -303,7 +303,12 @@ body {
 .hero-input-glow {
   position: relative;
   border-radius: 16px;
+  overflow: visible;
+}
+.hero-input-glow::before,
+.hero-input-glow::after {
   overflow: hidden;
+  pointer-events: none;
 }
 .hero-input-glow::before {
   content: "";
@@ -497,4 +502,18 @@ body {
 /* ── Panel separator ── */
 .panel-border {
   border-color: var(--border-default);
+}
+
+
+/* ── Mobile two-step flow: connection panel slide-up ── */
+.mobile-connect-panel {
+  transform: translateY(100%);
+  opacity: 0;
+  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.25s ease;
+  pointer-events: none;
+}
+.mobile-connect-panel-visible {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
 }
