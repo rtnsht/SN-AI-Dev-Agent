@@ -1,0 +1,102 @@
+"use client";
+
+import { useState } from "react";
+
+export default function RequestAccessPage() {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [company, setCompany] = useState("");
+  const [useCase, setUseCase] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/request-access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, company, use_case: useCase }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Something went wrong");
+        return;
+      }
+
+      setSuccess(data.message || "Request submitted! Check your email to verify.");
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="auth-page">
+      <div className="auth-card">
+        <h1 className="auth-title">Request Access</h1>
+        <p className="auth-subtitle">Tell us about yourself and how you plan to use the tool.</p>
+
+        {error && <div className="auth-error">{error}</div>}
+        {success && <div className="auth-success">{success}</div>}
+
+        {!success && (
+          <form onSubmit={handleSubmit}>
+            <label className="auth-label">Name *</label>
+            <input
+              type="text"
+              className="auth-input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              autoFocus
+            />
+
+            <label className="auth-label">Email *</label>
+            <input
+              type="email"
+              className="auth-input"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+
+            <label className="auth-label">Company</label>
+            <input
+              type="text"
+              className="auth-input"
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+            />
+
+            <label className="auth-label">Why do you want access? *</label>
+            <textarea
+              className="auth-input"
+              rows={3}
+              value={useCase}
+              onChange={(e) => setUseCase(e.target.value)}
+              required
+              placeholder="Describe your use case..."
+            />
+
+            <button type="submit" className="auth-button" disabled={loading}>
+              {loading ? "Submitting..." : "Request Access"}
+            </button>
+          </form>
+        )}
+
+        <div className="auth-links">
+          <a href="/login" className="auth-link">Already have access? Sign in</a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
