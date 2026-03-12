@@ -11,6 +11,18 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_APP_NAME: "SN AI Dev Agent"
+        NEXT_PUBLIC_APP_TAGLINE: "Say it. Ship it."
+        NEXT_PUBLIC_APP_SUBTITLE: "Spec-driven · Human-approved · AI-powered"
+        NEXT_PUBLIC_APP_DESCRIPTION: "AI-powered ServiceNow development"
+        NEXT_PUBLIC_APP_LOGO: "/logo-r-v10.svg"
+        NEXT_PUBLIC_HERO_TAGLINE: "r Works for You."
+        NEXT_PUBLIC_PRIMARY_COLOR: "blue"
+        NEXT_PUBLIC_ACCENT_COLOR: "purple"
+        NEXT_PUBLIC_SHOW_INFO_BUTTON: "true"
+        NEXT_PUBLIC_SHOW_TOOL_DETAILS: "false"
+        NEXT_PUBLIC_SHOW_LIVE_STATUS: "true"
     ports:
       - "3000:3000"
     env_file:
