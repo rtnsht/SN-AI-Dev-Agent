@@ -1,0 +1,85 @@
+# ============================================================================
+# Render Blueprint — Auto-configures the app when connected to your repo
+# Docs: https://docs.render.com/blueprint-spec
+#
+# Usage:
+#   1. Push this file to your repo
+#   2. Go to render.com → New → Blueprint → Connect repo
+#   3. Render reads this file and sets up everything
+#   4. Fill in env var values in the Render dashboard
+# ============================================================================
+
+services:
+  - type: web
+    name: sn-ai-dev-agent
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+
+    # ── Scaling ────────────────────────────────────────────────────
+    plan: pro                    # $25/mo per instance
+    numInstances: 1              # Start with 1, auto-scale handles the rest
+    scaling:
+      minInstances: 1
+      maxInstances: 5
+      targetCPUPercent: 70       # Scale up when avg CPU > 70%
+      targetMemoryPercent: 80    # Scale up when avg memory > 80%
+
+    # ── Health check ───────────────────────────────────────────────
+    healthCheckPath: /api/config
+
+    # ── Persistent disk for logs ───────────────────────────────────
+    disk:
+      name: webapp-logs
+      mountPath: /app/webapp/logs
+      sizeGB: 1
+
+    # ── Environment variables ──────────────────────────────────────
+    # Values are set in the Render dashboard (never commit secrets)
+    envVars:
+      # AI Provider Keys (at least one required)
+      - key: CLAUDE_API_KEY
+        sync: false              # Must be set manually in dashboard
+      - key: OPENROUTER_API_KEY
+        sync: false
+
+      # ServiceNow Instance (optional — users can enter in UI)
+      - key: SN_INSTANCE_URL
+        sync: false
+      - key: SN_USERNAME
+        sync: false
+      - key: SN_PASSWORD
+        sync: false
+
+      # Rate limiting
+      - key: RATE_LIMIT_MAX
+        value: "120"
+      - key: RATE_LIMIT_WINDOW_HOURS
+        value: "1"
+
+      # UI behavior
+      - key: ALLOW_USER_API_KEYS
+        value: "true"
+      - key: NEXT_PUBLIC_SHOW_TOOL_DETAILS
+        value: "false"
+      - key: NEXT_PUBLIC_SHOW_LIVE_STATUS
+        value: "true"
+
+      # Branding
+      - key: NEXT_PUBLIC_APP_NAME
+        value: "SN AI Dev Agent"
+      - key: NEXT_PUBLIC_APP_TAGLINE
+        value: "Say it. Ship it."
+      - key: NEXT_PUBLIC_APP_SUBTITLE
+        value: "Spec-driven · Human-approved · AI-powered"
+      - key: NEXT_PUBLIC_PRIMARY_COLOR
+        value: "blue"
+      - key: NEXT_PUBLIC_ACCENT_COLOR
+        value: "purple"
+      - key: NEXT_PUBLIC_SHOW_INFO_BUTTON
+        value: "true"
+
+      # Node / Next.js
+      - key: NODE_ENV
+        value: "production"
+

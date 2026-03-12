@@ -80,10 +80,12 @@ RUN mkdir -p /app/webapp/logs && chown nextjs:nodejs /app/webapp/logs
 
 USER nextjs
 
-EXPOSE 3000
-
+# PORT is overridable — Railway/Render inject their own $PORT at runtime.
+# Default 3000 matches local `npm run dev` behavior.
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+
+EXPOSE ${PORT}
 
 WORKDIR /app/webapp
 CMD ["node", "server.js"]

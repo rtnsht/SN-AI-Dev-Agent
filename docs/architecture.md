@@ -1,6 +1,6 @@
 # SN AI Dev Agent — Technical Architecture
 
-> **Version:** 2.4 | **Date:** 2026-03-11 | **Branch:** `sndevaiagentwebapp-launchv0.1`
+> **Version:** 2.5 | **Date:** 2026-03-12 | **Branch:** `teaser-march12`
 
 ---
 
@@ -1289,3 +1289,163 @@ The right sidebar has been simplified to show **only Connection info**:
 | Pipeline Status | Duplicate of header PhaseTracker |
 | Agent Activity | Moved inline to chat (Section 21) |
 
+
+
+---
+
+## 24. Multi-User Session Isolation
+
+> **Added:** 2026-03-12
+
+The app is designed for concurrent multi-user access. 100+ users can connect to different ServiceNow instances simultaneously with **zero risk of data cross-contamination**.
+
+### 24.1 Per-Request Client Isolation
+
+Every API request creates a **brand new `ServiceNowClient`** from the credentials in the POST body. There is no shared singleton or connection pool.
+
+```
+User A (dev12345.service-now.com)  ──POST──▶  route.ts  ──▶  new ServiceNowClient(A's creds)
+User B (dev99999.service-now.com)  ──POST──▶  route.ts  ──▶  new ServiceNowClient(B's creds)
+```
+
+**Key code path** (`sn-engine.ts`):
+```typescript
+function createSnClient(credentials: UserCredentials, registry: any) {
+  return new registry.ServiceNowClient({
+    instanceUrl: credentials.instanceUrl,
+    username: credentials.username,
+    password: credentials.password,
+    defaultScope: "global",
+  });
+}
+```
+
+Each client has its own:
+- Axios instance with dedicated cookie jar (`tough-cookie`)
+- Authentication credentials
+- Active update set ID (`_activeUpdateSetId`)
+- Base URL pointing to the user's specific instance
+
+### 24.2 Shared State Analysis
+
+| Shared State | Scope | Risk | Why Safe |
+|-------------|-------|------|----------|
+| `helperApiPaths` (Map) | Module-level | ✅ None | Keyed by `instanceUrl` — each instance gets its own entry |
+| `_toolRegistry` / `_toolDefs` | Module-level | ✅ None | Read-only tool definitions, identical for all users |
+| Rate limiter | Module-level | ✅ None | Keyed by IP address, not by instance |
+| Logger | Module-level | ✅ None | Keyed by `sessionId` — each browser session writes to its own log file |
+| Anthropic/OpenRouter client | Per-request | ✅ None | Created fresh per request with user's API key |
+| Conversation messages | Per-request | ✅ None | Sent in POST body, never stored server-side |
+
+### 24.3 What Cannot Cross Between Users
+
+| Resource | Isolation Mechanism |
+|----------|-------------------|
+| ServiceNow credentials | Sent per-request in POST body, never cached |
+| Cookie jar (session) | New `CookieJar()` per `ServiceNowClient` instance |
+| Update set context | `_activeUpdateSetId` lives on the client instance, dies with the request |
+| AI conversation history | Sent in POST body, stateless server |
+| API keys (Claude/OpenRouter) | Resolved per-request from body or env vars |
+| Log files | Unique `sessionId` per browser session → separate files |
+
+### 24.4 Scaling Considerations
+
+| Concern | Impact | Mitigation |
+|---------|--------|------------|
+| `helperApiPaths` Map growth | 1 entry per unique instance URL | Trivial memory (~100 bytes/entry); no TTL needed for <10K instances |
+| Concurrent Anthropic API calls | Each user's request makes independent API calls | Rate limiting per IP; users can bring their own API keys |
+| Log file I/O | Each session writes to its own file | Async append; persistent disk on Render/Railway |
+| Memory per request | ~2-5MB per active chat stream (client + messages + tool results) | Auto-scaling handles load spikes |
+
+---
+
+## 25. Docker & Deployment Architecture
+
+> **Added:** 2026-03-12
+
+### 25.1 Multi-Stage Docker Build
+
+The Dockerfile uses 4 stages to produce a minimal production image (~200MB):
+
+```
+Stage 1: mcp-build        Stage 2: deps
+(TypeScript compile)       (npm ci for webapp)
+        │                        │
+        └────────┬───────────────┘
+                 │
+        Stage 3: builder
+        (Next.js build with standalone output)
+                 │
+        Stage 4: runner
+        (Alpine + standalone server.js + mcp-servicenow dist)
+```
+
+| Stage | Base Image | Purpose | Output |
+|-------|-----------|---------|--------|
+| `mcp-build` | `node:20-alpine` | Compile `mcp-servicenow` TypeScript | `dist/` directory |
+| `deps` | `node:20-alpine` | Install webapp `node_modules` (resolves `file:../mcp-servicenow`) | `node_modules/` |
+| `builder` | `node:20-alpine` | Build Next.js with `output: "standalone"` | `.next/standalone/`, `.next/static/` |
+| `runner` | `node:20-alpine` | Production runtime (non-root `nextjs` user) | Final image |
+
+### 25.2 Standalone Output
+
+Next.js `output: "standalone"` produces a self-contained `server.js` that includes only the required `node_modules`. This reduces the production image from ~2GB to ~200MB.
+
+**Config** (`next.config.ts`):
+```typescript
+const nextConfig: NextConfig = {
+  output: "standalone",
+  serverExternalPackages: ["mcp-servicenow"],
+};
+```
+
+### 25.3 Runtime Architecture (Container)
+
+```
+/app/
+├── mcp-servicenow/          ← Built dist + node_modules (runtime dependency)
+│   ├── dist/                ← Compiled tool handlers
+│   ├── node_modules/        ← axios, zod, tough-cookie, etc.
+│   ├── lib/                 ← Helper scripts
+│   └── package.json
+│
+└── webapp/                  ← Next.js standalone server
+    ├── server.js            ← Entry point (CMD ["node", "server.js"])
+    ├── .next/static/        ← Static assets (CSS, JS chunks)
+    ├── public/              ← Logo, favicon, SVGs
+    ├── node_modules/        ← Minimal (standalone-pruned)
+    └── logs/                ← Session logs (persistent volume)
+```
+
+### 25.4 Port Configuration
+
+| Environment | Port Behavior |
+|-------------|--------------|
+| Local `npm run dev` | Port `3000` (default) |
+| `docker compose up` | Container `3000` → host `3000` |
+| Railway | Platform injects `$PORT` env var → overrides default `3000` |
+| Render | Platform injects `$PORT` env var → overrides default `3000` |
+
+All platforms expose the app via HTTPS on standard port 443 — no port in the public URL.
+
+### 25.5 Render Blueprint (`render.yaml`)
+
+The `render.yaml` file auto-configures the app on Render:
+
+| Setting | Value |
+|---------|-------|
+| Plan | Pro ($25/mo per instance) |
+| Auto-scaling | 1–5 instances (CPU 70%, memory 80% thresholds) |
+| Health check | `GET /api/config` |
+| Persistent disk | 1GB at `/app/webapp/logs` |
+| Secrets | Set in dashboard (never in file) |
+
+### 25.6 Files
+
+| File | Purpose |
+|------|---------|
+| `Dockerfile` | Multi-stage build (4 stages) |
+| `.dockerignore` | Excludes node_modules, .env, logs, temp files |
+| `docker-compose.yml` | Local Docker testing |
+| `render.yaml` | Render platform blueprint (auto-scale, health check, disk) |
+| `webapp/.env.example` | Template for all environment variables |
