@@ -32,13 +32,13 @@ export default function ThemeProvider({ children }: { children: React.ReactNode 
   const [theme, setTheme] = useState<Theme>("dark");
   const [mounted, setMounted] = useState(false);
 
-  // Read persisted theme on mount
+  // Always start in dark mode — user can toggle to light, but each session starts dark
   useEffect(() => {
-    const stored = localStorage.getItem("yantra-theme") as Theme | null;
-    const initial = stored === "light" || stored === "dark" ? stored : "dark";
+    const initial: Theme = "dark";
     setTheme(initial);
     document.documentElement.setAttribute("data-theme", initial);
     applyBrandColors(initial);
+    localStorage.setItem("yantra-theme", initial);
     setMounted(true);
   }, []);
 

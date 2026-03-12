@@ -54,7 +54,9 @@ export default function Home() {
   const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
   const [streamingEnabled, setStreamingEnabled] = useState(true);
   // Agent activity log — accumulates liveStatus messages for streaming display
-  const [activityLog, setActivityLog] = useState<{ message: string; phase: string; timestamp: number; toolName?: string; toolInput?: Record<string, unknown>; done?: boolean }[]>([]);
+  const [activityLog, setActivityLog] = useState<{ message: string; phase: string; timestamp: number; toolName?: string; toolInput?: Record<string, unknown>; done?: boolean; taskId?: number; taskName?: string }[]>([]);
+  // Task planner state — structured plan for current request
+  const [taskPlan, setTaskPlan] = useState<{ analysis: string; tasks: { id: number; name: string; type: string; tools: { name: string; args: Record<string, unknown> }[] }[] } | null>(null);
   // Dynamic example prompts from instance data
   const [instancePrompts, setInstancePrompts] = useState<{ icon: string; text: string; desc: string }[] | null>(null);
   // Persistent session ID for logging - generated once per page load
@@ -445,6 +447,29 @@ export default function Home() {
                         }
                         return updated;
                       });
+                    } else if (event.type === "plan") {
+                      // Task planner produced a structured plan
+                      setTaskPlan(event.plan);
+                      setLiveStatus({ message: "Executing plan...", phase: "thinking" });
+                    } else if (event.type === "task_start") {
+                      setLiveStatus({ message: `Task: ${event.taskName}`, phase: "tool" });
+                      setActivityLog((prev) => {
+                        const entry = { message: event.taskName, phase: "task" as string, timestamp: Date.now(), taskId: event.taskId, taskName: event.taskName, done: false };
+                        const updated = [...prev, entry];
+                        return updated.length > 100 ? updated.slice(-100) : updated;
+                      });
+                    } else if (event.type === "task_complete") {
+                      // Mark task entry as done in activity log
+                      setActivityLog((prev) => {
+                        const updated = [...prev];
+                        for (let i = updated.length - 1; i >= 0; i--) {
+                          if (updated[i].taskId === event.taskId && !updated[i].done) {
+                            updated[i] = { ...updated[i], done: true };
+                            break;
+                          }
+                        }
+                        return updated;
+                      });
                     } else if (event.type === "done") {
                       finalData = { reply: event.reply, toolExecutions: event.toolExecutions };
                     } else if (event.type === "max_rounds_reached") {
@@ -811,6 +836,7 @@ export default function Home() {
     setModelLocked(false);
     setPendingRetry(null);
     setActivityLog([]);
+    setTaskPlan(null);
   }, []);
 
   /** Disconnect and unlock fields so user can edit before reconnecting */
@@ -1055,6 +1081,7 @@ export default function Home() {
           userName={connInfo?.userInfo?.name}
           instancePrompts={instancePrompts ?? undefined}
           activityLog={activityLog}
+          taskPlan={taskPlan}
         />
       </main>
 

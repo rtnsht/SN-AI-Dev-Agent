@@ -18,6 +18,8 @@ import path from "node:path";
 import { buildSystemPrompt, buildDynamicContext } from "./system-prompt";
 import { logger } from "./logger";
 import { chatCompletion, OpenRouterRequest, OpenRouterMessage, OpenRouterContentBlock, OpenRouterTool } from "./openrouter";
+import { getSessionCache, SessionCache } from "./session-cache";
+import { shouldPlan, generatePlan, executePlan, formatGatheredData, type PlanStreamEvent, type ExecutionPlan } from "./task-planner";
 
 /* ── Context management constants ─────────────────────────────── */
 
@@ -964,12 +966,16 @@ export async function fetchInstancePrompts(
 
 export type StreamEvent =
   | { type: "status"; message: string; phase?: "thinking" | "tool" | "responding" }
-  | { type: "tool_start"; toolName: string; input: unknown }
-  | { type: "tool_end"; toolName: string; durationMs: number; success: boolean }
+  | { type: "tool_start"; toolName: string; input: unknown; taskId?: number }
+  | { type: "tool_end"; toolName: string; durationMs: number; success: boolean; taskId?: number }
   | { type: "text_delta"; text: string }
   | { type: "done"; reply: string; toolExecutions: ToolExecution[] }
   | { type: "max_rounds_reached"; reply: string; toolExecutions: ToolExecution[]; resumeAfterMs: number; phase?: string }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  // Task planner events
+  | { type: "plan"; plan: ExecutionPlan }
+  | { type: "task_start"; taskId: number; taskName: string }
+  | { type: "task_complete"; taskId: number; taskName: string };
 
 /**
  * Streaming version of chat that yields events for real-time UI updates.
@@ -1003,6 +1009,9 @@ export async function* chatStream(
   const dedup = new ToolCallDeduplicator();
   let rounds = 0;
 
+  // Session cache for cross-phase data reuse
+  const sessionCache = getSessionCache(sessionId);
+
   // Log initial request context
   const userIntent = processedMessages.filter(m => m.role === "user").slice(-1)[0]?.content?.slice(0, 200) || "";
   logger.info(sessionId, "chat_init", "Stream session initialized", {
@@ -1012,11 +1021,98 @@ export async function* chatStream(
     model,
     maxToolRounds: effectiveMaxRounds,
     userIntent,
+    cacheSize: sessionCache.size,
   });
+
+  // ── Task Planner: Plan → Gather → Execute ──────────────────────
+  let plannerRanSuccessfully = false;
+
+  if (shouldPlan(userIntent, phase, processedMessages.length)) {
+    yield { type: "status", message: "Planning execution...", phase: "thinking" };
+
+    const availableToolNames = tools.map((t: Anthropic.Tool) => t.name);
+    const plan = await generatePlan(
+      userIntent,
+      phase || "unknown",
+      availableToolNames,
+      sessionCache,
+      {
+        provider: "anthropic",
+        anthropicApiKey: credentials.claudeApiKey,
+        model,
+      },
+      sessionId
+    );
+
+    if (plan && plan.tasks.length > 0) {
+      // Create a tool executor that wraps executeAndLogTool
+      const toolExecutor = async (toolName: string, args: unknown) => {
+        const { execution, resultJson, success } = await executeAndLogTool(registry, snClient, toolName, args, sessionId);
+        toolExecutions.push(execution);
+        return { result: execution.output, durationMs: execution.durationMs, success };
+      };
+
+      // Execute the plan — yields events for UI
+      const planGenerator = executePlan(plan, toolExecutor, sessionCache, sessionId);
+      let gatheredData = new Map<string, unknown>();
+
+      // Consume the generator, forwarding planner events as StreamEvents
+      let iterResult = await planGenerator.next();
+      while (!iterResult.done) {
+        const planEvent = iterResult.value as PlanStreamEvent;
+        // Forward planner events to the SSE stream
+        if (planEvent.type === "plan") {
+          yield { type: "plan", plan: planEvent.plan! } as StreamEvent;
+        } else if (planEvent.type === "task_start") {
+          yield { type: "task_start", taskId: planEvent.taskId!, taskName: planEvent.taskName! } as StreamEvent;
+        } else if (planEvent.type === "task_complete") {
+          yield { type: "task_complete", taskId: planEvent.taskId!, taskName: planEvent.taskName! } as StreamEvent;
+        } else if (planEvent.type === "plan_tool_start") {
+          yield { type: "tool_start", toolName: planEvent.toolName!, input: {}, taskId: planEvent.taskId } as StreamEvent;
+        } else if (planEvent.type === "plan_tool_end") {
+          yield { type: "tool_end", toolName: planEvent.toolName!, durationMs: planEvent.durationMs!, success: planEvent.success!, taskId: planEvent.taskId } as StreamEvent;
+        }
+        iterResult = await planGenerator.next();
+      }
+      // The return value of the generator is the gathered data
+      gatheredData = iterResult.value || new Map();
+
+      // Inject gathered data into AI context so it doesn't re-fetch
+      if (gatheredData.size > 0) {
+        const dataText = formatGatheredData(gatheredData);
+        anthropicMessages.push({
+          role: "user",
+          content: [{ type: "text", text: dataText }],
+        });
+        // Add AI acknowledgment
+        anthropicMessages.push({
+          role: "assistant",
+          content: "I have received the pre-fetched data and will use it directly without re-querying.",
+        });
+        plannerRanSuccessfully = true;
+        logger.info(sessionId, "planner", "Gathered data injected into context", {
+          dataKeys: gatheredData.size,
+          dataLengthChars: dataText.length,
+        });
+      }
+    } else {
+      logger.info(sessionId, "planner", "Plan generation returned no tasks — falling back to reactive loop");
+    }
+  }
+
+  // Reduce round budget if planner already gathered data
+  let adjustedMaxRounds = effectiveMaxRounds;
+  if (plannerRanSuccessfully) {
+    adjustedMaxRounds = Math.max(5, Math.ceil(effectiveMaxRounds * 0.6));
+    logger.info(sessionId, "planner", "Round budget adjusted after planning", {
+      original: effectiveMaxRounds,
+      adjusted: adjustedMaxRounds,
+    });
+  }
 
   const ROUNDS_WARNING_THRESHOLD = 3; // Warn Claude when this many rounds remain
 
-  while (rounds < effectiveMaxRounds) {
+  while (rounds < adjustedMaxRounds) {
     // Abort signal check — bail early if client disconnected (saves API calls)
     if (signal?.aborted) {
       logger.info(sessionId, "chat_stream", "Aborted by client signal", { rounds, phase: phase || "none" });
@@ -1039,7 +1135,7 @@ export async function* chatStream(
     }
 
     // Inject a warning when approaching the round limit so Claude can wrap up gracefully
-    const remainingRounds = effectiveMaxRounds - rounds;
+    const remainingRounds = adjustedMaxRounds - rounds;
     if (remainingRounds === ROUNDS_WARNING_THRESHOLD - 1 && rounds > 1) {
       anthropicMessages.push({
         role: "user",
@@ -1061,7 +1157,7 @@ export async function* chatStream(
       logger.info(sessionId, "phase_reminder", `Injected phase gate reminder for ${phase}`, { round: rounds });
     }
 
-    logger.info(sessionId, "claude_api", `Stream round ${rounds}/${effectiveMaxRounds}: Calling Anthropic API`, {
+    logger.info(sessionId, "claude_api", `Stream round ${rounds}/${adjustedMaxRounds}: Calling Anthropic API`, {
       messageCount: anthropicMessages.length, model, remainingRounds,
     });
     yield { type: "status", message: `Round ${rounds}: Analyzing request...`, phase: "thinking" };
@@ -1171,7 +1267,7 @@ export async function* chatStream(
   // Extract any partial text from the last response to include context for resume
   const RESUME_DELAY_MS = 5000;
   logger.warn(sessionId, "chat_stream", "Stream max tool rounds reached -- signaling auto-resume", {
-    rounds: effectiveMaxRounds,
+    rounds: adjustedMaxRounds,
     phase: phase || "none",
     toolCount: toolExecutions.length,
     duplicateToolCalls: dedup.totalDuplicates,
@@ -1179,7 +1275,7 @@ export async function* chatStream(
   });
   yield {
     type: "max_rounds_reached",
-    reply: `[Reached ${effectiveMaxRounds} tool rounds in ${phase || "unknown"} phase. Resuming automatically to continue work...]`,
+    reply: `[Reached ${adjustedMaxRounds} tool rounds in ${phase || "unknown"} phase. Resuming automatically to continue work...]`,
     toolExecutions,
     resumeAfterMs: RESUME_DELAY_MS,
     phase: phase || undefined,
@@ -1200,14 +1296,77 @@ async function* chatStreamOpenRouter(
 ): AsyncGenerator<StreamEvent> {
   const registry = getToolRegistry();
   const snClient = createSnClient(credentials, registry);
-  const tools = toOpenRouterTools(getFilteredTools(phase, getToolDefs()));
+  const rawTools = getFilteredTools(phase, getToolDefs());
+  const tools = toOpenRouterTools(rawTools);
   const processedMessages = await preprocessFileAttachments(messages);
   const orMessages = toOpenRouterMessages(processedMessages, model);
   const toolExecutions: ToolExecution[] = [];
   const dedup = new ToolCallDeduplicator();
   let rounds = 0;
 
-  while (rounds < maxToolRounds) {
+  // Session cache for cross-phase data reuse
+  const sessionCache = getSessionCache(sessionId);
+  let adjustedMaxRounds = maxToolRounds;
+
+  // ── Task Planner for OpenRouter path ──────────────────────────
+  const userIntent = processedMessages.filter(m => m.role === "user").slice(-1)[0]?.content?.slice(0, 200) || "";
+
+  if (shouldPlan(userIntent, phase, processedMessages.length)) {
+    yield { type: "status", message: "Planning execution...", phase: "thinking" };
+
+    const availableToolNames = rawTools.map((t: Anthropic.Tool) => t.name);
+    const plan = await generatePlan(
+      userIntent,
+      phase || "unknown",
+      availableToolNames,
+      sessionCache,
+      {
+        provider: "openrouter",
+        openRouterApiKey: credentials.openRouterApiKey,
+        model,
+      },
+      sessionId
+    );
+
+    if (plan && plan.tasks.length > 0) {
+      const toolExecutor = async (toolName: string, args: unknown) => {
+        const { execution, resultJson, success } = await executeAndLogTool(registry, snClient, toolName, args, sessionId);
+        toolExecutions.push(execution);
+        return { result: execution.output, durationMs: execution.durationMs, success };
+      };
+
+      const planGenerator = executePlan(plan, toolExecutor, sessionCache, sessionId);
+      let gatheredData = new Map<string, unknown>();
+
+      let iterResult = await planGenerator.next();
+      while (!iterResult.done) {
+        const planEvent = iterResult.value as PlanStreamEvent;
+        if (planEvent.type === "plan") {
+          yield { type: "plan", plan: planEvent.plan! } as StreamEvent;
+        } else if (planEvent.type === "task_start") {
+          yield { type: "task_start", taskId: planEvent.taskId!, taskName: planEvent.taskName! } as StreamEvent;
+        } else if (planEvent.type === "task_complete") {
+          yield { type: "task_complete", taskId: planEvent.taskId!, taskName: planEvent.taskName! } as StreamEvent;
+        } else if (planEvent.type === "plan_tool_start") {
+          yield { type: "tool_start", toolName: planEvent.toolName!, input: {}, taskId: planEvent.taskId } as StreamEvent;
+        } else if (planEvent.type === "plan_tool_end") {
+          yield { type: "tool_end", toolName: planEvent.toolName!, durationMs: planEvent.durationMs!, success: planEvent.success!, taskId: planEvent.taskId } as StreamEvent;
+        }
+        iterResult = await planGenerator.next();
+      }
+      gatheredData = iterResult.value || new Map();
+
+      if (gatheredData.size > 0) {
+        const dataText = formatGatheredData(gatheredData);
+        orMessages.push({ role: "user", content: dataText });
+        orMessages.push({ role: "assistant", content: "I have received the pre-fetched data and will use it directly without re-querying." });
+        adjustedMaxRounds = Math.max(5, Math.ceil(maxToolRounds * 0.6));
+        logger.info(sessionId, "planner", "OpenRouter: Gathered data injected", { dataKeys: gatheredData.size });
+      }
+    }
+  }
+
+  while (rounds < adjustedMaxRounds) {
     if (signal?.aborted) {
       logger.info(sessionId, "chat_stream", "OpenRouter: Aborted by client signal", { rounds, phase: phase || "none" });
       yield { type: "error", message: "Request aborted by client" };

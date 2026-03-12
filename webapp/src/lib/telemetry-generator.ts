@@ -72,6 +72,15 @@ interface SessionTelemetry {
   toolStats: Map<string, { calls: number; successes: number; failures: number; totalMs: number }>;
   // Errors
   errors: { time: string; tool: string; message: string }[];
+  // Task planner stats
+  plannerStats: {
+    plansGenerated: number;
+    plansFailed: number;
+    totalPlanDurationMs: number;
+    cacheHits: number;
+    tasksPlanned: number;
+    roundsSaved: number;
+  };
 }
 
 // ── Parser ─────────────────────────────────────────────────────────────────
@@ -97,6 +106,7 @@ function parseSessionLog(logFile: string): SessionTelemetry {
     rounds: [], phases: [],
     toolStats: new Map(),
     errors: [],
+    plannerStats: { plansGenerated: 0, plansFailed: 0, totalPlanDurationMs: 0, cacheHits: 0, tasksPlanned: 0, roundsSaved: 0 },
   };
 
   let currentRound: Partial<RoundInfo> | null = null;
@@ -201,6 +211,24 @@ function parseSessionLog(logFile: string): SessionTelemetry {
 
     }
 
+    // ── Task Planner stats ──────────────────────────────────────────
+    if (entry.category === "planner") {
+      if (entry.message === "Plan generated") {
+        telemetry.plannerStats.plansGenerated++;
+        telemetry.plannerStats.totalPlanDurationMs += (d.durationMs as number) || 0;
+        telemetry.plannerStats.tasksPlanned += (d.taskCount as number) || 0;
+      } else if (entry.message.includes("failed")) {
+        telemetry.plannerStats.plansFailed++;
+      } else if (entry.message === "Round budget adjusted after planning") {
+        const orig = (d.original as number) || 0;
+        const adj = (d.adjusted as number) || 0;
+        telemetry.plannerStats.roundsSaved += orig - adj;
+      }
+    }
+    if (entry.category === "cache" && entry.message.includes("Cache hit")) {
+      telemetry.plannerStats.cacheHits++;
+    }
+
     // ── Completion ───────────────────────────────────────────────────
     if (entry.message.includes("completed") || entry.message.includes("Stream completed")) {
       telemetry.finalStopReason = (d.stopReason as string) || "end_turn";
@@ -296,6 +324,20 @@ function generateMarkdown(t: SessionTelemetry): string {
     }).join(", ") || "*(text only)*";
     const dur = r.tools.reduce((sum, t) => sum + t.durationMs, 0);
     md += `| ${r.roundNum} | ${timeOnly(r.startTime)} | ${toolNames} | ${dur > 0 ? `${(dur / 1000).toFixed(1)}s` : "—"} | ${r.inputTokens.toLocaleString()}/${r.outputTokens.toLocaleString()} | ${r.stopReason || "—"} |\n`;
+  }
+
+  // Task planner stats (if planner was used)
+  if (t.plannerStats.plansGenerated > 0 || t.plannerStats.cacheHits > 0) {
+    const ps = t.plannerStats;
+    md += `\n---\n\n## 🧠 Task Planner\n\n`;
+    md += `| Metric | Value |\n`;
+    md += `|--------|-------|\n`;
+    md += `| Plans Generated | ${ps.plansGenerated} |\n`;
+    md += `| Plans Failed | ${ps.plansFailed} |\n`;
+    md += `| Total Planning Time | ${(ps.totalPlanDurationMs / 1000).toFixed(1)}s |\n`;
+    md += `| Tasks Planned | ${ps.tasksPlanned} |\n`;
+    md += `| Cache Hits | ${ps.cacheHits} |\n`;
+    md += `| Rounds Saved | ${ps.roundsSaved} |\n`;
   }
 
   // Tool usage distribution

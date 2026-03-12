@@ -13,6 +13,22 @@ export const APP_LOGO        = process.env.NEXT_PUBLIC_APP_LOGO        || "";
 export const APP_HERO_TAGLINE = process.env.NEXT_PUBLIC_HERO_TAGLINE   || "";
 export const SHOW_INFO_BUTTON = process.env.NEXT_PUBLIC_SHOW_INFO_BUTTON !== "false"; // default: true
 
+// ── Landing Page Feature Pills ──────────────────────────────────────────────
+// Format: "Title|Description" — parsed into { title, desc }
+function parseFeaturePill(raw: string | undefined): { title: string; desc: string } | null {
+  if (!raw) return null;
+  const [title, ...rest] = raw.split("|");
+  const desc = rest.join("|"); // rejoin in case desc contains |
+  if (!title?.trim() || !desc?.trim()) return null;
+  return { title: title.trim(), desc: desc.trim() };
+}
+
+export const HERO_FEATURES: { title: string; desc: string }[] = [
+  parseFeaturePill(process.env.NEXT_PUBLIC_HERO_FEATURE_1),
+  parseFeaturePill(process.env.NEXT_PUBLIC_HERO_FEATURE_2),
+  parseFeaturePill(process.env.NEXT_PUBLIC_HERO_FEATURE_3),
+].filter((f): f is { title: string; desc: string } => f !== null);
+
 // ── Color Presets ───────────────────────────────────────────────────────────
 // Env vars accept a preset name (blue, purple, green, teal, red, orange, indigo)
 // or a raw hex color (e.g. "#2563eb"). If hex, a lighter hover variant is auto-derived.
