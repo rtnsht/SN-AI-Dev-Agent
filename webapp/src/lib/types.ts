@@ -124,12 +124,24 @@ export interface UserChoicesBlock {
   choices: UserChoice[];
 }
 
-/** Parse USER_CHOICES markers from assistant message content */
+/** Parse USER_CHOICES markers from assistant message content.
+ *  Supports both HTML comment format <!-- USER_CHOICES:{...} -->
+ *  and tag format <USER_CHOICES:{...}> that some models emit. */
 export function parseUserChoices(content: string): UserChoicesBlock | null {
-  const match = content.match(/<!--\s*USER_CHOICES:([\s\S]*?)\s*-->/);
-  if (match) {
+  // Try HTML comment format first: <!-- USER_CHOICES:{...} -->
+  const commentMatch = content.match(/<!--\s*USER_CHOICES:([\s\S]*?)\s*-->/);
+  if (commentMatch) {
     try {
-      return JSON.parse(match[1]) as UserChoicesBlock;
+      return JSON.parse(commentMatch[1]) as UserChoicesBlock;
+    } catch {
+      // fall through
+    }
+  }
+  // Try tag format: <USER_CHOICES:{...}>  (some models emit this instead)
+  const tagMatch = content.match(/<USER_CHOICES:([\s\S]*?)>/);
+  if (tagMatch) {
+    try {
+      return JSON.parse(tagMatch[1]) as UserChoicesBlock;
     } catch {
       return null;
     }
@@ -139,7 +151,10 @@ export function parseUserChoices(content: string): UserChoicesBlock | null {
 
 /** Strip USER_CHOICES markers from content for display */
 export function stripUserChoicesMarker(content: string): string {
-  return content.replace(/<!--\s*USER_CHOICES:[\s\S]*?\s*-->/g, "").trim();
+  return content
+    .replace(/<!--\s*USER_CHOICES:[\s\S]*?\s*-->/g, "")
+    .replace(/<USER_CHOICES:[\s\S]*?>/g, "")
+    .trim();
 }
 
 /** Parse phase gate markers from assistant message content */
