@@ -40,6 +40,9 @@ services:
       NEXT_PUBLIC_SHOW_INFO_BUTTON: "true"
       NEXT_PUBLIC_SHOW_TOOL_DETAILS: "false"
       NEXT_PUBLIC_SHOW_LIVE_STATUS: "true"
+      NEXT_PUBLIC_HERO_FEATURE_1: "Describe what you need. We'll build it.|Tell the AI what you want in plain English — forms, automations, workflows, or custom features — and it handles the rest."
+      NEXT_PUBLIC_HERO_FEATURE_2: "A guided workflow, not a black box.|Every feature follows a structured path: spec → design → build → test → deploy. You review and approve each step before moving on."
+      NEXT_PUBLIC_HERO_FEATURE_3: "You're always in control.|Nothing gets deployed without your sign-off. The AI checks what already exists, reuses what it can, and tracks every change."
 
     # ── Health check ───────────────────────────────────────────────
     healthCheckPath: /api/config
@@ -99,3 +102,55 @@ services:
       - key: NODE_ENV
         value: "production"
 
+      # ── Auth Gate (Invite-Only Access) ──────────────────────────
+      # Supabase (required for auth gate)
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+
+      # Admin credentials
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_NAME
+        sync: false
+      - key: ADMIN_PASSWORD_HASH
+        sync: false
+
+      # Auth behavior
+      - key: APP_URL
+        sync: false
+      - key: REQUIRE_EMAIL_VERIFICATION
+        value: "true"
+      - key: REQUIRE_ACCESS_APPROVAL
+        value: "true"
+
+      # Session
+      - key: SESSION_COOKIE_NAME
+        value: "sn-ai-session"
+      - key: SESSION_MAX_AGE_DAYS
+        value: "1"
+
+      # Login rate limiting
+      - key: LOGIN_MAX_ATTEMPTS
+        value: "3"
+      - key: LOGIN_WINDOW_MINUTES
+        value: "15"
+
+      # Magic link / email verification
+      - key: MAGIC_LINK_EXPIRY_HOURS
+        value: "72"
+      - key: EMAIL_VERIFY_EXPIRY_HOURS
+        value: "24"
+
+      # Email provider (Zeptomail)
+      - key: ZEPTOMAIL_API_KEY
+        sync: false
+      - key: ZEPTOMAIL_API_URL
+        value: "https://api.zeptomail.com/v1.1/email"
+      - key: ZEPTOMAIL_FROM_EMAIL
+        sync: false
+      - key: ZEPTOMAIL_FROM_NAME
+        sync: false
+      - key: ZEPTOMAIL_BOUNCE_ADDRESS
+        sync: false
