@@ -448,7 +448,13 @@ export default function Home() {
                     } else if (event.type === "done") {
                       finalData = { reply: event.reply, toolExecutions: event.toolExecutions };
                     } else if (event.type === "max_rounds_reached") {
-                      // Auto-resume: add partial reply as assistant msg, then schedule continuation
+                      // Check if this is a lightweight phase that should NOT auto-resume
+                      // (e.g., scope_selection — auto-resuming just creates cascading loops)
+                      const noAutoResumePhases = new Set(["scope_selection"]);
+                      const eventPhase = (event as { phase?: string }).phase;
+                      const shouldAutoResume = !eventPhase || !noAutoResumePhases.has(eventPhase);
+
+                      // Add partial reply as assistant msg
                       const partialMsg: ChatMessage = {
                         role: "assistant",
                         content: event.reply,
@@ -458,6 +464,19 @@ export default function Home() {
                       const updatedMsgs = [...messagesRef.current, partialMsg];
                       messagesRef.current = updatedMsgs;
                       setMessages(updatedMsgs);
+
+                      if (!shouldAutoResume) {
+                        // Don't auto-resume — show actionable error instead of cascading loops
+                        setLiveStatus(null);
+                        setMessages((prev) => [...prev, {
+                          role: "system",
+                          type: "error",
+                          content: `**Phase stalled**: The AI could not complete the \`${eventPhase}\` phase within the round limit. This usually means it needs guidance to proceed.\n\n**Try**: Tell the AI what to do next, e.g. "Emit the phase gate and proceed to implementation."`,
+                          timestamp: new Date().toISOString(),
+                        }]);
+                        setIsLoading(false);
+                        return;
+                      }
 
                       // Show countdown timer
                       const delayMs = event.resumeAfterMs || 5000;

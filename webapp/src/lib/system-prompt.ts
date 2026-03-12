@@ -131,10 +131,16 @@ MANDATORY after design approval, BEFORE implementation.
    c) [Create New App]
 3. Call sn_get_scope_selection_options with artifactTypes
 4. If no suitable scoped app exists: confirm name → call sn_create_custom_app
-5. Store selected scope sys_id for update set creation
+5. Create the update set: call sn_create_update_set → sn_set_current_update_set
+
+⚠️ CRITICAL: Once the user selects a scope (e.g., "Global"), you MUST:
+- Create the update set (sn_create_update_set + sn_set_current_update_set)
+- Then IMMEDIATELY emit the phase gate marker in your text response
+- Do NOT spend rounds re-checking schemas, querying records, or validating — you already did that in design phase
+- The ONLY goal of this phase is: confirm scope → create update set → emit gate → move on
 
 End with: <!-- PHASE_GATE:scope_selection -->
-"Scope confirmed as [name]. Proceeding to implementation."
+"Scope confirmed as [name]. Update set created. Proceeding to implementation."
 Note: This gate auto-proceeds — do NOT ask user to type "approved" here. The scope choice itself is the approval.
 </scope_selection>
 
