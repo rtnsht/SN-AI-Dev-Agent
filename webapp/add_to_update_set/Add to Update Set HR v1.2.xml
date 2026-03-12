@@ -1,0 +1,1482 @@
+<?xml version="1.0" encoding="UTF-8"?><unload unload_date="2020-05-21 21:17:06">
+<sys_remote_update_set action="INSERT_OR_UPDATE">
+<application display_value="Human Resources: Core">d4ac3fff5b311200a4656ede91f91af2</application>
+<application_name>Human Resources: Core</application_name>
+<application_scope>sn_hr_core</application_scope>
+<application_version>6.0.43</application_version>
+<collisions/>
+<commit_date/>
+<deleted/>
+<description/>
+<inserted/>
+<name>Add to Update Set HR v1.2</name>
+<origin_sys_id/>
+<parent display_value=""/>
+<release_date/>
+<remote_base_update_set display_value="Add to Update Set HR v1.2">1e4e4ea72ffc5010c6c690bcf699b669</remote_base_update_set>
+<remote_parent_id/>
+<remote_sys_id>28cd8e672ffc5010c6c690bcf699b677</remote_sys_id>
+<state>loaded</state>
+<summary/>
+<sys_class_name>sys_remote_update_set</sys_class_name>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2020-05-21 21:17:06</sys_created_on>
+<sys_id>1e4e4ea72ffc5010c6c690bcf699b669</sys_id>
+<sys_mod_count>1</sys_mod_count>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2020-05-21 21:17:06</sys_updated_on>
+<update_set display_value=""/>
+<update_source display_value=""/>
+<updated/>
+</sys_remote_update_set>
+<sys_remote_update_set action="INSERT_OR_UPDATE">
+<application display_value="Communities">10809a9edb866200b1f6f78eaf961904</application>
+<application_name>Communities</application_name>
+<application_scope>sn_communities</application_scope>
+<application_version>1.7.14</application_version>
+<collisions/>
+<commit_date/>
+<deleted/>
+<description/>
+<inserted/>
+<name>Add to Update Set Communities v1.0</name>
+<origin_sys_id/>
+<parent display_value="Add to Update Set HR v1.2">1e4e4ea72ffc5010c6c690bcf699b669</parent>
+<release_date/>
+<remote_base_update_set display_value="Add to Update Set HR v1.2">1e4e4ea72ffc5010c6c690bcf699b669</remote_base_update_set>
+<remote_parent_id/>
+<remote_sys_id>e4cd8e672ffc5010c6c690bcf699b680</remote_sys_id>
+<state>in_hierarchy</state>
+<summary/>
+<sys_class_name>sys_remote_update_set</sys_class_name>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2020-05-21 21:17:06</sys_created_on>
+<sys_id>124e4ea72ffc5010c6c690bcf699b66c</sys_id>
+<sys_mod_count>0</sys_mod_count>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2020-05-21 21:17:06</sys_updated_on>
+<update_set display_value=""/>
+<update_source display_value=""/>
+<updated/>
+</sys_remote_update_set>
+<sys_remote_update_set action="INSERT_OR_UPDATE">
+<application display_value="Human Resources: Core">d4ac3fff5b311200a4656ede91f91af2</application>
+<application_name>Human Resources: Core</application_name>
+<application_scope>sn_hr_core</application_scope>
+<application_version>6.0.43</application_version>
+<collisions/>
+<commit_date/>
+<deleted/>
+<description/>
+<inserted/>
+<name>Add to Update Set HR v1.2</name>
+<origin_sys_id/>
+<parent display_value=""/>
+<release_date/>
+<remote_base_update_set display_value="Add to Update Set HR v1.2">1e4e4ea72ffc5010c6c690bcf699b669</remote_base_update_set>
+<remote_parent_id/>
+<remote_sys_id>28cd8e672ffc5010c6c690bcf699b677</remote_sys_id>
+<state>loaded</state>
+<summary/>
+<sys_class_name>sys_remote_update_set</sys_class_name>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2020-05-21 21:17:06</sys_created_on>
+<sys_id>1e4e4ea72ffc5010c6c690bcf699b669</sys_id>
+<sys_mod_count>1</sys_mod_count>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2020-05-21 21:17:06</sys_updated_on>
+<update_set display_value=""/>
+<update_source display_value=""/>
+<updated/>
+</sys_remote_update_set>
+<sys_remote_update_set action="INSERT_OR_UPDATE">
+<application display_value="Employee Document Management">1baeb0339371030092051d1e867ffb08</application>
+<application_name>Employee Document Management</application_name>
+<application_scope>sn_hr_ef</application_scope>
+<application_version>6.0.43</application_version>
+<collisions/>
+<commit_date/>
+<deleted/>
+<description/>
+<inserted/>
+<name>Add to Update Set EDM v1.0</name>
+<origin_sys_id/>
+<parent display_value="Add to Update Set HR v1.2">1e4e4ea72ffc5010c6c690bcf699b669</parent>
+<release_date/>
+<remote_base_update_set display_value="Add to Update Set HR v1.2">1e4e4ea72ffc5010c6c690bcf699b669</remote_base_update_set>
+<remote_parent_id/>
+<remote_sys_id>e8cd8e672ffc5010c6c690bcf699b67e</remote_sys_id>
+<state>in_hierarchy</state>
+<summary/>
+<sys_class_name>sys_remote_update_set</sys_class_name>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2020-05-21 21:17:06</sys_created_on>
+<sys_id>5a4e4ea72ffc5010c6c690bcf699b66c</sys_id>
+<sys_mod_count>0</sys_mod_count>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2020-05-21 21:17:06</sys_updated_on>
+<update_set display_value=""/>
+<update_source display_value=""/>
+<updated/>
+</sys_remote_update_set>
+<sys_remote_update_set action="INSERT_OR_UPDATE">
+<application display_value="Content Delivery">b26210490b7203008cd6e7ae37673a6a</application>
+<application_name>Content Delivery</application_name>
+<application_scope>sn_cd</application_scope>
+<application_version>16.4.1.1</application_version>
+<collisions/>
+<commit_date/>
+<deleted/>
+<description/>
+<inserted/>
+<name>Add to Update Set CD v1.1</name>
+<origin_sys_id/>
+<parent display_value="Add to Update Set HR v1.2">1e4e4ea72ffc5010c6c690bcf699b669</parent>
+<release_date/>
+<remote_base_update_set display_value="Add to Update Set HR v1.2">1e4e4ea72ffc5010c6c690bcf699b669</remote_base_update_set>
+<remote_parent_id/>
+<remote_sys_id>eccd8e672ffc5010c6c690bcf699b67c</remote_sys_id>
+<state>in_hierarchy</state>
+<summary/>
+<sys_class_name>sys_remote_update_set</sys_class_name>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2020-05-21 21:17:06</sys_created_on>
+<sys_id>924e4ea72ffc5010c6c690bcf699b66d</sys_id>
+<sys_mod_count>0</sys_mod_count>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2020-05-21 21:17:06</sys_updated_on>
+<update_set display_value=""/>
+<update_source display_value=""/>
+<updated/>
+</sys_remote_update_set>
+<sys_remote_update_set action="INSERT_OR_UPDATE">
+<application display_value="Content Automation">bde72a4753710300d901a7e6a11c0838</application>
+<application_name>Content Automation</application_name>
+<application_scope>sn_ca</application_scope>
+<application_version>16.4.1.1</application_version>
+<collisions/>
+<commit_date/>
+<deleted/>
+<description/>
+<inserted/>
+<name>Add to Update Set CA v1.1</name>
+<origin_sys_id/>
+<parent display_value="Add to Update Set HR v1.2">1e4e4ea72ffc5010c6c690bcf699b669</parent>
+<release_date/>
+<remote_base_update_set display_value="Add to Update Set HR v1.2">1e4e4ea72ffc5010c6c690bcf699b669</remote_base_update_set>
+<remote_parent_id/>
+<remote_sys_id>e0cd8e672ffc5010c6c690bcf699b67b</remote_sys_id>
+<state>in_hierarchy</state>
+<summary/>
+<sys_class_name>sys_remote_update_set</sys_class_name>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2020-05-21 21:17:06</sys_created_on>
+<sys_id>9e4e4ea72ffc5010c6c690bcf699b66a</sys_id>
+<sys_mod_count>0</sys_mod_count>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2020-05-21 21:17:06</sys_updated_on>
+<update_set display_value=""/>
+<update_source display_value=""/>
+<updated/>
+</sys_remote_update_set>
+<sys_remote_update_set action="INSERT_OR_UPDATE">
+<application display_value="Human Resources: Lifecycle Events">532da270dad21200a4656ede91f9331e</application>
+<application_name>Human Resources: Lifecycle Events</application_name>
+<application_scope>sn_hr_le</application_scope>
+<application_version>6.0.43</application_version>
+<collisions/>
+<commit_date/>
+<deleted/>
+<description/>
+<inserted/>
+<name>Add to Update Set HR LE v1.0</name>
+<origin_sys_id/>
+<parent display_value="Add to Update Set HR v1.2">1e4e4ea72ffc5010c6c690bcf699b669</parent>
+<release_date/>
+<remote_base_update_set display_value="Add to Update Set HR v1.2">1e4e4ea72ffc5010c6c690bcf699b669</remote_base_update_set>
+<remote_parent_id/>
+<remote_sys_id>e4cd8e672ffc5010c6c690bcf699b679</remote_sys_id>
+<state>in_hierarchy</state>
+<summary/>
+<sys_class_name>sys_remote_update_set</sys_class_name>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2020-05-21 21:17:06</sys_created_on>
+<sys_id>d64e4ea72ffc5010c6c690bcf699b66b</sys_id>
+<sys_mod_count>0</sys_mod_count>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2020-05-21 21:17:06</sys_updated_on>
+<update_set display_value=""/>
+<update_source display_value=""/>
+<updated/>
+</sys_remote_update_set>
+<sys_update_xml action="INSERT_OR_UPDATE">
+<action>INSERT_OR_UPDATE</action>
+<application display_value="Communities">10809a9edb866200b1f6f78eaf961904</application>
+<category>customer</category>
+<comments/>
+<name>sys_script_include_211e1b7e4f4c7b00d1676bd18110c719</name>
+<payload>&lt;?xml version="1.0" encoding="UTF-8"?&gt;&lt;record_update table="sys_script_include"&gt;&lt;sys_script_include action="INSERT_OR_UPDATE"&gt;&lt;access&gt;public&lt;/access&gt;&lt;active&gt;true&lt;/active&gt;&lt;api_name&gt;sn_communities.addToUpdateSetUtils&lt;/api_name&gt;&lt;caller_access/&gt;&lt;client_callable&gt;false&lt;/client_callable&gt;&lt;description&gt;Version 3.0&amp;#13;
+Utility script to add components to update sets&lt;/description&gt;&lt;name&gt;addToUpdateSetUtils&lt;/name&gt;&lt;script&gt;&lt;![CDATA[var addToUpdateSetUtils = Class.create();
+addToUpdateSetUtils.prototype = {
+    initialize: function() {
+    },
+	
+	checkTable: function(tableRec, tableName) {
+		/*
+		 * Scoped addToUpdateSetUtils Script Includes are useful when table Application Access settings prevent other scopes from CRUD access.
+		 * The global checkTable function is executed first and if no table match is found, then all scope checkTable functions are executed.
+		 * If a table match is found within this script, set continueProcessing to false so no additional scope scripts are executed.
+		 * If a scope table match is not found, then the single record will be added by the global checkTable function.
+		 *
+		 * If the table extends another table and you prefer to get all extensions, uncomment the default processParentTable = true and the if
+		 * statement below it and set the table and function.
+		 */
+		
+		var continueProcessing = true;
+		var processParentTable = false;
+		
+		switch (tableName) {
+			case "sn_communities_forum":
+				this._addForum(tableRec, tableName);
+				continueProcessing = false;
+				break;
+			case "sn_communities_permission":
+				this._addPermission(tableRec, tableName);
+				continueProcessing = false;
+				break;
+			case "sn_communities_profile":
+				this._addCommunityProfileAndUser(tableRec, tableName);
+				continueProcessing = false;
+				break;
+			default:
+				//processParentTable = true;
+				break;
+		}
+
+		/*if (processParentTable) {
+			// Check for table needs at parent table level
+			var tableBase = new global.addToUpdateSetUtils()._getTableBase(tableName);
+			switch (tableBase) {
+				case "table_name":
+					this._function_name(tableRec, tableName);
+					continueProcessing = false;
+					break;
+			}
+		}*/
+
+		return continueProcessing;
+	},
+	
+	_addForum: function(communityForum, tableName) {
+		if (typeof communityForum == "string") {
+			var recID = communityForum;
+			communityForum = new GlideRecord("sn_communities_forum");
+			communityForum.get(recID);
+		}
+		this._addToSet(communityForum);
+		var forumID = communityForum.getValue("sys_id");
+		this._gatherSubForums(forumID);
+
+		var workflowID = communityForum.getValue("approval_workflow_for_membership");
+		if (!gs.nil(workflowID)) {
+			this._addWorkflow(workflowID);
+		}
+
+		this._addForumTopic(forumID);
+		
+		var contentTypeM2M = new GlideRecord("sn_communities_m2m_forum_contenttype");
+		contentTypeM2M.addQuery("forum_id", forumID);
+		contentTypeM2M.query();
+		while (contentTypeM2M.next()) {
+			this._addToSet(contentTypeM2M);
+			this._addContentType(contentTypeM2M.getValue("content_type"));
+			if (!gs.nil(contentTypeM2M.getValue("approval_workflow"))) {
+				this._addWorkflow(contentTypeM2M.getValue("approval_workflow"));
+			}
+		}
+
+		this._addForumPermissions(forumID);
+		this._addForumContent(forumID);
+
+		/* Not sure if we need this because it is tied to specific users, but leaving in just in case 
+		   var permissionException = new GlideRecord("sn_communities_permission_exception");
+		   permissionException.addQuery("forum", forumID);
+		   permissionException.query();
+		   while (permissionException.next()) {
+			   this._addToSet(permissionException);
+		   }
+		*/
+	},
+	
+	_gatherSubForums: function(forumID) {
+		var communityForum = new GlideRecord("sn_communities_forum");
+		communityForum.addQuery("parent", forumID);
+		communityForum.query();
+		while (communityForum.next()) {
+			this._addForum(communityForum);
+		}
+	},
+	
+	_addForumTopic: function(forumID) {
+		var forumTopicM2M = new GlideRecord("sn_communities_m2m_forum_topic");
+		forumTopicM2M.addQuery("forum_id", forumID);
+		forumTopicM2M.query();
+		while (forumTopicM2M.next()) {
+			this._addToSet(forumTopicM2M);
+			
+			var forumTopic = forumTopicM2M.topic_id.getRefRecord();
+			this._addToSet(forumTopic);
+		}
+	},
+	
+	_addContentType: function(contentTypeID) {
+		var contentType = new GlideRecord("sn_communities_content_type");
+		if (contentType.get(contentTypeID)) {
+			this._addToSet(contentType);
+
+			var searchSource = contentType.getValue("sp_search_source");
+			if (!gs.nil(searchSource)) {
+				new global.addToUpdateSetUtils()._addSearchSources(searchSource);
+			}
+		}
+	},
+	
+	_addForumPermissions: function(forumID) {
+		var forumPermission = new GlideRecord("sn_communities_forum_permissions");
+		forumPermission.addQuery("forum", forumID);
+		forumPermission.query();
+		while (forumPermission.next()) {
+			this._addToSet(forumPermission);
+			
+			var forumUser = forumPermission.forum_user.getRefRecord();
+			this._addToSet(forumUser);
+			
+			var forumMember = new GlideRecord("sn_communities_members");
+			forumMember.addQuery("forum_user", forumUser.getValue("sys_id"));
+			forumMember.query();
+			while (forumMember.next()) {
+				if (forumMember.getValue("membership_type") == "sys_user") {
+					
+				}
+			}
+			
+			this._addPermission(forumPermission.getValue("permission"));
+		}
+	},
+	
+	_addPermission: function(permission, tableName) {
+		if (typeof permission == "string") {
+			var recID = permission;
+			permission = new GlideRecord("sn_communities_permission");
+			permission.get(recID);
+		}
+		this._addToSet(permission);
+
+		var permissionDetail = new GlideRecord("sn_communities_permission_details");
+		permissionDetail.addQuery("permission", permission.getValue("sys_id"));
+		permissionDetail.query();
+		while (permissionDetail.next()) {
+			this._addToSet(permissionDetail);
+
+			var accessType = permissionDetail.access.getRefRecord();
+			this._addToSet(accessType);
+
+			this._addContentType(permissionDetail.getValue("content_type"));
+		}
+	},
+	
+	_addForumContent: function(forumID) {
+		var content = new GlideRecord("sn_communities_content");
+		content.addQuery("forum_id", forumID);
+		content.query();
+		while (content.next()) {
+			this._addToSet(content);
+			this._addForumUser(content.profile.document.toString());
+			
+			var contentTable = content.getValue("content_name");
+			var contentRec = new GlideRecord(contentTable);
+			if (contentRec.get(content.getValue("content_id"))) {
+				this._addToSet(contentRec);
+				
+				switch (contentTable) {
+					case "sn_communities_video_as_content":
+						var videoRec = new GlideRecord("sn_communities_video_library");
+						if (videoRec.get(contentRec.getValue("video"))) {
+							this._addToSet(videoRec);
+						}
+						break;
+					case "sn_communities_event":
+						var eventRSVP = new GlideRecord("sn_communities_event_rsvp");
+						eventRSVP.addQuery("event", contentRec.getValue("sys_id"));
+						eventRSVP.query();
+						while (eventRSVP.next()) {
+							this._addToSet(eventRSVP);
+							this._addForumUser(eventRSVP.attendee.document.toString());
+						}
+						break;
+				}
+			}
+		}
+	},
+	
+	_addForumUser: function(userID) {
+		var userRec = new GlideRecord("sys_user");
+		if (userRec.get(userID)) {
+			new global.addToUpdateSetUtils()._addUser(userRec, "sys_user");
+		}
+	},
+
+	_addCommunityProfileAndUser: function(communityProfile, tableName) {
+		this._addToSet(communityProfile);
+		this._addForumUser(communityProfile.live_profile.document.toString());
+	},
+	
+	_addCommunityProfile: function(liveProfileID) {
+		var communityProfile = new GlideRecord("sn_communities_profile");
+		communityProfile.addQuery("live_profile", liveProfileID);
+		communityProfile.query();
+		if (communityProfile.next()) {
+			this._addToSet(communityProfile);
+		}
+	},
+	
+	_addWorkflow: function(workflowID) {
+		var workflow = new GlideRecord("wf_workflow");
+		if (workflow.get(workflowID)) {
+			new global.addToUpdateSetUtils()._addWorkflow(workflow);
+		}
+	},
+	
+	_addToSet: function(tableRec) {
+		new global.addToUpdateSetUtils().saveRecord(tableRec);
+	},
+
+    type: 'addToUpdateSetUtils'
+};]]&gt;&lt;/script&gt;&lt;sys_class_name&gt;sys_script_include&lt;/sys_class_name&gt;&lt;sys_created_by&gt;admin&lt;/sys_created_by&gt;&lt;sys_created_on&gt;2019-03-11 20:00:55&lt;/sys_created_on&gt;&lt;sys_id&gt;211e1b7e4f4c7b00d1676bd18110c719&lt;/sys_id&gt;&lt;sys_mod_count&gt;11&lt;/sys_mod_count&gt;&lt;sys_name&gt;addToUpdateSetUtils&lt;/sys_name&gt;&lt;sys_package display_value="Community" source="sn_communities"&gt;10809a9edb866200b1f6f78eaf961904&lt;/sys_package&gt;&lt;sys_policy/&gt;&lt;sys_scope display_value="Community"&gt;10809a9edb866200b1f6f78eaf961904&lt;/sys_scope&gt;&lt;sys_update_name&gt;sys_script_include_211e1b7e4f4c7b00d1676bd18110c719&lt;/sys_update_name&gt;&lt;sys_updated_by&gt;admin&lt;/sys_updated_by&gt;&lt;sys_updated_on&gt;2019-10-17 17:53:37&lt;/sys_updated_on&gt;&lt;/sys_script_include&gt;&lt;/record_update&gt;</payload>
+<payload_hash>-564260808</payload_hash>
+<remote_update_set display_value="Add to Update Set Communities v1.0">124e4ea72ffc5010c6c690bcf699b66c</remote_update_set>
+<replace_on_upgrade>false</replace_on_upgrade>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2020-05-21 21:17:06</sys_created_on>
+<sys_id>164e4ea72ffc5010c6c690bcf699b66c</sys_id>
+<sys_mod_count>0</sys_mod_count>
+<sys_recorded_at>16ddada87170000001</sys_recorded_at>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2020-05-21 21:17:06</sys_updated_on>
+<table/>
+<target_name>addToUpdateSetUtils</target_name>
+<type>Script Include</type>
+<update_domain>global</update_domain>
+<update_guid>b9bebba973e80450c86c615984aba96b</update_guid>
+<update_guid_history>b9bebba973e80450c86c615984aba96b:-564260808,b9bebba973e80450c86c615984aba96b:-564260808,b9bebba973e80450c86c615984aba96b:-564260808,c1dec587799f3380daaec0030b8b78de:1168108917,c5117deaf84373403abbbfaa259772a0:-1940012372,ccc303a15f680850e49511a4476d436f:1218554872,3193aa01a8a0485012d48e2d0e1f9b64:-1347154417,50be018fc95f3f00bf6873c5331021c9:65951828,9163902602c77f005b6702c3cd041b5b:-1940012372,bd80946258c77f00de204d1c1334e173:1140882576,62bf00aac20f3f00a3c4bda9e272679a:1847643373,f6cd4c6a670f3f003492f0ea31abfeb3:2090517221,476cc82a430f3f000bb9034dd09fe0ad:716460584,f1e5480374c97b00669aee0d9c6bb955:-1674036333,78e50803f2c97b00f278efdf19a574cb:-70271476,365e18baa5c93b0045b379598f25e719:-1674036333,9c18d05300c0fb0090bc55a3471505db:915154303,ca4e04536180fb007ef137f41b588979:-131054451,87c4c41ba140fb009f906dbd375945d7:873084412,8a3c7b7209cc7b00b6a2dfa7b36a79fd:1623360962,487a37f6d0cc7b00d7507ffe97d347bd:-696791056,ed1e1b7e244c7b00183b39c5f4c6d81b:-240799052</update_guid_history>
+<update_set display_value=""/>
+<view/>
+</sys_update_xml>
+<sys_update_xml action="INSERT_OR_UPDATE">
+<action>INSERT_OR_UPDATE</action>
+<application display_value="Human Resources: Core">d4ac3fff5b311200a4656ede91f91af2</application>
+<category>customer</category>
+<comments/>
+<name>sys_script_include_b96ed42e4fdda740d1676bd18110c7a4</name>
+<payload>&lt;?xml version="1.0" encoding="UTF-8"?&gt;&lt;record_update table="sys_script_include"&gt;&lt;sys_script_include action="INSERT_OR_UPDATE"&gt;&lt;access&gt;public&lt;/access&gt;&lt;active&gt;true&lt;/active&gt;&lt;api_name&gt;sn_hr_core.addToUpdateSetUtils&lt;/api_name&gt;&lt;caller_access/&gt;&lt;client_callable&gt;false&lt;/client_callable&gt;&lt;description&gt;Version 3.3&amp;#13;
+Utility script to add components to update sets&lt;/description&gt;&lt;name&gt;addToUpdateSetUtils&lt;/name&gt;&lt;script&gt;&lt;![CDATA[var addToUpdateSetUtils = Class.create();
+addToUpdateSetUtils.prototype = {
+    initialize: function() {
+		this.clientSession = gs.getSession();
+    },
+	
+	checkTable: function(tableRec, tableName) {
+		/*
+		 * Scoped addToUpdateSetUtils Script Includes are useful when table Application Access settings prevent other scopes from CRUD access.
+		 * The global checkTable function is executed first and if no table match is found, then all scope checkTable functions are executed.
+		 * If a table match is found within this script, set continueProcessing to false so no additional scope scripts are executed.
+		 * If a scope table match is not found, then the single record will be added by the global checkTable function.
+		 *
+		 * If the table extends another table and you prefer to get all extensions, uncomment the default processParentTable = true and the if
+		 * statement below it and set the table and function.
+		 */
+		
+		var continueProcessing = true;
+		var processParentTable = false;
+		
+		switch (tableName) {
+			case "sn_hr_core_service":
+				this._addHRService(tableRec, tableName);
+				continueProcessing = false;
+				break;
+			case "sn_hr_core_criteria":
+				this._addHRCriteria("sys_id", tableRec.getValue("sys_id"));
+				continueProcessing = false;
+				break;
+			case "sn_hr_core_template":
+				this._addHRTemplate(tableRec, tableName);
+				continueProcessing = false;
+				break;
+			case "sn_hr_core_topic_detail":
+				this._addTopicDetail(tableRec, tableName);
+				continueProcessing = false;
+				break;
+			default:
+				processParentTable = true;
+				break;
+		}
+		
+		if (processParentTable) {
+			// Check for table needs at parent table level
+			var tableBase = new global.addToUpdateSetUtils()._getTableBase(tableName);
+			switch (tableBase) {
+				case "sn_hr_core_document_template":
+					this._addHRDocumentTemplate(tableRec, tableName);
+					continueProcessing = false;
+					break;
+			}
+		}
+		
+		return continueProcessing;
+	},
+	
+	_addHRService: function(hrService, tableName) {
+		var recID;
+		if (typeof hrService == "string") {
+		recID = hrService;
+			hrService = new GlideRecord("sn_hr_core_service");
+			hrService.get(recID);
+		}
+		recID = hrService.getValue("sys_id");
+		this._addToSet(hrService);
+		this._addBadge(hrService.getValue("badge"));
+		this._addTopicDetail(hrService.getValue("topic_detail"));
+		this._addChecklist(hrService);
+		
+		var employeeDocumentType = hrService.getValue("employee_document_type");
+		if (!gs.nil(employeeDocumentType)) {
+			new sn_hr_ef.addToUpdateSetUtils()._addDocumentType(employeeDocumentType);
+		}
+		
+		var templateID = hrService.getValue("template");
+		if (!gs.nil(templateID)) {
+			this._addHRTemplate(templateID);
+		}
+		
+		var recordProducerID = hrService.getValue("producer");
+		if (!gs.nil(recordProducerID)) {
+			var recordProducer = hrService.producer.getRefRecord();
+			if (recordProducer.isValidRecord()) {
+				var userCriteriaList = new global.addToUpdateSetUtils()._addCatItem(recordProducer, recordProducer.getTableName());
+			}
+		}
+		
+		var hrCriteriaID = hrService.hr_criteria.toString();
+		if (!gs.nil(hrCriteriaID)) {
+			this._addHRCriteria("sys_id", hrCriteriaID);
+		}
+		
+		if (!gs.nil(hrService.getValue("case_creation_service_config"))) {
+			var caseCreationConfig = hrService.case_creation_service_config.getRefRecord();
+			this._addToSet(caseCreationConfig);
+		}
+		
+		var leType = hrService.getValue("le_type");
+		if (!gs.nil(leType)) {
+			new sn_hr_le.addToUpdateSetUtils()._addEventType(leType);
+		}
+		
+		//parent_service=20c4f2cb534073000ad0ddeeff7b1273^
+		var serviceActivity = new GlideRecord("sn_hr_core_service_activity");
+		serviceActivity.addQuery("parent_service", recID);
+		serviceActivity.query();
+		while (serviceActivity.next()) {
+			this._addToSet(serviceActivity);
+			
+			var activityType = serviceActivity.getValue("activity_type");
+			switch (activityType) {
+				case "task":
+					this._addHRTemplate(serviceActivity.getValue("child_template"));
+					break;
+				case "child":
+					this._addHRService(serviceActivity.getValue("child_hr_service"));
+					break;
+			}
+		}
+		
+		if (hrService.isValidField("flow") &amp;&amp; !gs.nil(hrService.getValue("flow"))) {
+			new global.addToUpdateSetUtils()._addFlow(hrService.getValue("flow"));
+		}
+	},
+	
+	_addHRCriteria: function(queryField, queryValue) {
+		if (!gs.nil(queryValue)) {
+			var hrCriteria = new GlideRecord("sn_hr_core_criteria");
+			
+			if (hrCriteria.isValidField(queryField)) {
+				hrCriteria.addQuery(queryField, "IN", queryValue);
+				hrCriteria.query();
+				while (hrCriteria.next()) {
+					this._addToSet(hrCriteria);
+					
+					//Only add user_criteria if this function is adding HR Criteria first - searched by sys_id
+					if (queryField == "sys_id") {
+						var userCriteria = new GlideRecord("user_criteria");
+						if (userCriteria.get(hrCriteria.getValue("related_user_criteria"))) {
+							this._addToSet(userCriteria);
+						}
+					}
+
+					var hrCriteriaConditionM2M = new GlideRecord("sn_hr_core_m2m_condition_criteria");
+					hrCriteriaConditionM2M.addQuery("hr_criteria", hrCriteria.getValue("sys_id"));
+					hrCriteriaConditionM2M.query();
+					while (hrCriteriaConditionM2M.next()) {
+						this._addToSet(hrCriteriaConditionM2M);
+						var hrCriteriaCondition = hrCriteriaConditionM2M.hr_condition.getRefRecord();
+						this._addToSet(hrCriteriaCondition);
+					}
+				}
+			}
+		}
+	},
+	
+	_addHRTemplate: function(hrTemplate, tableName) {
+		if (typeof hrTemplate == "string") {
+			var recID = hrTemplate;
+			hrTemplate = new GlideRecord("sn_hr_core_template");
+			hrTemplate.get(recID);
+		}
+
+		this._addToSet(hrTemplate);
+		this._addChecklist(hrTemplate);
+
+		var templateObject = this._parseTemplateString(hrTemplate.template.toString());
+		if (!gs.nil(templateObject.pdf_template)) {
+			var hrPDFTemplate = new GlideRecord("sn_hr_core_document_template");
+			if (hrPDFTemplate.get(templateObject.pdf_template)) {
+				this._addHRDocumentTemplate(hrPDFTemplate.getValue("sys_id"), hrPDFTemplate.getValue("sys_class_name"));
+			}
+		}
+
+		if (!gs.nil(templateObject.workflow)) {
+			var workflow = new GlideRecord("wf_workflow");
+			if (workflow.get(templateObject.workflow)) {
+				new global.addToUpdateSetUtils()._addWorkflow(workflow);
+			}
+		}
+		
+		if (!gs.nil(templateObject.sn_esign_esignature_configuration)) {
+			var signatureTemplate = new GlideRecord("sn_esign_configuration");
+			if (signatureTemplate.get(templateObject.sn_esign_esignature_configuration)) {
+				this._addToSet(signatureTemplate);
+			}
+		}
+	},
+	
+	_addTopicDetail: function(topicDetail, tableName) {
+		if (typeof topicDetail == "string") {
+			var recID = topicDetail;
+			topicDetail = new GlideRecord("sn_hr_core_topic_detail");
+			topicDetail.get(recID);
+		}
+		this._addToSet(topicDetail);
+		
+		var topicCategory = new GlideRecord("sn_hr_core_topic_category");
+		if (topicCategory.get(topicDetail.getValue("topic_category"))) {
+			this._addToSet(topicCategory);
+		}
+	},
+	
+	_addHRDocumentTemplate: function(hrDocumentTemplate, tableName) {
+		var recID;
+		if (typeof hrDocumentTemplate == "string") {
+			recID = hrDocumentTemplate;
+			hrDocumentTemplate = new GlideRecord(tableName);
+			hrDocumentTemplate.get(recID);
+		}
+		this._addToSet(hrDocumentTemplate);
+		
+		var documentType = new GlideRecord("sn_hr_core_document_type");
+		if (documentType.get(hrDocumentTemplate.getValue("document_type"))) {
+			this._addToSet(documentType);
+		}
+		
+		recID = hrDocumentTemplate.getValue("sys_id");
+		this._addHRCriteria("sys_id", hrDocumentTemplate.getValue("hr_criteria"));
+
+		if (tableName == "sn_hr_core_pdf_template") {
+			var warningMessages = this.clientSession.getClientData("warningMessages") + "";
+			// split adding an extra comma so checking length
+			if (warningMessages == "null" || warningMessages.length == 0) {
+				warningMessages = [];
+			} else {
+				warningMessages = warningMessages.split(",");
+			}
+			
+			var pdfTemplateMapping = new GlideRecord("sn_hr_core_pdf_template_mapping");
+			pdfTemplateMapping.addQuery("document", hrDocumentTemplate.getValue("sys_id"));
+			pdfTemplateMapping.query();
+			while (pdfTemplateMapping.next()) {
+				this._addToSet(pdfTemplateMapping);
+				if (!gs.nil(pdfTemplateMapping.getValue("mapping_field")) &amp;&amp; pdfTemplateMapping.mapping_field.toString().startsWith("u_")) {
+					var warningMessage = '&lt;a href="' + hrDocumentTemplate.getLink() + '" target="_blank"&gt;' + hrDocumentTemplate.getDisplayValue() + ' ' + hrDocumentTemplate.getClassDisplayValue() + '&lt;/a&gt;';
+					warningMessage = warningMessage + " contains template mappings to custom fields that may need to be added to your update set.";
+					if (warningMessages.indexOf(warningMessage) == -1) {
+						warningMessages.push(warningMessage);
+					}
+				}
+			}
+			this.clientSession.putClientData("warningMessages", warningMessages.toString());
+			
+			var documentRevision = hrDocumentTemplate.document_revision.getRefRecord();
+			this._addToSet(documentRevision);
+			
+			var documentRevisionID = documentRevision.getValue("sys_id"); 
+			var documentID = documentRevision.getValue("document"); 
+			
+			var managedDocument = new GlideRecord("dms_document");
+			if (managedDocument.get(documentID)) {
+				this._addToSet(managedDocument);
+				
+				// Get any additional revisions
+				documentRevision = new GlideRecord("dms_document_revision");
+				documentRevision.addQuery("document", documentID);
+				documentRevision.addQuery("sys_id", "!=", documentRevisionID);
+				documentRevision.query();
+				while (documentRevision.next()) {
+					this._addToSet(documentRevision);
+				}
+				
+				// Get E-Signature Template
+				var signatureTemplate = new GlideRecord("sn_esign_configuration");
+				signatureTemplate.addQuery("managed_document", documentID);
+				signatureTemplate.query();
+				if (signatureTemplate.next()) {
+					this._addToSet(signatureTemplate);
+				}
+			}
+		}
+	},
+	
+	// Helper function for global addToUpdateSetUtils to check for PDF document templates related to managed documents
+	_getHRDocumentTemplates: function(docRevisionID) {
+		var hrPDFTemplate = new GlideRecord("sn_hr_core_pdf_template");
+		hrPDFTemplate.addQuery("document_revision", docRevisionID);
+		hrPDFTemplate.query();
+		while (hrPDFTemplate.next()) {
+			this._addHRDocumentTemplate(hrPDFTemplate, hrPDFTemplate.getTableName());
+		}
+	},
+	
+	_addChecklist: function(tableRec) {
+		var checkList = new GlideRecord("checklist");
+		checkList.addQuery("document", tableRec.getValue("sys_id"));
+		checkList.addQuery("table", tableRec.getTableName());
+		checkList.query();
+		while (checkList.next()) {
+			this._addToSet(checkList);
+			var checkListItem = new GlideRecord("checklist_item");
+			checkListItem.addQuery("checklist", checkList.getValue("sys_id"));
+			checkListItem.query();
+			while (checkListItem.next()) {
+				this._addToSet(checkListItem);
+			}
+		}
+	},
+	
+	_addBadge: function(badgeID) {
+		var badge = new GlideRecord("sn_hr_core_badge");
+		if (badge.get(badgeID)) {
+			this._addToSet(badge);
+		}
+	},
+	
+	_addEmailContent: function(emailContentID) {
+		var emailContent = new GlideRecord("sn_hr_core_email_content");
+		if (emailContent.get(emailContentID)) {
+			this._addToSet(emailContent);
+		}
+	},
+	
+	_parseTemplateString: function(templateString) {
+		var templateObject = {};
+
+		var templateArray = templateString.toString().split("^");
+		for (var i = 0; i &lt; templateArray.length; i++) {
+			var fieldPair = templateArray[i].toString().split("=");			
+			templateObject[fieldPair[0]] = fieldPair[1];
+		}
+		
+		return templateObject;
+	},
+	
+	_addToSet: function(tableRec) {
+		new global.addToUpdateSetUtils().saveRecord(tableRec);
+	},
+
+    type: 'addToUpdateSetUtils'
+};]]&gt;&lt;/script&gt;&lt;sys_class_name&gt;sys_script_include&lt;/sys_class_name&gt;&lt;sys_created_by&gt;admin&lt;/sys_created_by&gt;&lt;sys_created_on&gt;2018-10-24 18:32:46&lt;/sys_created_on&gt;&lt;sys_id&gt;b96ed42e4fdda740d1676bd18110c7a4&lt;/sys_id&gt;&lt;sys_mod_count&gt;61&lt;/sys_mod_count&gt;&lt;sys_name&gt;addToUpdateSetUtils&lt;/sys_name&gt;&lt;sys_package display_value="Human Resources: Core" source="sn_hr_core"&gt;d4ac3fff5b311200a4656ede91f91af2&lt;/sys_package&gt;&lt;sys_policy/&gt;&lt;sys_scope display_value="Human Resources: Core"&gt;d4ac3fff5b311200a4656ede91f91af2&lt;/sys_scope&gt;&lt;sys_update_name&gt;sys_script_include_b96ed42e4fdda740d1676bd18110c7a4&lt;/sys_update_name&gt;&lt;sys_updated_by&gt;admin&lt;/sys_updated_by&gt;&lt;sys_updated_on&gt;2020-05-21 21:16:24&lt;/sys_updated_on&gt;&lt;/sys_script_include&gt;&lt;/record_update&gt;</payload>
+<payload_hash>-371118891</payload_hash>
+<remote_update_set display_value="Add to Update Set HR v1.2">1e4e4ea72ffc5010c6c690bcf699b669</remote_update_set>
+<replace_on_upgrade>false</replace_on_upgrade>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2020-05-21 21:17:06</sys_created_on>
+<sys_id>524e4ea72ffc5010c6c690bcf699b66a</sys_id>
+<sys_mod_count>0</sys_mod_count>
+<sys_recorded_at>1723918293b0000001</sys_recorded_at>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2020-05-21 21:17:06</sys_updated_on>
+<table/>
+<target_name>addToUpdateSetUtils</target_name>
+<type>Script Include</type>
+<update_domain>global</update_domain>
+<update_guid>502e8aa7c2fc501002d023f25e67b638</update_guid>
+<update_guid_history>502e8aa7c2fc501002d023f25e67b638:-371118891,a6e5ca27197844d02050f5413ad8e85d:-205435034,4cc38223f57844d07f95ad1a5c185166:351607498,6b70823d9670cc902c10e2d598bb2f99:188839560,57758a2f48f4c8104bfa46fc9db44ad6:-9768604,a8450a2f9df4c8103d98eb52003afc41:765499710,cc63ceab18f4c810e408b08318da29d0:547273928,65128a6b15f4c8103e85acf659509d0b:-2002145410,6c676965db7044108b600f1df3d2bf3a:2034686697,c7ea48750d2c04503c52891b3bb5c011:-297385968,b48f3be9fae80450f1b6f8e9a0b57589:178765747,631f33e9bfe8045055bb10d12c856156:1749049960,61802660a1d44c10fd9fbc0e504faeb3:1814051584,6ec6d43ccb04c8506fdf12df0b0e822e:1333621686,d1c6d43cd104c850a4318c85ad4db006:931259215,c9a694f88204c8507c42935583ed7865:1333621686,ae5bcd07b99f338001c21f865ee6be85:1665483505,3c90b34b8883f340465e07e2abca8e44:-56824291,0a087a83f503f340a8b27c305b8a352c:-1114119070,93d5f203b303f340c6f6ce2d39f89639:-40290,3506ceae1483734087f866e8bcad9bf7:2015808574,03a03dea974373406f5637dbdf78cb3b:1466046033,4c0dac2a466a7300fd6e4fedfa2a6d89:202711433,917ac068656173803fb099c8fb2aabb9:560157235,66a800ac4fed33807bbc82da36a4cb02:-877496171,8dd5f3dc85ed3380a4665ddce6b1ac3e:1699663931,27b573dcdeed3380f9aee6a2f2620940:-404168326,c46fecca9c6848502a16c23efc64e0c0:-369734575,c62f6ccaad684850a45229846cfe7ea7:-1792324527,5774d8756560c850b772f63ac92ff81a:-369734575,4e1000751d20c8507277c740ee99f62d:-569515950,3553a6c10720c4500ac027cc1efc6b24:-2008930647,481dda206d5c8810443cd6a46459e025:1985676542,e6685e2c7a1c8810151868b5d0264dd5:-353584592,a599cde8611888100d1462e4678e6f2b:-739291372,73a741a8e31888104f758d13c5cebbd0:1316259282,7cf64d68ef188810192622bba3709fd9:-586553365,dcd4c9e40c188810e3213b4b38df0508:-584298694,b58409e454188810a60e247bebf3334d:-1606816895,3073c1a4ad188810570b5a7b03777dbb:1227769774,3ce2c96434188810c85e1bc52993e49d:-1012056653,8532cd242618881045e794a337d95c5f:790810326,6b51c5247e1888103e622b55b41ba911:962514524,29b089e01f1888108d80bee33843ba48:-1290181665,e01045e04a188810de4e892ab2357d15:-2077411232,598ffca07d188810a0728b09c9b0be9d:1775370053,b39b38eca9d4881007e3e7b1d8ad989f:1649871915,d44a34ac2ad48810144a687799d7de45:1598822485,6689746c0bd488105d2898cc7a0e7dab:76225969,63c83c2c51d48810153a915c758b91e5:927573086,1a77b8e850d48810deb0d0b6840b050c:-142946394,992730e8aad488102702f8bd759714e0:-2014725391,8726306891d48810bae489bf9393f248:415210,b1f150b8650048102eeef1d235a306f3:-1240981579,1d147c47221f3f0040bb0c368c8ebd4f:1886783890,2429e8cb27db3f00684d71eed95b6d5a:1626733169,1f11604718db3f0026faaf82dde33084:1559101253,c0eb084fab1bfb407e46100f366b67dd:-2007378527,7f3b00cb211bfb400f0499227d9986e6:-708235518,b50f278fb50b73004001e04560453775:2015808574,d49a278bfa0b73002af9d3478e143ffd:1576201310,e279fda6fd0f7f00831d0e946069f2dd:2015808574,c033496ab44b7f00193e83717bd89012:1466046033,1983d026ffc77f0038376163e305ba0d:32521192,e2d054eace0f3f008cea5db49b6eada5:489958284,63c600e647877f00a5ef269043b2f46f:-1207384132,4fb600e63a877f002eac496718c5cf67:-404122500,79ec2da1826ef340b285527f68364d94:-832192952,709ba121256ef34080c2bf775250f046:-2100186075,408320a9c65c3740fdf3d9c753580610:1137389030,a362557b74887f00f0164d9d6a6ed4ba:-304548504,5721113b94887f00e2d13eeb6b3571b2:1562296971,f978481f8f40fb00f57e621ccca49742:-1867856026,5b796415f348b3003efa9730d26e716f:-207433593,e7ec005ddf662380a52f64f9a67408f4:-702087551,afe592e234966740449f49c974640fab:-807948574,08d49a628796674087eada84fc84026e:-913937144,fd125a6e1456674019e38a56132337d7:1171473349,6cff75ea48166740f8b091cb63b623e1:990073810,ddee75e6951667404eaca43c079ef6c3:-1725382284,7bd51b9027e5ef40f88b536fffdcc977:848011878,264ccf948ba5ef40111e24108a8b583b:-1239322008,cc1ccb9497a5ef406350866543d9744b:-1472263964,ab3acb14f9a5ef408c8ed15de896f0d6:-1682122719,4b188b9081a5ef40e73fe0d1788d7fbc:-1472263964,54e7cb507ca5ef40105928b75f759ee5:-1630159954,f0470750bfa5ef4018b3274b649155ae:-40139461,3bce3694a565ef400df0454986378bf5:-1472263964,2f26ea1cd2e1ef40bc5c9b7bd92d7f32:-266425588,a2c326985be1ef404daae5d2b4c153d1:-283684267,b969d2c805a1af4003025e3763e2c310:-1682122719,3c59d6c82da1af40822df5aaa7021d95:-1635399589,70475648b3a1af40e2a1d6c7c17d3b5b:-1285727237,f1b65608fba1af4025a44722aa4de475:-213275025,74d51e4454a1af401bbc558daf2791ca:527852835,35d3120438a1af40ee74ca8f9664cdb6:1413849798,f2e162f69d1d2b40bb686eeea2b6c2bb:1819476389,40305afa21992b40b9e9599a739d0975:1825880703,90666db6b8d52b40488a09819dcef7d9:-1842768082,3ce719baf7552b40f9228f1ee129ae34:219120449,c4dbad226495e740b23b640a6877748e:-352230029,ac89a1ae5855e74052ada7e86ce5fdf7:-1016064557,3f6921aeaf55e74086b670fe034bdbbc:-1368536468,a1e685a64fd1e740cacf4d7e4e1e4c09:-461303174,04d145ee5791e740718fb288c9f0a05e:1707196534,cafcbce24691e740ebab2c69f22013c0:112124786,52ccb8e24091e740a835b4f90d5d3118:-1510449047,0a1cf8620d91e740a1120ba8161bc005:345122620,63f5f0aa3c51e74080f69c1c836a233f:-484716698,8aa5f8aaf351e74060e210bd9c84d003:-1740444467,c58ed42ed2dda7401e3da5e4a8b998be:-857592496</update_guid_history>
+<update_set display_value=""/>
+<view/>
+</sys_update_xml>
+<sys_update_xml action="INSERT_OR_UPDATE">
+<action>INSERT_OR_UPDATE</action>
+<application display_value="Employee Document Management">1baeb0339371030092051d1e867ffb08</application>
+<category>customer</category>
+<comments/>
+<name>sys_script_include_c98bfde3dbf4c810a6813967f49619ec</name>
+<payload>&lt;?xml version="1.0" encoding="UTF-8"?&gt;&lt;record_update&gt;&lt;sys_script_include action="INSERT_OR_UPDATE"&gt;
+&lt;access&gt;public&lt;/access&gt;
+&lt;active&gt;true&lt;/active&gt;
+&lt;api_name&gt;sn_hr_ef.addToUpdateSetUtils&lt;/api_name&gt;
+&lt;caller_access/&gt;
+&lt;client_callable&gt;false&lt;/client_callable&gt;
+&lt;description/&gt;
+&lt;name&gt;addToUpdateSetUtils&lt;/name&gt;
+&lt;script&gt;&lt;![CDATA[var addToUpdateSetUtils = Class.create();
+addToUpdateSetUtils.prototype = {
+    initialize: function() {
+    },
+	
+	checkTable: function(tableRec, tableName) {
+		/*
+		 * Scoped addToUpdateSetUtils Script Includes are useful when table Application Access settings prevent other scopes from CRUD access.
+		 * The global checkTable function is executed first and if no table match is found, then all scope checkTable functions are executed.
+		 * If a table match is found within this script, set continueProcessing to false so no additional scope scripts are executed.
+		 * If a scope table match is not found, then the single record will be added by the global checkTable function.
+		 *
+		 * If the table extends another table and you prefer to get all extensions, uncomment the default processParentTable = true and the if
+		 * statement below it and set the table and function.
+		 */
+		
+		var continueProcessing = true;
+		var processParentTable = false;
+		
+		switch (tableName) {
+			case "sn_hr_ef_document_type":
+				this._addDocumentType(tableRec, tableName);
+				continueProcessing = false;
+				break;
+			default:
+				//processParentTable = true;
+				break;
+		}
+
+		/*if (processParentTable) {
+			// Check for table needs at parent table level
+			var tableBase = new global.addToUpdateSetUtils()._getTableBase(tableName);
+			switch (tableBase) {
+				case "table_name":
+					this._function_name(tableRec, tableName);
+					continueProcessing = false;
+					break;
+			}
+		}*/
+
+		return continueProcessing;
+	},
+	
+	_addDocumentType: function(documentType, tableName) {
+		var recID;
+		if (typeof documentType == "string") {
+			recID = documentType;
+			documentType = new GlideRecord("sn_hr_ef_document_type");
+			documentType.get(recID);
+		}
+		this._addToSet(documentType);
+		recID = documentType.getValue("sys_id");
+		
+		new sn_hr_core.addToUpdateSetUtils()._addTopicDetail(documentType.getValue("topic_detail"));
+		
+		var securityPolicy = new GlideRecord("sn_hr_ef_security_policy");
+		if (securityPolicy.get(documentType.getValue("security_policy"))) {
+			this._addToSet(securityPolicy);
+		}
+		
+		var retentionPolicy = new GlideRecord("sn_hr_ef_retention_policy");
+		retentionPolicy.addQuery("table", "sn_hr_ef_document_type");
+		retentionPolicy.addQuery("applies_to", recID);
+		retentionPolicy.query();
+		while (retentionPolicy.next()) {
+			this._addToSet(retentionPolicy);
+			
+			if (!gs.nil(retentionPolicy.getValue("hr_criteria"))) {
+				new sn_hr_core.addToUpdateSetUtils()._addHRCriteria("sys_id", retentionPolicy.getValue("hr_criteria"));
+			}
+			
+			if (!gs.nil(retentionPolicy.getValue("retention_period"))) {
+				var retentionPeriod = new GlideRecord("sn_hr_ef_retention_period");
+				if (retentionPeriod.get(retentionPolicy.getValue("retention_period"))) {
+					this._addToSet(retentionPeriod);
+				}
+			}
+		}
+	},
+	
+	_addToSet: function(tableRec) {
+		new global.addToUpdateSetUtils().saveRecord(tableRec);
+	},
+
+    type: 'addToUpdateSetUtils'
+};]]&gt;&lt;/script&gt;
+&lt;sys_class_name&gt;sys_script_include&lt;/sys_class_name&gt;
+&lt;sys_created_by&gt;admin&lt;/sys_created_by&gt;
+&lt;sys_created_on&gt;2019-11-05 00:14:03&lt;/sys_created_on&gt;
+&lt;sys_id&gt;c98bfde3dbf4c810a6813967f49619ec&lt;/sys_id&gt;
+&lt;sys_mod_count&gt;0&lt;/sys_mod_count&gt;
+&lt;sys_name&gt;addToUpdateSetUtils&lt;/sys_name&gt;
+&lt;sys_package display_value="Employee Document Management" source="sn_hr_employee_files"&gt;1baeb0339371030092051d1e867ffb08&lt;/sys_package&gt;
+&lt;sys_policy/&gt;
+&lt;sys_scope display_value="Employee Document Management"&gt;1baeb0339371030092051d1e867ffb08&lt;/sys_scope&gt;
+&lt;sys_update_name&gt;sys_script_include_c98bfde3dbf4c810a6813967f49619ec&lt;/sys_update_name&gt;
+&lt;sys_updated_by&gt;admin&lt;/sys_updated_by&gt;
+&lt;sys_updated_on&gt;2019-11-05 00:14:03&lt;/sys_updated_on&gt;
+&lt;/sys_script_include&gt;&lt;/record_update&gt;</payload>
+<payload_hash>647134117</payload_hash>
+<remote_update_set display_value="Add to Update Set EDM v1.0">5a4e4ea72ffc5010c6c690bcf699b66c</remote_update_set>
+<replace_on_upgrade>false</replace_on_upgrade>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2020-05-21 21:17:06</sys_created_on>
+<sys_id>5e4e4ea72ffc5010c6c690bcf699b66c</sys_id>
+<sys_mod_count>0</sys_mod_count>
+<sys_recorded_at>16e38f0476e0000001</sys_recorded_at>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2020-05-21 21:17:06</sys_updated_on>
+<table/>
+<target_name>addToUpdateSetUtils</target_name>
+<type>Script Include</type>
+<update_domain>global</update_domain>
+<update_guid>0a2482e3977844d068263293bdafc1a6</update_guid>
+<update_guid_history>0a2482e3977844d068263293bdafc1a6:647134117,0a2482e3977844d068263293bdafc1a6:647134117,dbd5426fa0f4c81050f5c9279458d3a4:1987138888,dd05822f44f4c8108ee348ee4ce30963:923510304,52620e6b23f4c810956d1cc0a72e1b6a:1987138888</update_guid_history>
+<update_set display_value=""/>
+<view/>
+</sys_update_xml>
+<sys_update_xml action="INSERT_OR_UPDATE">
+<action>INSERT_OR_UPDATE</action>
+<application display_value="Content Delivery">b26210490b7203008cd6e7ae37673a6a</application>
+<category>customer</category>
+<comments/>
+<name>sys_script_include_630e24904fef2b00d1676bd18110c778</name>
+<payload>&lt;?xml version="1.0" encoding="UTF-8"?&gt;&lt;record_update table="sys_script_include"&gt;&lt;sys_script_include action="INSERT_OR_UPDATE"&gt;&lt;access&gt;public&lt;/access&gt;&lt;active&gt;true&lt;/active&gt;&lt;api_name&gt;sn_cd.addToUpdateSetUtils&lt;/api_name&gt;&lt;caller_access/&gt;&lt;client_callable&gt;false&lt;/client_callable&gt;&lt;description&gt;Version 3.1&amp;#13;
+Utility script to add components to update sets&lt;/description&gt;&lt;name&gt;addToUpdateSetUtils&lt;/name&gt;&lt;script&gt;&lt;![CDATA[var addToUpdateSetUtils = Class.create();
+addToUpdateSetUtils.prototype = {
+    initialize: function() {
+    },
+	
+	checkTable: function(tableRec, tableName) {
+		/*
+		 * Scoped addToUpdateSetUtils Script Includes are useful when table Application Access settings prevent other scopes from CRUD access.
+		 * The global checkTable function is executed first and if no table match is found, then all scope checkTable functions are executed.
+		 * If a table match is found within this script, set continueProcessing to false so no additional scope scripts are executed.
+		 * If a scope table match is not found, then the single record will be added by the global checkTable function.
+		 *
+		 * If the table extends another table and you prefer to get all extensions, uncomment the default processParentTable = true and the if
+		 * statement below it and set the table and function.
+		 */
+		
+		var continueProcessing = true;
+		var processParentTable = false;
+		
+		switch (tableName) {
+			case "sn_cd_content_visibility":
+				this._addScheduledContent(tableRec, tableName);
+				continueProcessing = false;
+				break;
+			default:
+				processParentTable = true;
+				break;
+		}
+
+		if (processParentTable) {
+			// Check for table needs at parent table level
+			var tableBase = new global.addToUpdateSetUtils()._getTableBase(tableName);
+			switch (tableBase) {
+				case "sn_cd_content_base":
+					this._addContent(tableRec, tableName);
+					continueProcessing = false;
+					break;
+			}
+		}
+
+		return continueProcessing;
+	},
+	
+	_addScheduledContent: function(scheduleContent, tableName) {
+		this._addToSet(scheduleContent);
+
+		//Add audience records
+		var audienceList = scheduleContent.audience.toString();
+		if (!gs.nil(audienceList)) {
+			this._addAudience(audienceList);
+		}
+
+		//Add portal content and dependencies
+		this._addContent(scheduleContent.getValue("content"));
+
+		if (scheduleContent.isValidField("forum_id") &amp;&amp; !gs.nil(scheduleContent.getValue("forum_id"))) {
+			new sn_communities.addToUpdateSetUtils()._addForum(scheduleContent.getValue("forum_id"));
+		}
+	},
+	
+	_addContent: function(contentRec, tableName) {
+		var recID;
+		if (typeof contentRec == "string") {
+			recID = contentRec;
+			contentRec = new GlideRecord("sn_cd_content_base");
+			contentRec.get(recID);
+		}
+		recID = contentRec.getValue("sys_id");
+		
+		if (gs.nil(tableName)) {
+			tableName = contentRec.getTableName();
+		}
+		if (tableName != contentRec.getValue("sys_class_name")) {
+			contentRec = new GlideRecord(contentRec.getValue("sys_class_name"));
+			contentRec.get(recID);
+			tableName = contentRec.getTableName();
+		}
+		
+		this._addToSet(contentRec);
+		
+		if (!gs.nil(contentRec.getValue("block"))) {
+				var blockContent = contentRec.block.getRefRecord();
+				this._addToSet(blockContent);
+		}
+		
+		switch (tableName) {
+			case "sn_cd_content_portal":
+				if (!gs.nil(contentRec.getValue("url_asset"))) {
+					this._addLinkContent(contentRec.getValue("url_asset"));
+				}
+				break;
+			case "sn_cd_content_notification":
+				//No references to other records
+				break;
+			case "sn_cd_content_mobile":
+				if (!gs.nil(contentRec.getValue("url_link"))) {
+					this._addLinkContent(contentRec.getValue("url_link"));
+				}
+				break;
+			case "sn_cd_content_community":
+				if (!gs.nil(contentRec.getValue("video_url_asset"))) {
+					this._addLinkContent(contentRec.getValue("video_url_asset"));
+				}
+				if (!gs.nil(contentRec.getValue("virtual_url_asset"))) {
+					this._addLinkContent(contentRec.getValue("virtual_url_asset"));
+				}
+				if (!gs.nil(contentRec.getValue("forum_links"))) {
+					this._addLinkContent(contentRec.getValue("forum_links"));
+				}
+				break;
+			case "sn_cd_content_todo":
+				if (!gs.nil(contentRec.getValue("url_asset"))) {
+					this._addLinkContent(contentRec.getValue("url_asset"));
+				}
+				//TODO: esig_template = sn_esign_configuration table in E-Signature scope
+				break;
+		}
+	},
+	
+	_addLinkContent: function(linkList){
+		var linkContent = new GlideRecord("sn_cd_url_asset");
+		linkContent.addQuery("sys_id", "IN", linkList);
+		linkContent.query();
+		while (linkContent.next()) {
+			this._addToSet(linkContent);
+
+			if (linkContent.type == "forums_link") {
+				new sn_communities.addToUpdateSetUtils()._addForum(linkContent.getValue("forum_id"));
+			}
+		}
+	},
+	
+	// Helper function for other addToUpdateSetUtils to use
+	_addContentFromList: function(contentList) {
+		var contentRec = new GlideRecord("sn_cd_content_base");
+		contentRec.addQuery("sys_id", "IN", contentList);
+		contentRec.query();
+		while (contentRec.next()) {
+			this._addContent(contentRec, contentRec.getTableName());
+		}
+	},
+	
+	_addAudience: function(audienceList) {
+		audienceList = audienceList.toString().split(",");
+		for (var i = 0; i &lt; audienceList.length; i++) {
+			var audience = new GlideRecord("sn_cd_audience");
+			if (audience.get(audienceList[i])) {
+				this._addToSet(audience);
+			}
+		}
+	},
+	
+	// Helper function for global.addToUpdateSetUtils() when adding a service portal page
+	checkScheduledContent: function(spPageID) {
+		var scheduleContent = new GlideRecord("sn_cd_content_visibility");
+		scheduleContent.addQuery("sp_page", spPageID);
+		scheduleContent.query();
+		while (scheduleContent.next()) {
+			this._addScheduledContent(scheduleContent);
+		}
+	},
+	
+	_addToSet: function(tableRec) {
+		new global.addToUpdateSetUtils().saveRecord(tableRec);
+	},
+
+    type: 'addToUpdateSetUtils'
+};]]&gt;&lt;/script&gt;&lt;sys_class_name&gt;sys_script_include&lt;/sys_class_name&gt;&lt;sys_created_by&gt;admin&lt;/sys_created_by&gt;&lt;sys_created_on&gt;2019-02-06 16:15:37&lt;/sys_created_on&gt;&lt;sys_id&gt;630e24904fef2b00d1676bd18110c778&lt;/sys_id&gt;&lt;sys_mod_count&gt;15&lt;/sys_mod_count&gt;&lt;sys_name&gt;addToUpdateSetUtils&lt;/sys_name&gt;&lt;sys_package display_value="Content Delivery" source="sn_cd"&gt;b26210490b7203008cd6e7ae37673a6a&lt;/sys_package&gt;&lt;sys_policy/&gt;&lt;sys_scope display_value="Content Delivery"&gt;b26210490b7203008cd6e7ae37673a6a&lt;/sys_scope&gt;&lt;sys_update_name&gt;sys_script_include_630e24904fef2b00d1676bd18110c778&lt;/sys_update_name&gt;&lt;sys_updated_by&gt;admin&lt;/sys_updated_by&gt;&lt;sys_updated_on&gt;2020-03-11 20:18:47&lt;/sys_updated_on&gt;&lt;/sys_script_include&gt;&lt;/record_update&gt;</payload>
+<payload_hash>1029973788</payload_hash>
+<remote_update_set display_value="Add to Update Set CD v1.1">924e4ea72ffc5010c6c690bcf699b66d</remote_update_set>
+<replace_on_upgrade>false</replace_on_upgrade>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2020-05-21 21:17:06</sys_created_on>
+<sys_id>964e4ea72ffc5010c6c690bcf699b66d</sys_id>
+<sys_mod_count>0</sys_mod_count>
+<sys_recorded_at>170cb3fe7790000001</sys_recorded_at>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2020-05-21 21:17:06</sys_updated_on>
+<table/>
+<target_name>addToUpdateSetUtils</target_name>
+<type>Script Include</type>
+<update_domain>global</update_domain>
+<update_guid>c8189c7455ab001026eaaa7dab3bc7ca</update_guid>
+<update_guid_history>c8189c7455ab001026eaaa7dab3bc7ca:1029973788,c8189c7455ab001026eaaa7dab3bc7ca:1029973788,478ebba928e80450943b6abd2e1af265:-1435967217,478ebba928e80450943b6abd2e1af265:-1435967217,5ff079ea42437340fcf8512dea1d098d:465392833,e0e72477c366b7004d3d63902a15b022:987284058,2554a83f6f66b700ae8565ea504385c5:-883070011,b283cf61ff680850887a733c38ce07d7:-1955432400,4c230b61b068085092d4a9efd13c2d83:-2083478110,01046e013aa0485042351daca130d099:1888026721,43e5dcae860f3f00e2d8b9a37d64b70e:465392833,eb4398a248c77f00c7926c23ad628492:1195748091,909158a252c77f00dcf52797ce9385c6:-1990795497,e861d4a2eac77f00c8f36f8ea0d59231:2038308488,7ba0d86243c77f00c21cdab29948388e:-908685818,349548cf4e897b003290c71358f33dff:-1480598484,8b40283e30c93b001e1c78a093031a74:217125611,6f615c578a80fb008db0f1a3ba087ba7:538139488,aa211817c680fb000ec06028eb000485:-366018485,7f833bf852afeb009eb48cb032d8e6ad:2098053988,0b22ff78b2afeb00ab234350901312f1:-1865736538,4061fb382aafeb00ea2b509b36c8ecac:-520845271,beaeebf0abafeb008d569ae0d055b8d6:1353161625,6cf6b85812ef2b00b65e921f8a7a828d:-922130286,12d6b4d861ef2b007dd6ae70f24c82dd:-1097763809,eb0e289079ef2b00d88fec7b42d2e138:183854885</update_guid_history>
+<update_set display_value=""/>
+<view/>
+</sys_update_xml>
+<sys_update_xml action="INSERT_OR_UPDATE">
+<action>INSERT_OR_UPDATE</action>
+<application display_value="Content Automation">bde72a4753710300d901a7e6a11c0838</application>
+<category>customer</category>
+<comments/>
+<name>sys_script_include_1da8d91c4f636b00d1676bd18110c735</name>
+<payload>&lt;?xml version="1.0" encoding="UTF-8"?&gt;&lt;record_update table="sys_script_include"&gt;&lt;sys_script_include action="INSERT_OR_UPDATE"&gt;&lt;access&gt;public&lt;/access&gt;&lt;active&gt;true&lt;/active&gt;&lt;api_name&gt;sn_ca.addToUpdateSetUtils&lt;/api_name&gt;&lt;caller_access/&gt;&lt;client_callable&gt;false&lt;/client_callable&gt;&lt;description&gt;Version 3.1&amp;#13;
+Utility script to add components to update sets for content automation&lt;/description&gt;&lt;name&gt;addToUpdateSetUtils&lt;/name&gt;&lt;script&gt;&lt;![CDATA[var addToUpdateSetUtils = Class.create();
+addToUpdateSetUtils.prototype = {
+    initialize: function() {
+    },
+	
+	checkTable: function(tableRec, tableName) {
+		/*
+		 * Scoped addToUpdateSetUtils Script Includes are useful when table Application Access settings prevent other scopes from CRUD access.
+		 * The global checkTable function is executed first and if no table match is found, then all scope checkTable functions are executed.
+		 * If a table match is found within this script, set continueProcessing to false so no additional scope scripts are executed.
+		 * If a scope table match is not found, then the single record will be added by the global checkTable function.
+		 *
+		 * If the table extends another table and you prefer to get all extensions, uncomment the default processParentTable = true and the if
+		 * statement below it and set the table and function.
+		 */
+		
+		var continueProcessing = true;
+		var processParentTable = false;
+		
+		switch (tableName) {
+			case "sn_ca_campaign":
+				this._addCampaign(tableRec, tableName);
+				continueProcessing = false;
+				break;
+			case "sn_ca_campaign_bundle":
+				var bundleQuery = "sys_id=" + tableRec.getValue("sys_id");
+				this._addCampaignBundle(bundleQuery);
+				continueProcessing = false;
+				break;
+			case "sn_ca_campaign_item":
+				var contentQuery = "sys_id=" + tableRec.getValue("sys_id");
+				this._addCampaignContent(contentQuery);
+				continueProcessing = false;
+				break;
+			default:
+				//processParentTable = true;
+				break;
+		}
+
+		/*if (processParentTable) {
+			// Check for table needs at parent table level
+			var tableBase = new global.addToUpdateSetUtils()._getTableBase(tableName);
+			switch (tableBase) {
+				case "table_name":
+					this._function_name(tableRec, tableName);
+					continueProcessing = false;
+					break;
+			}
+		}*/
+
+		return continueProcessing;
+	},
+	
+	_addCampaign: function(campaign, tableName) {
+		this._addToSet(campaign);
+
+		//Add audience records
+		var audienceList = campaign.audience.toString();
+		if (!gs.nil(audienceList)) {
+			this._addAudience(audienceList);
+		}
+
+		//Add campaign bundles
+		var bundleQuery = "campaign=" + campaign.getValue("sys_id");
+		this._addCampaignBundle(bundleQuery);
+	},
+	
+	_addCampaignBundle: function(bundleQuery) {
+		var bundleList = [];
+		
+		var campaignBundle = new GlideRecord("sn_ca_campaign_bundle");
+		campaignBundle.addEncodedQuery(bundleQuery);
+		campaignBundle.query();
+		while (campaignBundle.next()) {
+			this._addToSet(campaignBundle);
+			bundleList.push(campaignBundle.getValue("sys_id"));
+		}
+		
+		//Add campaign content
+		var contentQuery = "campaign_bundleIN" + bundleList.toString();
+		this._addCampaignContent(contentQuery);
+	},
+	
+	_addCampaignContent: function(contentQuery) {
+		var contentList = [];
+		var audienceList = [];
+		
+		var campaignItem = new GlideRecord("sn_ca_campaign_item");
+		campaignItem.addEncodedQuery(contentQuery);
+		campaignItem.query();
+		while (campaignItem.next()) {
+			this._addToSet(campaignItem);
+			
+			//Collect audience records
+			var audience = campaignItem.audience.toString().split(",");
+			for (var i = 0; i &lt; audience.length; i++) {
+				if (!gs.nil(audience[i]) &amp;&amp; audienceList.indexOf(audience[i]) == -1) {
+					audienceList.push(audience[i]);
+				}
+			}
+			
+			contentList.push(campaignItem.getValue("content"));
+		}
+		
+		//Add content
+		this._addContent(contentList);
+		
+		//Add audience records
+		this._addAudience(audienceList);
+	},
+	
+	_addAudience: function(audienceList) {
+		new sn_cd.addToUpdateSetUtils()._addAudience(audienceList);
+	},
+	
+	_addContent: function(contentList) {
+		new sn_cd.addToUpdateSetUtils()._addContentFromList(contentList);
+	},
+	
+	// Helper function for global.addToUpdateSetUtils() when adding a service portal page
+	checkScheduledContent: function(spPageID) {
+		var scheduleContent = new GlideRecord("sn_cd_content_visibility");
+		scheduleContent.addQuery("sp_page", spPageID);
+		scheduleContent.query();
+		while (scheduleContent.next()) {
+			this._addScheduledContent("", "", scheduleContent);
+		}
+	},
+	
+	_addToSet: function(tableRec) {
+		new global.addToUpdateSetUtils().saveRecord(tableRec);
+	},
+
+    type: 'addToUpdateSetUtils'
+};]]&gt;&lt;/script&gt;&lt;sys_class_name&gt;sys_script_include&lt;/sys_class_name&gt;&lt;sys_created_by&gt;admin&lt;/sys_created_by&gt;&lt;sys_created_on&gt;2019-02-06 19:21:42&lt;/sys_created_on&gt;&lt;sys_id&gt;1da8d91c4f636b00d1676bd18110c735&lt;/sys_id&gt;&lt;sys_mod_count&gt;16&lt;/sys_mod_count&gt;&lt;sys_name&gt;addToUpdateSetUtils&lt;/sys_name&gt;&lt;sys_package display_value="Content Automation" source="sn_ca"&gt;bde72a4753710300d901a7e6a11c0838&lt;/sys_package&gt;&lt;sys_policy/&gt;&lt;sys_scope display_value="Content Automation"&gt;bde72a4753710300d901a7e6a11c0838&lt;/sys_scope&gt;&lt;sys_update_name&gt;sys_script_include_1da8d91c4f636b00d1676bd18110c735&lt;/sys_update_name&gt;&lt;sys_updated_by&gt;admin&lt;/sys_updated_by&gt;&lt;sys_updated_on&gt;2020-03-11 20:17:55&lt;/sys_updated_on&gt;&lt;/sys_script_include&gt;&lt;/record_update&gt;</payload>
+<payload_hash>1804517965</payload_hash>
+<remote_update_set display_value="Add to Update Set CA v1.1">9e4e4ea72ffc5010c6c690bcf699b66a</remote_update_set>
+<replace_on_upgrade>false</replace_on_upgrade>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2020-05-21 21:17:06</sys_created_on>
+<sys_id>924e4ea72ffc5010c6c690bcf699b66b</sys_id>
+<sys_mod_count>0</sys_mod_count>
+<sys_recorded_at>170cb3f1b010000001</sys_recorded_at>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2020-05-21 21:17:06</sys_updated_on>
+<table/>
+<target_name>addToUpdateSetUtils</target_name>
+<type>Script Include</type>
+<update_domain>global</update_domain>
+<update_guid>9bd71c74adab0010cd075c8deb609e4d</update_guid>
+<update_guid_history>9bd71c74adab0010cd075c8deb609e4d:1804517965,9bd71c74adab0010cd075c8deb609e4d:1804517965,693ebb69ece804501f0c5e57192ab73d:1603627085,693ebb69ece804501f0c5e57192ab73d:1603627085,89e0fdeab2437340c895184ebd884f03:-1838513778,49bd18b7176e7700725e05059e56bfdb:-2134107949,722a18f3496e7700cf779cf1a4b11b30:652813016,0d634f61a2680850b44403b0283ec99b:-232020852,1ec3ee01b9a04850437a303da0cd3f46:1805761495,04c69822b24f3f0028f1594d7598f24c:-1838513778,e79394263fc77f001a9d09230255bf94:381174348,a18118a2dcc77f00068eeb5b4f1dd953:-352625108,7f31dc6212c77f00d2acffad3c873530:2094486542,a7b05c621ac77f0079904985b3585054:-717572643,f1634c49feefeb00f7959960df559bad:-2101813661,ad61c0492aefeb006ea27f00d3651b6e:638808895,6190004930efeb007eb1d7845860c215:1299258257,5c5373f8b1afeb00cf538af4ddce6e1f:1604452567,5b437bb880afeb007c8f8d6b5d4d5102:-147833635,4ae23fb8fbafeb0046d440f9ae34889f:1604452567,bc1137384eafeb005f7c1eff3256786e:1744477569,05a0733818afeb00b41f74527ef5afb0:1865094550,0090f3f43dafeb00a4e4c566d9b1caa0:1183854463,d03f6bb48eafeb008a1ca8f1fcc22364:-746942788,57f2c2d88e276b00e869cca9d34d4c81:-46906926,19a8d91cae636b000775d23a329a9138:-1299964880</update_guid_history>
+<update_set display_value=""/>
+<view/>
+</sys_update_xml>
+<sys_update_xml action="INSERT_OR_UPDATE">
+<action>INSERT_OR_UPDATE</action>
+<application display_value="Human Resources: Lifecycle Events">532da270dad21200a4656ede91f9331e</application>
+<category>customer</category>
+<comments/>
+<name>sys_script_include_bc1a25ae4f55e740d1676bd18110c780</name>
+<payload>&lt;?xml version="1.0" encoding="UTF-8"?&gt;&lt;record_update table="sys_script_include"&gt;&lt;sys_script_include action="INSERT_OR_UPDATE"&gt;&lt;access&gt;public&lt;/access&gt;&lt;active&gt;true&lt;/active&gt;&lt;api_name&gt;sn_hr_le.addToUpdateSetUtils&lt;/api_name&gt;&lt;caller_access/&gt;&lt;client_callable&gt;false&lt;/client_callable&gt;&lt;description&gt;Version 3.0&amp;#13;
+Utility script to add components to update sets&lt;/description&gt;&lt;name&gt;addToUpdateSetUtils&lt;/name&gt;&lt;script&gt;&lt;![CDATA[var addToUpdateSetUtils = Class.create();
+addToUpdateSetUtils.prototype = {
+    initialize: function() {
+    },
+	
+	checkTable: function(tableRec, tableName) {
+		/*
+		 * Scoped addToUpdateSetUtils Script Includes are useful when table Application Access settings prevent other scopes from CRUD access.
+		 * The global checkTable function is executed first and if no table match is found, then all scope checkTable functions are executed.
+		 * If a table match is found within this script, set continueProcessing to false so no additional scope scripts are executed.
+		 * If a scope table match is not found, then the single record will be added by the global checkTable function.
+		 *
+		 * If the table extends another table and you prefer to get all extensions, uncomment the default processParentTable = true and the if
+		 * statement below it and set the table and function.
+		 */
+		
+		var continueProcessing = true;
+		var processParentTable = false;
+		
+		switch (tableName) {
+			case "sn_hr_le_type":
+				this._addEventType(tableRec, tableName);
+				continueProcessing = false;
+				break;
+			case "sn_hr_le_activity_set":
+				this._addActivitySet(tableRec, tableName);
+				continueProcessing = false;
+				break;
+			default:
+				//processParentTable = true;
+				break;
+		}
+
+		/*if (processParentTable) {
+			// Check for table needs at parent table level
+			var tableBase = new global.addToUpdateSetUtils()._getTableBase(tableName);
+			switch (tableBase) {
+				case "table_name":
+					this._function_name(tableRec, tableName);
+					continueProcessing = false;
+					break;
+			}
+		}*/
+
+		return continueProcessing;
+	},
+	
+	_addEventType: function(leType, tableName) {
+		if (typeof leType == "string") {
+			var recID = leType;
+			leType = new GlideRecord("sn_hr_le_type");
+			leType.get(recID);
+		}
+		this._addToSet(leType);
+		this._addActivitySet(leType.getValue("sys_id"), leType.getTableName());
+	},
+	
+	_addActivitySet: function(activitySet, tableName) {
+		var activitySetList = [];
+		if (typeof activitySet == "string") {
+			var recID = activitySet;
+			activitySet = new GlideRecord("sn_hr_le_activity_set");
+			if (tableName == "sn_hr_le_activity_set") {
+				activitySet.addQuery("sys_id", recID);
+			} else {
+				activitySet.addQuery("le_type", recID);
+			}
+			activitySet.query();
+			while (activitySet.next()) {
+				this._addToSet(activitySet);
+				activitySetList.push(activitySet.sys_id.toString());
+			}
+		} else {
+			this._addToSet(activitySet);
+			activitySetList.push(activitySet.sys_id.toString());
+		}
+		
+		var activity = new GlideRecord("sn_hr_le_activity");
+		activity.addQuery("activity_set", "IN", activitySetList.toString());
+		activity.query();
+		while (activity.next()) {
+			this._addToSet(activity);
+			if (!gs.nil(activity.getValue("audience"))) {
+				new sn_cd.addToUpdateSetUtils()._addAudience(activity.getValue("audience"));
+			}
+			if (!gs.nil(activity.getValue("badge"))) {
+				new sn_hr_core.addToUpdateSetUtils()._addBadge(activity.getValue("badge"));
+			}
+			if (!gs.nil(activity.getValue("catalog_item"))) {
+				this._addCatItem(activity.getValue("catalog_item"), activity.catalog_item.sys_class_name.toString());
+			}
+			if (!gs.nil(activity.getValue("email_template"))) {
+				new sn_hr_core.addToUpdateSetUtils()._addEmailContent(activity.getValue("email_template"));
+			}
+			//ToDo add Flow flow, sys_hub_flow
+			if (!gs.nil(activity.getValue("hr_criteria"))) {
+				new sn_hr_core.addToUpdateSetUtils()._addHRCriteria("sys_id", activity.getValue("hr_criteria"));
+			}
+			if (!gs.nil(activity.getValue("hr_service"))) {
+				new sn_hr_core.addToUpdateSetUtils()._addHRService(activity.getValue("hr_service"));
+			}
+			if (!gs.nil(activity.getValue("hr_template"))) {
+				new sn_hr_core.addToUpdateSetUtils()._addHRTemplate(activity.getValue("hr_template"));
+			}
+			if (!gs.nil(activity.getValue("order_guide"))) {
+				this._addCatItem(activity.getValue("order_guide"), activity.order_guide.sys_class_name.toString());
+			}
+			if (!gs.nil(activity.getValue("system_template"))) {
+				new global.addToUpdateSetUtils()._addTemplate(activity.getValue("system_template"));
+			}
+			if (activity.isValidField("flow") &amp;&amp; !gs.nil(activity.getValue("flow"))) {
+				new global.addToUpdateSetUtils()._addFlow(activity.getValue("flow"));
+			}
+			
+			var fieldMapping = new GlideRecord("sn_hr_le_activity_field_mapping");
+			fieldMapping.addQuery("activity", activity.getValue("sys_id"));
+			fieldMapping.query();
+			while (fieldMapping.next()) {
+				this._addToSet(fieldMapping);
+			}
+		}
+	},
+	
+	_addCatItem: function(catItemID, tableName) {
+		var catItem = new GlideRecord(tableName);
+		if (catItem.get(catItemID)) {
+			new global.addToUpdateSetUtils()._addCatItem(catItem, tableName);
+		}
+	},
+	
+	_addToSet: function(tableRec) {
+		new global.addToUpdateSetUtils().saveRecord(tableRec);
+	},
+
+    type: 'addToUpdateSetUtils'
+};]]&gt;&lt;/script&gt;&lt;sys_class_name&gt;sys_script_include&lt;/sys_class_name&gt;&lt;sys_created_by&gt;admin&lt;/sys_created_by&gt;&lt;sys_created_on&gt;2018-10-25 00:02:54&lt;/sys_created_on&gt;&lt;sys_id&gt;bc1a25ae4f55e740d1676bd18110c780&lt;/sys_id&gt;&lt;sys_mod_count&gt;27&lt;/sys_mod_count&gt;&lt;sys_name&gt;addToUpdateSetUtils&lt;/sys_name&gt;&lt;sys_package display_value="Human Resources: Lifecycle Events" source="sn_hr_le"&gt;532da270dad21200a4656ede91f9331e&lt;/sys_package&gt;&lt;sys_policy/&gt;&lt;sys_scope display_value="Human Resources: Lifecycle Events"&gt;532da270dad21200a4656ede91f9331e&lt;/sys_scope&gt;&lt;sys_update_name&gt;sys_script_include_bc1a25ae4f55e740d1676bd18110c780&lt;/sys_update_name&gt;&lt;sys_updated_by&gt;admin&lt;/sys_updated_by&gt;&lt;sys_updated_on&gt;2019-10-18 14:48:00&lt;/sys_updated_on&gt;&lt;/sys_script_include&gt;&lt;/record_update&gt;</payload>
+<payload_hash>-410934054</payload_hash>
+<remote_update_set display_value="Add to Update Set HR LE v1.0">d64e4ea72ffc5010c6c690bcf699b66b</remote_update_set>
+<replace_on_upgrade>false</replace_on_upgrade>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2020-05-21 21:17:06</sys_created_on>
+<sys_id>da4e4ea72ffc5010c6c690bcf699b66b</sys_id>
+<sys_mod_count>0</sys_mod_count>
+<sys_recorded_at>16ddf56f2d10000001</sys_recorded_at>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2020-05-21 21:17:06</sys_updated_on>
+<table/>
+<target_name>addToUpdateSetUtils</target_name>
+<type>Script Include</type>
+<update_domain>global</update_domain>
+<update_guid>f4dd944a3fec00905e9f6c62f84ecc77</update_guid>
+<update_guid_history>f4dd944a3fec00905e9f6c62f84ecc77:-410934054,f4dd944a3fec00905e9f6c62f84ecc77:-410934054,f4dd944a3fec00905e9f6c62f84ecc77:-410934054,c1fe33e91ae8045052b11b07eb7dc63a:-1394601293,3f906a60bfd44c102627fd8965b959b7:576289535,419bc547c69f33804089647daf93ae73:-328407193,fdc07dea0e43734037edef757a47ec96:794898048,eb1d242a496a730074aa5e082a8941b8:-1270712502,ff638b6d272c88503892a4c9e2216a21:-535445901,12d207a9252c8850eac508df5fc0ca2a:416868581,4b986a0550a048503875db0baa3f475b:2031459392,58536a0135a04850b8236a77967c4d27:-1319707627,fbc81e6ca61c88108a6cc313dac76ee2:-1566655170,f9ef2043871f3f003484089793e1da62:-328407193,bcee68cfeedb3f00000577e05995cea6:365862941,5f4d20cf7edb3f00531e9de6a4b61017:190837349,d21ce08f81db3f0062ac86fff8ce4822:-232704593,d7db6c0fa1db3f0064997a722a37d950:-667909233,9b3b6c0fdadb3f004d7fc261dbfd2b8e:-232704593,9f89200f52db3f00faa4ee1dcfc1c8d8:-684132935,55f35ccb2a9b3f0093e5bf5b3bf2ab4f:-1634348260,a5e2c12609cf3f00cc6c14a274142dab:794898048,1452012660cf3f007a84033d852651cc:-402767408,6f228de29ecf3f00ca00655647d7e5ed:1170454950,baf109e243cf3f003d57914af3eaf2a0:1942758118,fb8185e2d7cf3f00c829a13e1ddb8f2e:-144358937,19cf3862ddcf3f00858a22ab8df1c9a2:1417903167,643fb4622fcf3f00cf716de3657ca7cf:-1859987590,7ade7062d1cf3f002f33f8d6f6805a80:657878651,7abc3cae528f3f0038f560cbf720ec3a:-946960934,5bcbf026204b7f008802dca17804680c:-867611873,01bab4e29a4b7f00de8c465d7f7168c2:-1348210758,88c9fc62b64b7f00b1938654c53c510a:390458673,6573d0262dc77f00f03a05aa84d56df1:-873178809,4f9094621ec77f006859d5064aa3f3c0:-544453725,6ab60c26440f3f0026b7bb51c1d8767a:201321190,db5ce8a6a76eb740fe023edcf757f17b:586358441,17fbdd65c32e3740af14581f51e17f19:-1270712502,13c8c05f5140fb00d3078932ad034984:-809171828,d2c8445fdf40fb009255295ef5097338:1812307825,8ab8045f5740fb00be5c471bc3bbf7e7:-809171828,b3692415be48b3004da2f83587502cfe:434557451,11cccc1dc56623803a9aaf6194b9b5a7:1428472352,562043f52d96a340321e545eb5b2c2af:1510500115,fb10c3f5bd96a3401da2dd3096f479ff:2028038445,92cd2e313956a340867dd8c99e57cb5f:1510500115,fc8662b97016a340ef35600db64bc2ab:1449725645,0f4522f51916a340c3972075ac4a1e2c:1311605851,3f1e7721410663008b5d16be1d2e6d32:1376128412,26d51b905ae5ef40e60070a12f7cba72:-1414485580,658ccbd4ffa5ef408c2356cc8ca4890a:-1291420623,764a0354f1a5ef402db2853d6d9b17db:-792294531,efce7694b765ef404f659490d1a8e40f:-1291420623,77659a44b2a1af4082435af0e896cab3:-792294531,5533560444a1af40a2ca459b2f927e27:-763918834,123196403da1af4046f90176520564ae:-792294531,0fb4dd08756d6f408a2164a250e09a6d:-892797934,dbbfc6baa7992b40b9d0fb26bf5b1258:-151189758,0e776d3681d52b4095f8b9c950059ffd:365012416,bb566db67cd52b407fb04ba9af849e7d:2070368737,dcd795ba2a552b403cf9ac8177d2eacd:1679132014,b81a25aec555e740144707d02f91ea83:1125941244</update_guid_history>
+<update_set display_value=""/>
+<view/>
+</sys_update_xml>
+</unload>

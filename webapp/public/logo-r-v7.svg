@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- V7: Split-tone "r" — half dark, half gradient, modern duotone -->
+  <defs>
+    <linearGradient id="g7" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f43f5e"/>
+      <stop offset="50%" stop-color="#a855f7"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+    <clipPath id="leftHalf">
+      <rect x="0" y="0" width="256" height="512"/>
+    </clipPath>
+    <clipPath id="rightHalf">
+      <rect x="256" y="0" width="256" height="512"/>
+    </clipPath>
+  </defs>
+  <!-- Background rounded square -->
+  <rect x="16" y="16" width="480" height="480" rx="80" fill="#0c0a1a"/>
+  <!-- Left half of "r" — white -->
+  <g clip-path="url(#leftHalf)">
+    <path d="M185 390 V200 Q185 142 255 130 Q320 120 370 155"
+          stroke="white" stroke-width="46" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+  <!-- Right half of "r" — gradient -->
+  <g clip-path="url(#rightHalf)">
+    <path d="M185 390 V200 Q185 142 255 130 Q320 120 370 155"
+          stroke="url(#g7)" stroke-width="46" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+  <!-- Tip glow -->
+  <circle cx="370" cy="155" r="10" fill="url(#g7)" opacity="0.8"/>
+</svg>
+

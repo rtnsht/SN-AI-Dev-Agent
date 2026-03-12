@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- V1: Geometric "r" in a circle with node accent -->
+  <defs>
+    <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#4C7DFF"/>
+    </linearGradient>
+  </defs>
+  <!-- Circle background -->
+  <circle cx="256" cy="256" r="240" fill="url(#g1)"/>
+  <!-- Stylized lowercase "r" — clean, modern, slightly rounded -->
+  <path d="M200 370 V195 Q200 155 240 145 Q270 138 310 150" 
+        stroke="white" stroke-width="42" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Node dot at the tip of the r's arm -->
+  <circle cx="310" cy="150" r="18" fill="white"/>
+  <!-- Small circuit node accent -->
+  <circle cx="310" cy="150" r="8" fill="url(#g1)"/>
+  <!-- Subtle inner ring for depth -->
+  <circle cx="256" cy="256" r="240" stroke="white" stroke-width="2" opacity="0.15" fill="none"/>
+</svg>
+

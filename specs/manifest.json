@@ -1,50 +1,17 @@
 {
   "version": "1.0",
-  "lastUpdated": "2026-01-20",
+  "lastUpdated": "2026-02-22",
   "project": {
-    "name": "ServiceNow AI Development",
-    "description": "AI-powered ServiceNow development with spec-driven methodology",
+    "name": "SN AI Dev Agent",
+    "description": "AI-powered ServiceNow development web app with spec-driven SDLC methodology",
     "repository": "SN AI Dev",
-    "defaultInstance": "dev300943"
+    "defaultInstance": "dev181312"
   },
-  "requirements": {
-    "REQ-001": {
-      "title": "Normal Change Maintenance Window Enforcement",
-      "description": "Form guidance, mandatory planning data enforcement, and stakeholder notifications for Normal Changes during maintenance windows",
-      "status": "deployed",
-      "phase": "complete",
-      "created": "2026-01-20",
-      "lastUpdated": "2026-01-20",
-      "deployedAt": "2026-01-20T15:59:17.792Z",
-      "updateSetId": "d77099f5932a72502f57f0ba2bba105c",
-      "artifacts": {
-        "spec": "specs/REQ-001/1-spec.md",
-        "design": "specs/REQ-001/2-design.md",
-        "implementation": "specs/REQ-001/3-implementation/",
-        "testing": "specs/REQ-001/4-testing/",
-        "deployment": "specs/REQ-001/5-deployment.md"
-      }
-    },
-    "REQ-002": {
-      "title": "New Hire Equipment Bundle Orchestration",
-      "description": "Automated orchestration of fulfillment tasks for new hire equipment bundle catalog item with completion tracking and notifications",
-      "status": "in-progress",
-      "phase": "testing",
-      "created": "2026-01-20",
-      "lastUpdated": "2026-01-20",
-      "artifacts": {
-        "spec": "specs/REQ-002/1-spec.md",
-        "design": "specs/REQ-002/2-design.md",
-        "implementation": "specs/REQ-002/3-implementation/",
-        "testing": "specs/REQ-002/4-testing/"
-      }
-    }
-  },
+  "requirements": {},
   "statistics": {
-    "total": 2,
-    "deployed": 1,
-    "inProgress": 1,
+    "total": 0,
+    "deployed": 0,
+    "inProgress": 0,
     "notStarted": 0
   }
 }
-

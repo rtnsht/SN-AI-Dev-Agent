@@ -21,15 +21,26 @@ export const getRecordSchema = z.object({
   fields: z.array(z.string()).optional().describe('List of fields to return')
 });
 
+// Coerce JSON string → object (AI agents sometimes send data as a stringified JSON)
+const coerceJsonObject = z.preprocess(
+  (v) => {
+    if (typeof v === 'string') {
+      try { return JSON.parse(v); } catch { return v; }
+    }
+    return v;
+  },
+  z.record(z.unknown())
+);
+
 export const createRecordSchema = z.object({
   table: z.string().describe('The table name to create record in'),
-  data: z.record(z.unknown()).describe('Field values for the new record')
+  data: coerceJsonObject.describe('Field values for the new record')
 });
 
 export const updateRecordSchema = z.object({
   table: z.string().describe('The table name'),
   sys_id: z.string().describe('The sys_id of the record to update'),
-  data: z.record(z.unknown()).describe('Field values to update')
+  data: coerceJsonObject.describe('Field values to update')
 });
 
 export const deleteRecordSchema = z.object({
@@ -80,25 +91,47 @@ export async function getRecord(client: ServiceNowClient, input: z.infer<typeof 
 
 export async function createRecord(client: ServiceNowClient, input: z.infer<typeof createRecordSchema>) {
   const record = await client.createRecord(input.table, input.data);
-  
+
+  // Auto-move sys_update_xml to active update set (if one is set)
+  let updateSetCapture: { moved: number; errors: string[] } | undefined;
+  if (client.activeUpdateSetId) {
+    updateSetCapture = await client.moveArtifactToUpdateSet(input.table, record.sys_id);
+  }
+
   return {
     success: true,
     message: `Record created successfully`,
     table: input.table,
     sys_id: record.sys_id,
-    record: record
+    record: record,
+    updateSetCapture: updateSetCapture ? {
+      activeUpdateSet: client.activeUpdateSetId,
+      moved: updateSetCapture.moved,
+      errors: updateSetCapture.errors.length > 0 ? updateSetCapture.errors : undefined
+    } : undefined
   };
 }
 
 export async function updateRecord(client: ServiceNowClient, input: z.infer<typeof updateRecordSchema>) {
   const record = await client.updateRecord(input.table, input.sys_id, input.data);
-  
+
+  // Auto-move sys_update_xml to active update set (if one is set)
+  let updateSetCapture: { moved: number; errors: string[] } | undefined;
+  if (client.activeUpdateSetId) {
+    updateSetCapture = await client.moveArtifactToUpdateSet(input.table, record.sys_id);
+  }
+
   return {
     success: true,
     message: `Record updated successfully`,
     table: input.table,
     sys_id: record.sys_id,
-    record: record
+    record: record,
+    updateSetCapture: updateSetCapture ? {
+      activeUpdateSet: client.activeUpdateSetId,
+      moved: updateSetCapture.moved,
+      errors: updateSetCapture.errors.length > 0 ? updateSetCapture.errors : undefined
+    } : undefined
   };
 }
 

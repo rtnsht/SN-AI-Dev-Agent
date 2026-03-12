@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<unload unload_date="2026-02-28 00:00:00">
+
+    <!-- Update Set Record -->
+    <sys_remote_update_set action="INSERT_OR_UPDATE">
+        <application>global</application>
+        <application_name>Global</application_name>
+        <application_scope>global</application_scope>
+        <application_version/>
+        <collisions/>
+        <commit_date/>
+        <deleted/>
+        <description>AutoAssign High Priority Incident Flow - Automatically assigns P1/P2 incidents to Network Support group</description>
+        <inserted/>
+        <name>AutoAssign High Priority Incident Flow</name>
+        <origin_sys_id>aa001122334455667788990011223344</origin_sys_id>
+        <parent/>
+        <release_date/>
+        <remote_base_update_set/>
+        <state>loaded</state>
+        <summary/>
+        <sys_class_name>sys_remote_update_set</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-02-28 00:00:00</sys_created_on>
+        <sys_id>aa001122334455667788990011223344</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-02-28 00:00:00</sys_updated_on>
+        <updated/>
+    </sys_remote_update_set>
+
+    <!-- Flow Definition -->
+    <sys_update_xml action="INSERT_OR_UPDATE">
+        <action>INSERT_OR_UPDATE</action>
+        <application>global</application>
+        <category>customer</category>
+        <comments/>
+        <name>sys_hub_flow_autoassign_high_priority_incident</name>
+        <payload><![CDATA[<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_hub_flow"><sys_hub_flow action="INSERT_OR_UPDATE"><access>public</access><acls/><active>true</active><annotation/><attributes/><callable_by_client_api>false</callable_by_client_api><category/><copied_from/><copied_from_name/><description>Automatically assigns high-priority (P1/P2) incidents to the Network Support group upon creation. This flow triggers when a new incident is created with priority 1 or 2.</description><internal_name>autoassign_high_priority_incident</internal_name><label_cache/><latest_snapshot/><master_snapshot/><name>AutoAssign High Priority Incident</name><natlang/><outputs/><remote_trigger_id/><run_as>system_user</run_as><run_with_roles/><sc_callable>false</sc_callable><show_draft_actions>false</show_draft_actions><status>draft</status><sys_class_name>sys_hub_flow</sys_class_name><sys_created_by>admin</sys_created_by><sys_created_on>2026-02-28 00:00:00</sys_created_on><sys_domain>global</sys_domain><sys_domain_path>/</sys_domain_path><sys_id>bb112233445566778899001122334455</sys_id><sys_mod_count>0</sys_mod_count><sys_name>AutoAssign High Priority Incident</sys_name><sys_overrides/><sys_package display_value="Global" source="global">global</sys_package><sys_policy/><sys_scope display_value="Global" source="global">global</sys_scope><sys_update_name>sys_hub_flow_autoassign_high_priority_incident</sys_update_name><sys_updated_by>admin</sys_updated_by><sys_updated_on>2026-02-28 00:00:00</sys_updated_on><type>flow</type><version>1</version></sys_hub_flow></record_update>]]></payload>
+        <remote_update_set display_value="AutoAssign High Priority Incident Flow">aa001122334455667788990011223344</remote_update_set>
+        <replace_on_upgrade>false</replace_on_upgrade>
+        <sys_class_name>sys_update_xml</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2026-02-28 00:00:00</sys_created_on>
+        <sys_id>cc112233445566778899001122334455</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_recorded_at>0</sys_recorded_at>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2026-02-28 00:00:00</sys_updated_on>
+        <table>sys_hub_flow</table>
+        <target_name>AutoAssign High Priority Incident</target_name>
+        <type>Flow</type>
+        <update_domain>global</update_domain>
+        <update_guid>cc112233445566778899001122334455</update_guid>
+        <update_set display_value="AutoAssign High Priority Incident Flow">aa001122334455667788990011223344</update_set>
+    </sys_update_xml>
+
+</unload>

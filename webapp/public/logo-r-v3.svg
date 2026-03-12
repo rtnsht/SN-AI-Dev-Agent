@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- V3: Minimal "r" with connected nodes — AI/network feel -->
+  <defs>
+    <linearGradient id="g3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="g3a" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#c084fc"/>
+    </linearGradient>
+  </defs>
+  <!-- Circle background -->
+  <circle cx="256" cy="256" r="244" fill="url(#g3)"/>
+  <!-- Thin border ring -->
+  <circle cx="256" cy="256" r="244" stroke="url(#g3a)" stroke-width="2.5" fill="none" opacity="0.5"/>
+  <!-- Main "r" stroke — thick, confident -->
+  <path d="M190 385 V200 Q190 150 250 138 Q300 128 350 158" 
+        stroke="url(#g3a)" stroke-width="38" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Network nodes along the r -->
+  <!-- Base node -->
+  <circle cx="190" cy="385" r="12" fill="#38bdf8"/>
+  <circle cx="190" cy="385" r="5" fill="#0f172a"/>
+  <!-- Curve node -->
+  <circle cx="220" cy="165" r="10" fill="#818cf8"/>
+  <circle cx="220" cy="165" r="4" fill="#0f172a"/>
+  <!-- Tip node -->
+  <circle cx="350" cy="158" r="14" fill="#c084fc"/>
+  <circle cx="350" cy="158" r="6" fill="#0f172a"/>
+  <!-- Connecting traces (subtle network lines) -->
+  <line x1="190" y1="373" x2="220" y2="175" stroke="#818cf8" stroke-width="1.5" opacity="0.2"/>
+  <line x1="220" y1="165" x2="350" y2="158" stroke="#c084fc" stroke-width="1.5" opacity="0.2"/>
+  <!-- Floating accent dots -->
+  <circle cx="310" cy="260" r="4" fill="#38bdf8" opacity="0.3"/>
+  <circle cx="280" cy="320" r="3" fill="#818cf8" opacity="0.25"/>
+  <circle cx="340" cy="300" r="3.5" fill="#c084fc" opacity="0.2"/>
+</svg>
+

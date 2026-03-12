@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- V8: Stacked layers "r" — 3D depth with offset shadows -->
+  <defs>
+    <linearGradient id="g8" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2dd4bf"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect x="16" y="16" width="480" height="480" rx="80" fill="#0a0a0f"/>
+  <!-- Shadow layer 3 (deepest) -->
+  <path d="M195 385 V205 Q195 148 260 135 Q315 125 360 155"
+        stroke="#1e293b" stroke-width="44" stroke-linecap="round" stroke-linejoin="round" fill="none"
+        transform="translate(12,12)"/>
+  <!-- Shadow layer 2 -->
+  <path d="M195 385 V205 Q195 148 260 135 Q315 125 360 155"
+        stroke="#334155" stroke-width="44" stroke-linecap="round" stroke-linejoin="round" fill="none"
+        transform="translate(6,6)"/>
+  <!-- Main "r" -->
+  <path d="M195 385 V205 Q195 148 260 135 Q315 125 360 155"
+        stroke="url(#g8)" stroke-width="44" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Highlight dot -->
+  <circle cx="360" cy="155" r="14" fill="#2dd4bf"/>
+  <circle cx="360" cy="155" r="6" fill="#0a0a0f"/>
+</svg>
+

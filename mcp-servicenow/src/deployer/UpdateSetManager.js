@@ -93,27 +93,55 @@ export class UpdateSetManager {
     }
 
     /**
-     * Move an artifact's update record to the current update set
-     * This compensates for REST API not respecting session-based update set
+     * Extract sys_id from a ServiceNow reference field (may be string or {link, value} object)
+     */
+    _resolveRef(field) {
+        if (typeof field === 'string') return field;
+        if (field && typeof field === 'object' && 'value' in field) return String(field.value);
+        return String(field ?? '');
+    }
+
+    /**
+     * Move an artifact's update record to the current update set.
+     * Uses retry logic with increasing delays for reliable capture.
+     * This compensates for REST API not respecting session-based update set.
+     *
+     * Three-layer defense strategy:
+     * - Layer 1: Session-based capture (handled by setCurrentUpdateSet)
+     * - Layer 2: Post-creation sys_update_xml move (this method)
+     * - Layer 3: Server-side GlideUpdateManager2 (handled by MCP TypeScript client)
      */
     async moveArtifactToUpdateSet(sysUpdateName) {
         if (!this.currentUpdateSetId || !sysUpdateName) return;
 
-        try {
-            const record = await this.client.findRecord(
-                'sys_update_xml',
-                'name',
-                sysUpdateName,
-                ['sys_id', 'update_set']
-            );
+        const maxRetries = 3;
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            const delay = attempt === 0 ? 1000 : 1500 * (attempt + 1);
+            await new Promise(r => setTimeout(r, delay));
 
-            if (record && record.update_set !== this.currentUpdateSetId) {
-                await this.client.updateRecord('sys_update_xml', record.sys_id, {
-                    update_set: this.currentUpdateSetId
-                });
+            try {
+                const record = await this.client.findRecord(
+                    'sys_update_xml',
+                    'name',
+                    sysUpdateName,
+                    ['sys_id', 'update_set']
+                );
+
+                if (record) {
+                    const currentUpdateSet = this._resolveRef(record.update_set);
+                    if (currentUpdateSet !== this.currentUpdateSetId) {
+                        await this.client.updateRecord('sys_update_xml', record.sys_id, {
+                            update_set: this.currentUpdateSetId
+                        });
+                    }
+                    return; // Success — stop retrying
+                }
+            } catch (e) {
+                if (attempt === maxRetries - 1) {
+                    console.warn(`   ⚠️  Failed to move ${sysUpdateName} to update set after ${maxRetries} attempts`);
+                }
+                // Otherwise retry
             }
-        } catch (e) {
-            // Silently continue - we'll validate at the end
         }
     }
 

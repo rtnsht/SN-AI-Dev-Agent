@@ -1,0 +1,257 @@
+#!/usr/bin/env node
+/**
+ * Flow Designer Activation Helper
+ * 
+ * Activates/publishes a flow using sn_fd.FlowDesignHelper via background script.
+ * Note: This requires admin permissions and proper Flow Designer setup.
+ * 
+ * Usage:
+ *   node lib/activate-flow.js <flow-sys-id>
+ * 
+ * Example:
+ *   node lib/activate-flow.js 30f3d26187e92300e0ef0cf888cb0b91
+ */
+import * as dotenv from 'dotenv';
+import axios from 'axios';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
+
+const instanceUrl = process.env.SN_INSTANCE_URL;
+const auth = { username: process.env.SN_USERNAME, password: process.env.SN_PASSWORD };
+const headers = { 'Accept': 'application/json', 'Content-Type': 'application/json' };
+
+/**
+ * Get flow details
+ */
+async function getFlow(flowId) {
+    const resp = await axios.get(`${instanceUrl}/api/now/table/sys_hub_flow/${flowId}`, {
+        auth,
+        headers,
+        params: { sysparm_fields: 'sys_id,name,internal_name,status,active,latest_snapshot,master_snapshot' }
+    });
+    return resp.data.result;
+}
+
+/**
+ * Execute a background script on ServiceNow
+ * Uses the sys_script_executor or sysauto_script approach
+ */
+async function executeBackgroundScript(script) {
+    console.log('   📜 Executing background script...');
+    
+    // Method 1: Try the Scripts - Background endpoint (sys.scripts.do)
+    try {
+        const response = await axios.post(
+            `${instanceUrl}/api/now/table/sys_script_execution`,
+            {
+                script: script,
+                scope: 'global'
+            },
+            { auth, headers }
+        );
+        return { success: true, result: response.data };
+    } catch (err) {
+        // Method 2: Create a scheduled job that runs immediately
+        console.log('   ⚠️  Direct script execution not available, trying scheduled job...');
+        return await executeViaScheduledJob(script);
+    }
+}
+
+/**
+ * Execute script via a scheduled job
+ */
+async function executeViaScheduledJob(script) {
+    const jobName = `Flow Activation - ${new Date().toISOString()}`;
+    
+    try {
+        // Create scheduled job
+        const createResp = await axios.post(
+            `${instanceUrl}/api/now/table/sysauto_script`,
+            {
+                name: jobName,
+                script: script,
+                active: true,
+                run_type: 'once',
+                run_start: new Date().toISOString().slice(0, 19).replace('T', ' ')
+            },
+            { auth, headers }
+        );
+        
+        const jobId = createResp.data.result.sys_id;
+        console.log(`   ✅ Created scheduled job: ${jobId}`);
+        console.log('   ⏳ Waiting for execution (10 seconds)...');
+        
+        await new Promise(r => setTimeout(r, 10000));
+        
+        // Clean up - deactivate and optionally delete the job
+        await axios.patch(
+            `${instanceUrl}/api/now/table/sysauto_script/${jobId}`,
+            { active: false },
+            { auth, headers }
+        );
+        
+        return { success: true, jobId };
+    } catch (err) {
+        return { success: false, error: err.response?.data?.error?.message || err.message };
+    }
+}
+
+/**
+ * Check system logs for script output
+ */
+async function checkLogs(searchTerm, afterTime) {
+    const resp = await axios.get(`${instanceUrl}/api/now/table/syslog`, {
+        auth,
+        headers,
+        params: {
+            sysparm_query: `messageLIKE${searchTerm}^sys_created_on>${afterTime}^ORDERBYDESCsys_created_on`,
+            sysparm_fields: 'sys_created_on,level,message',
+            sysparm_limit: 10
+        }
+    });
+    return resp.data.result || [];
+}
+
+/**
+ * Activate a flow using FlowDesignHelper
+ */
+async function activateFlow(flowId) {
+    console.log('╔════════════════════════════════════════════════════════════╗');
+    console.log('║           Flow Designer Activation Helper                  ║');
+    console.log('╚════════════════════════════════════════════════════════════╝');
+    console.log(`\n🌐 Instance: ${instanceUrl}`);
+    console.log(`📋 Flow ID: ${flowId}\n`);
+
+    // Get flow details
+    console.log('1️⃣  Fetching flow details...');
+    const flow = await getFlow(flowId);
+    if (!flow) {
+        console.error('❌ Flow not found');
+        process.exit(1);
+    }
+    
+    console.log(`   Name: ${flow.name || flow.internal_name}`);
+    console.log(`   Status: ${flow.status}`);
+    console.log(`   Active: ${flow.active}`);
+    console.log(`   Latest Snapshot: ${flow.latest_snapshot || 'None'}`);
+
+    if (flow.status === 'published') {
+        console.log('\n✅ Flow is already published!');
+        return;
+    }
+
+    // Generate activation script
+    console.log('\n2️⃣  Generating activation script...');
+    const activationScript = `
+// Flow Activation Script - Generated by activate-flow.js
+(function() {
+    var flowId = '${flowId}';
+    gs.info('Flow Activation: Starting for flow ' + flowId);
+    
+    try {
+        // Method 1: Try FlowDesignHelper
+        if (typeof sn_fd !== 'undefined' && sn_fd.FlowDesignHelper) {
+            var result = sn_fd.FlowDesignHelper.publish(flowId);
+            gs.info('Flow Activation: FlowDesignHelper.publish result = ' + result);
+        } else {
+            // Method 2: Direct status update (creates draft, needs UI activation)
+            var gr = new GlideRecord('sys_hub_flow');
+            if (gr.get(flowId)) {
+                gr.status = 'published';
+                gr.active = true;
+                gr.update();
+                gs.info('Flow Activation: Status updated to published');
+            } else {
+                gs.error('Flow Activation: Flow not found - ' + flowId);
+            }
+        }
+    } catch (e) {
+        gs.error('Flow Activation: Error - ' + e.message);
+    }
+    
+    gs.info('Flow Activation: Completed');
+})();
+`;
+
+    const startTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    
+    // Execute the script
+    console.log('\n3️⃣  Executing activation...');
+    const result = await executeBackgroundScript(activationScript);
+
+    if (!result.success) {
+        console.log(`\n⚠️  Automated activation failed: ${result.error}`);
+        console.log('\n📋 MANUAL ACTIVATION REQUIRED');
+        console.log('═'.repeat(60));
+        console.log('\nOption 1: Use Flow Designer UI');
+        console.log(`   ${instanceUrl}/sys_hub.do?sys_id=${flowId}`);
+        console.log('   Click "Activate" button\n');
+
+        console.log('Option 2: Run Background Script');
+        console.log(`   ${instanceUrl}/sys.scripts.do`);
+        console.log('   Paste and run:\n');
+        console.log('─'.repeat(50));
+        console.log(activationScript);
+        console.log('─'.repeat(50));
+        return;
+    }
+
+    // Wait and check logs
+    console.log('\n4️⃣  Checking activation logs...');
+    await new Promise(r => setTimeout(r, 3000));
+
+    const logs = await checkLogs('Flow Activation', startTime);
+    if (logs.length > 0) {
+        console.log('   📜 Log entries:');
+        for (const log of logs) {
+            const level = log.level === 'error' ? '❌' : '✅';
+            console.log(`      ${level} ${log.message}`);
+        }
+    }
+
+    // Verify final status
+    console.log('\n5️⃣  Verifying flow status...');
+    const updatedFlow = await getFlow(flowId);
+    console.log(`   Status: ${updatedFlow.status}`);
+    console.log(`   Active: ${updatedFlow.active}`);
+    console.log(`   Latest Snapshot: ${updatedFlow.latest_snapshot || 'None'}`);
+
+    if (updatedFlow.status === 'published' && updatedFlow.latest_snapshot) {
+        console.log('\n🎉 Flow activated successfully!');
+    } else {
+        console.log('\n⚠️  Flow may need manual activation in Flow Designer UI.');
+        console.log(`   ${instanceUrl}/sys_hub.do?sys_id=${flowId}`);
+    }
+}
+
+/**
+ * Main execution
+ */
+async function main() {
+    const flowId = process.argv[2];
+
+    if (!flowId) {
+        console.log('Flow Designer Activation Helper');
+        console.log('===============================\n');
+        console.log('Usage: node lib/activate-flow.js <flow-sys-id>\n');
+        console.log('Example:');
+        console.log('  node lib/activate-flow.js 30f3d26187e92300e0ef0cf888cb0b91\n');
+        console.log('This script attempts to publish/activate a flow using:');
+        console.log('  1. sn_fd.FlowDesignHelper.publish() API');
+        console.log('  2. Direct status update (fallback)\n');
+        console.log('Note: Some flows may require manual activation in the UI.');
+        console.log(`Find flows at: ${instanceUrl}/sys_hub_flow_list.do`);
+        process.exit(1);
+    }
+
+    await activateFlow(flowId);
+}
+
+main().catch(e => {
+    console.error('\n❌ Error:', e.response?.data || e.message);
+    process.exit(1);
+});
+

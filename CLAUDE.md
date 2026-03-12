@@ -8,7 +8,7 @@ This file contains mandatory rules, processes, and context for AI agents working
 
 ## 1. Project Overview
 
-**Project**: SN AI Dev Agent  
+**Project**: Yantra - AI Dev Agent - SN
 **Purpose**: AI-powered ServiceNow development with spec-driven methodology  
 **Instance**: dev300943.service-now.com  
 
@@ -147,6 +147,7 @@ SN-AI-Dev-Agent/
 │   └── utils/
 │
 └── docs/                        # 📚 DOCUMENTATION
+    ├── architecture.md          # Full technical architecture doc
     └── BROWNFIELD-ENHANCEMENT-PLAN.md
 ```
 
@@ -224,9 +225,6 @@ node scripts/validate.cjs REQ-XXX
 cd mcp-servicenow
 node deploy/deploy.js REQ-XXX
 
-# Import Flow Designer Update Set (see Section 13)
-node mcp-servicenow/lib/import-updateset.js <xml-file> --direct
-
 # Run tests
 cd mcp-servicenow
 node tests/test-connection.js
@@ -290,57 +288,175 @@ At the start of every session involving requirements:
 
 ---
 
-## 13. Flow Designer Deployment
+## 13. Update Set Artifact Capture
 
-> ⚠️ **IMPORTANT: Flow Designer has complex internal requirements**
+> ⚠️ **IMPORTANT: REST API does NOT honor "current update set" session context like the UI does**
 
-Flow Designer flows require **snapshots** that are created by the Flow Designer engine. Direct REST API table inserts create records but the flow won't be functional until activated via the UI.
+Artifacts created via REST API land in the "Default" update set instead of the intended target. This framework implements a **three-layer defense strategy** to ensure reliable capture.
 
-### 13.1 Understanding Flow Designer Structure
+### 14.1 Three-Layer Defense Strategy
 
-| Table | Purpose | Key Fields |
-|-------|---------|------------|
-| `sys_hub_flow` | Flow definition | name, internal_name, status, latest_snapshot, master_snapshot |
-| `sys_hub_trigger_instance` | Flow trigger | flow, trigger_definition, trigger_type |
-| `sys_hub_action_instance` | Action steps | flow, action_type, compiled_snapshot, order, ui_id |
-| `sys_hub_flow_stage` | Flow stages | flow, label, stage_id, order |
-| `sys_hub_flow_input` | Flow variables | Complex variable definitions |
+**Layer 1 — Session-based capture** (`sn-client.ts`):
+- Cookie-jar session persistence via `axios-cookiejar-support` + `tough-cookie`
+- `callSetCurrentUpdateSetApi()` calls the UpdateSetHelper Scripted REST API
+- Server-side runs `GlideUpdateSet().set()` to bind the session to the target update set
 
-**Critical:** Flows require `latest_snapshot` and `master_snapshot` references created when you **Activate/Publish** a flow.
+**Layer 2 — Post-creation move** (fallback in `sn-client.ts`):
+- `moveArtifactToUpdateSet()` queries `sys_update_xml` after every create/update
+- Multi-strategy search: exact name match → LIKE search → metadata table broad search with payload filtering
+- Retry logic with increasing delays (metadata tables like `sys_dictionary` get 1500ms initial + 3 retries)
+- Moves records to the target update set if they landed in the wrong one
+- Auto-move hooks in: `createRecord`, `updateRecord`, `createBusinessRule`, `createScriptInclude`, `createClientScript`
 
-### 13.2 Recommended Approach: REST API + Manual Activation
+**Layer 3 — Server-side GlideUpdateManager2** (fallback in `sn-client.ts`):
+- `callAddToUpdateSetApi()` calls the AddToUpdateSetHelper Scripted REST API
+- Server-side uses `GlideUpdateManager2().saveRecord(gr)` to explicitly create `sys_update_xml` entry
+- Works for ANY table type, including those that don't reliably generate `sys_update_xml` entries (e.g., `sys_dictionary`, `sysauto_script`, `sysevent_register`)
+- Auto-deployed alongside other helper APIs on connection init
 
-**Step 1:** Create flow structure via REST API (creates draft flow):
+### 14.2 Duplicate Update Set Detection
+
+`sn_create_update_set` checks for existing update sets with the same name **before** creating:
+
+| Scenario | Behavior |
+|----------|----------|
+| No duplicate | Creates normally |
+| Duplicate found (default) | Returns `duplicateDetected: true` with existing sets and 3 options |
+| Duplicate + `autoTimestamp: true` | Auto-appends ISO timestamp to name |
+| Duplicate + `force: true` | Skips check, creates duplicate |
+
+**NEVER silently create duplicate update sets** — always surface the conflict to the user first.
+
+### 14.3 New Tools
+
+| Tool | Purpose |
+|------|---------|
+| `sn_move_to_update_set` | Manual fallback — move a specific artifact to a target update set |
+| `sn_verify_update_set_capture` | Verify ALL artifacts are captured in the update set; auto-moves missing ones |
+
+### 14.4 Required Setup
+
+1. Deploy the UpdateSetHelper Scripted REST API:
+   ```bash
+   cd mcp-servicenow
+   node src/deployer/setup-updateset-api.js
+   ```
+2. Configure in `.env`:
+   ```
+   SN_UPDATE_SET_API_PATH=/api/<namespace>/update_set_helper/set_current
+   ```
+
+### 14.5 Implementation Workflow (for AI agents)
+
+1. Call `sn_create_update_set` — handle `duplicateDetected` response if returned
+2. Call `sn_set_current_update_set` with the update set sys_id
+3. Create artifacts — each response includes `updateSetCapture` field confirming capture
+4. Verify with `sn_get_update_set_contents`
+5. Use `sn_move_to_update_set` as fallback for any missing artifacts
+
+---
+
+## 14. Live Session Telemetry
+
+Every AI agent session generates a live-updating telemetry dashboard at `webapp/logs/telemetry-session-{suffix}.md`.
+
+### How It Works
+1. User clicks **Connect** → POST `/api/session-start` logs connection metadata and starts a 15-second telemetry interval
+2. Every `logger.log()` call triggers a throttled `updateTelemetry()` (max once per 15s)
+3. The telemetry generator parses the session JSONL log and regenerates the markdown dashboard
+4. One file per session, overwritten in place — open in VS Code to watch live
+
+### What's Captured
+- **Connect metadata**: instance URL, username, model, AI provider
+- **Phase transitions**: spec → design → scope_selection → implementation
+- **Round-by-round activity**: tools called, durations, tokens, stop reasons
+- **Tool usage stats**: per-tool call counts, success/failure rates, avg duration
+- **Errors**: timestamped with tool name and message
+- **Session Updates**: conversational narration with intent-based tool descriptions, phase-aware context, error categorization, and efficiency assessment
+
+### Key Files
+| File | Purpose |
+|------|---------|
+| `webapp/src/lib/telemetry-generator.ts` | JSONL parser → markdown generator + conversational narration |
+| `webapp/src/lib/logger.ts` | Hooks `updateTelemetry()` into every log write |
+| `webapp/src/app/api/session-start/route.ts` | Logs connect event, starts telemetry stream |
+
+---
+
+## 15. AI Agent Type Coercion (Schema Hardening)
+
+AI agents frequently send string values where schemas expect `boolean`, `number`, or `object`. All MCP tool schemas use `z.preprocess()` to transparently coerce these inputs.
+
+### Coerced Types
+- **String → Boolean**: `"true"` / `"false"` → `true` / `false`
+- **String → Number**: `"100"` → `100`
+- **JSON String → Object**: `'{"name":"x"}'` → `{name:"x"}`
+
+### Files with Coercion
+`scripts.ts`, `records.ts`, `ui-policies.ts`, `notifications.ts`, `update-sets.ts`, `scheduled-jobs.ts`, `acls.ts`
+
+### After Editing MCP Schemas
 ```bash
-cd mcp-servicenow
-node lib/create-flow-rest.js
+cd mcp-servicenow && rm -rf dist && npx tsc
 ```
+Then restart the webapp server.
 
-**Step 2:** Open Flow Designer UI and:
-1. Configure trigger conditions
-2. Add/configure action steps
-3. Click **Activate** to publish (creates snapshots)
+---
 
-### 13.3 Key Action Type IDs (for reference)
+## 16. Inline Agent Activity (Chat Thinking Block)
 
-| Action | Snapshot ID | Definition ID |
-|--------|-------------|---------------|
-| Create Catalog Task | `af51fd0e73141300612c273ffff6a785` | `f597c41073081300612c273ffff6a767` |
-| Log | `5bc1bcc6531003003bf1d9109ec587d4` | - |
-| Service Catalog Trigger | - | `c43a1011c36813002841b63b12d3ae15` |
+Agent activity is displayed **inline in the chat flow** as a collapsible thinking block during AI processing. There is no sidebar Agent Activity panel.
 
-### 13.4 Alternative: Manual Flow Creation
+### Key Design
+- **No emojis/icons** — only pulsing dot (active step) and ✓ checkmark (completed step) in muted gray
+- **Conversational labels** — tool names are mapped to friendly text (e.g., `sn_get_business_rules` + `{table:"incident"}` → "Business rules on incident")
+- **Collapsible** — header shows latest step + tool count, chevron toggles step list
+- **Deduplication** — "Starting...", "Round N: Analyzing..." merged into single "Analyzing your request..."
 
-For complex flows, create manually in Flow Designer UI:
-1. Navigate to `Process Automation > Flow Designer`
-2. Create new flow with trigger and actions
-3. Activate the flow
-4. Capture in Update Set for version control
+### Key Files
+| File | Purpose |
+|------|---------|
+| `webapp/src/components/ChatWindow.tsx` | `InlineAgentActivity` component, `friendlyToolLabel()`, `processActivityLog()` |
+| `webapp/src/app/page.tsx` | Captures `tool_start` events with `toolName` + `toolInput` into `activityLog[]` |
 
-### 13.5 Lessons Learned
+---
 
-- **Snapshots are mandatory** - Flow engine requires compiled snapshots
-- **Action instances use snapshot IDs** - Not definition IDs
-- **UI activation required** - Creates internal metadata and snapshots
-- **Draft flows are accessible** - Can be opened and edited in UI
+## 17. Theme System & Branding
+
+### Theme Toggle
+- Dark/light mode via `ThemeProvider.tsx` + `ThemeToggle.tsx` (sun/moon button in header)
+- Persists to `localStorage`; defaults to dark
+- CSS vars defined per theme in `globals.css` via `[data-theme="light"]` / `[data-theme="dark"]`
+
+### Branding Configuration
+All values configurable via `NEXT_PUBLIC_*` env vars in `webapp/.env`:
+
+| Env Var | Default |
+|---------|---------|
+| `NEXT_PUBLIC_APP_NAME` | "Yantra - AI Dev Agent - SN" |
+| `NEXT_PUBLIC_APP_TAGLINE` | "Say it. Ship it." |
+| `NEXT_PUBLIC_HERO_TAGLINE` | "Yantra works for you." |
+| `NEXT_PUBLIC_APP_LOGO` | "/yantra-logo.png" |
+| `NEXT_PUBLIC_PRIMARY_COLOR` | "blue" (or any preset: purple, green, teal, red, orange, indigo, or hex) |
+| `NEXT_PUBLIC_ACCENT_COLOR` | "purple" |
+
+### Key Files
+| File | Purpose |
+|------|---------|
+| `webapp/src/lib/branding.ts` | Color presets (dark + light), env var resolution, CSS var exports |
+| `webapp/src/components/ThemeProvider.tsx` | React context, theme state, CSS var injection |
+| `webapp/src/components/ThemeToggle.tsx` | Toggle button UI |
+
+---
+
+## 18. UI Layout Notes
+
+### Right Sidebar
+Shows **only Connection info** (user, instance URL, roles). Pipeline Status and Agent Activity have been removed from the sidebar.
+
+### Chat Avatars
+User and AI avatars are **hidden** from the chat UI. The `userName` data is still available in the backend for telemetry/logging.
+
+### Header Bar
+Contains: Settings toggle, app title, connection badge, PhaseTracker (SDLC pipeline), theme toggle, Export button, New Chat button.
 

@@ -6,13 +6,25 @@
 import { z } from 'zod';
 import { ServiceNowClient } from '../client/sn-client.js';
 
+// ── Type coercion helpers ──
+const coerceOptBool = (def: boolean) =>
+  z.preprocess(
+    (v) => (v === 'true' ? true : v === 'false' ? false : v === undefined ? undefined : v),
+    z.boolean().optional().default(def)
+  );
+const coerceOptNum = (def: number) =>
+  z.preprocess(
+    (v) => (typeof v === 'string' && /^\d+$/.test(v) ? parseInt(v, 10) : v),
+    z.number().optional().default(def)
+  );
+
 // ============ ACLs ============
 
 export const getAclsSchema = z.object({
   table: z.string().optional().describe('Filter by table name'),
   operation: z.enum(['read', 'write', 'create', 'delete', '*']).optional().describe('Filter by operation'),
-  activeOnly: z.boolean().optional().default(true),
-  limit: z.number().optional().default(50)
+  activeOnly: coerceOptBool(true),
+  limit: coerceOptNum(50)
 });
 
 export const createAclSchema = z.object({
@@ -21,14 +33,14 @@ export const createAclSchema = z.object({
   roles: z.array(z.string()).optional().describe('Required roles (role names)'),
   condition: z.string().optional().describe('Script condition'),
   script: z.string().optional().describe('Advanced script'),
-  active: z.boolean().optional().default(true)
+  active: coerceOptBool(true)
 });
 
 // ============ ROLES ============
 
 export const getRolesSchema = z.object({
   query: z.string().optional().describe('Query filter for roles'),
-  limit: z.number().optional().default(100)
+  limit: coerceOptNum(100)
 });
 
 export const createRoleSchema = z.object({
@@ -36,7 +48,7 @@ export const createRoleSchema = z.object({
   description: z.string().optional().describe('Role description'),
   suffix: z.string().optional().describe('Suffix for scoped apps'),
   assignableBy: z.string().optional().describe('Role that can assign this role'),
-  elevated: z.boolean().optional().default(false).describe('Is elevated privilege')
+  elevated: coerceOptBool(false).describe('Is elevated privilege')
 });
 
 // ============ IMPLEMENTATIONS ============

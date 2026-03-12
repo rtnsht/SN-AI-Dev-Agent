@@ -1,0 +1,27 @@
+# ============================================================================
+# Docker Compose — Local testing for SN AI Dev Agent
+# Usage:
+#   1. Copy webapp/.env.example to webapp/.env and fill in your keys
+#   2. docker compose up --build
+#   3. Open http://localhost:3000
+# ============================================================================
+
+services:
+  webapp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - webapp/.env
+    environment:
+      - NODE_ENV=production
+    volumes:
+      # Persist logs across container restarts
+      - webapp-logs:/app/webapp/logs
+    restart: unless-stopped
+
+volumes:
+  webapp-logs:
+
