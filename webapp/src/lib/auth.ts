@@ -241,18 +241,30 @@ export async function seedAdmin(): Promise<void> {
   const name = process.env.ADMIN_NAME;
   const passwordHash = process.env.ADMIN_PASSWORD_HASH;
 
-  if (!email || !name || !passwordHash) return; // Not configured
+  if (!email || !name || !passwordHash) {
+    console.warn("[auth] Admin seed skipped — ADMIN_EMAIL, ADMIN_NAME, or ADMIN_PASSWORD_HASH is not set.");
+    _seeded = true;
+    return;
+  }
+
+  // Warn if password hash looks invalid
+  if (!passwordHash.startsWith("$2a$") && !passwordHash.startsWith("$2b$")) {
+    console.warn("[auth] WARNING: ADMIN_PASSWORD_HASH does not look like a bcrypt hash. Login will likely fail.");
+  }
 
   const db = getSupabase();
+  const normalizedEmail = email.toLowerCase().trim();
+
   const { data } = await db
     .from("users")
-    .select("id")
-    .eq("email", email.toLowerCase().trim())
+    .select("id, password_hash, name, role")
+    .eq("email", normalizedEmail)
     .single();
 
   if (!data) {
+    // Insert new admin
     const { error } = await db.from("users").insert({
-      email: email.toLowerCase().trim(),
+      email: normalizedEmail,
       name,
       password_hash: passwordHash,
       role: "admin",
@@ -263,6 +275,30 @@ export async function seedAdmin(): Promise<void> {
       console.error("[auth] Failed to seed admin:", error.message);
     } else {
       console.log(`[auth] Admin user seeded: ${email}`);
+    }
+  } else {
+    // Update existing admin if env vars changed
+    const needsUpdate =
+      data.password_hash !== passwordHash ||
+      data.name !== name ||
+      data.role !== "admin";
+
+    if (needsUpdate) {
+      const { error } = await db
+        .from("users")
+        .update({
+          password_hash: passwordHash,
+          name,
+          role: "admin",
+          status: "active",
+        })
+        .eq("id", data.id);
+
+      if (error) {
+        console.error("[auth] Failed to update admin:", error.message);
+      } else {
+        console.log(`[auth] Admin user updated from env vars: ${email}`);
+      }
     }
   }
 
