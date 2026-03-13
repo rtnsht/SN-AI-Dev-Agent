@@ -88,6 +88,8 @@ export default function Home() {
   const [instancePrompts, setInstancePrompts] = useState<{ icon: string; text: string; desc: string }[] | null>(null);
   // Mobile two-step flow: 'hero' = landing page, 'connect' = full-screen connection panel
   const [mobileStep, setMobileStep] = useState<"hero" | "connect">("hero");
+  // Logged-in webapp user info (name, role) from /api/auth/me
+  const [appUser, setAppUser] = useState<{ name: string; email: string; role: string } | null>(null);
   // Persistent session ID for logging — survives refresh via sessionStorage
   const [clientSessionId] = useState(() => {
     if (typeof window !== "undefined") {
@@ -190,6 +192,14 @@ export default function Home() {
       // Corrupt storage — ignore and start fresh
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Fetch logged-in webapp user info ──
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data) setAppUser(data); })
+      .catch(() => {});
   }, []);
 
   // ── Persist state to sessionStorage on change ──
@@ -1179,17 +1189,31 @@ export default function Home() {
                 </button>
               </>
             )}
-            {/* Admin link (visible only for admin users — role set via middleware header) */}
-            <a
-              href="/admin"
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-[11px] font-medium rounded-md transition-colors"
-              style={{ background: "var(--surface-secondary)", color: "var(--text-secondary)" }}
-              onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-elevated)"; e.currentTarget.style.color = "var(--text-primary)"; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "var(--surface-secondary)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
-              title="Admin Dashboard"
-            >
-              <span className="hidden sm:inline">Admin</span>
-            </a>
+            {/* Logged-in user name */}
+            {appUser?.name && (
+              <span
+                className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-md"
+                style={{ color: "var(--text-secondary)" }}
+                title={appUser.email}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                {appUser.name}
+              </span>
+            )}
+            {/* Admin link — only visible for admin-role users */}
+            {appUser?.role === "admin" && (
+              <a
+                href="/admin"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-[11px] font-medium rounded-md transition-colors"
+                style={{ background: "var(--surface-secondary)", color: "var(--text-secondary)" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-elevated)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "var(--surface-secondary)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+                title="Admin Dashboard"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                <span className="hidden sm:inline">Admin</span>
+              </a>
+            )}
             {/* Logout */}
             <button
               onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}

@@ -42,7 +42,7 @@ export default function RequestAccessPage() {
     <div className="auth-page">
       <div className="auth-card">
         <h1 className="auth-title">Request Access</h1>
-        <p className="auth-subtitle">Tell us about yourself and how you plan to use the tool.</p>
+        <p className="auth-subtitle">Tell us a bit about yourself and what you'd like to build.</p>
 
         {error && <div className="auth-error">{error}</div>}
         {success && <div className="auth-success">{success}</div>}
@@ -76,14 +76,14 @@ export default function RequestAccessPage() {
               onChange={(e) => setCompany(e.target.value)}
             />
 
-            <label className="auth-label">Why do you want access? *</label>
+            <label className="auth-label">What are you looking to build or solve? *</label>
             <textarea
               className="auth-input"
               rows={3}
               value={useCase}
               onChange={(e) => setUseCase(e.target.value)}
               required
-              placeholder="Describe your use case..."
+              placeholder="e.g. Automate change approvals, build a custom portal, streamline incident workflows..."
             />
 
             <button type="submit" className="auth-button" disabled={loading}>
