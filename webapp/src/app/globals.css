@@ -218,21 +218,17 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
+  border-radius: 16px;
   transition: box-shadow var(--transition-normal), filter var(--transition-normal);
+  box-shadow: 0 0 32px color-mix(in srgb, var(--color-primary) 12%, transparent);
 }
-/* Dark mode: soft primary glow around the logo */
-.hero-logo-container {
-  box-shadow: 0 0 48px color-mix(in srgb, var(--color-primary) 18%, transparent);
-}
-/* Light mode: subtle shadow + slight brightness boost so orbitals pop on white page */
 [data-theme="light"] .hero-logo-container {
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
-  filter: brightness(1.1) contrast(1.05);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  filter: brightness(1.05) contrast(1.02);
 }
 .hero-logo {
   object-fit: contain;
-  filter: drop-shadow(0 0 20px color-mix(in srgb, var(--color-primary) 30%, transparent));
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--color-primary) 20%, transparent));
 }
 
 /* ── Hero tagline ── */
@@ -506,13 +502,24 @@ body {
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   LANDING PAGE
+   LANDING PAGE — Enterprise redesign
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .landing-page {
   min-height: 100vh;
   overflow-y: auto;
   position: relative;
+}
+
+/* ── Scroll-reveal animation ── */
+.reveal-section {
+  opacity: 0;
+  transform: translateY(32px);
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal-section.revealed {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 /* ── Landing header (sticky, glass effect) ── */
@@ -526,45 +533,39 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 32px;
   background: transparent;
   border-bottom: 1px solid transparent;
   transition: background var(--transition-normal), border-color var(--transition-normal), backdrop-filter var(--transition-normal);
 }
-
 .landing-header.scrolled {
   background: color-mix(in srgb, var(--surface-primary) 85%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-bottom-color: var(--border-default);
 }
-
 .landing-header-left {
   display: flex;
   align-items: center;
   gap: 10px;
 }
-
 .landing-header-logo {
   width: 32px;
   height: 32px;
   border-radius: 8px;
   object-fit: contain;
 }
-
 .landing-header-name {
   font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
   letter-spacing: -0.01em;
 }
-
 .landing-header-right {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-
 .landing-header-cta {
   display: inline-flex;
   align-items: center;
@@ -578,7 +579,6 @@ body {
   cursor: pointer;
   transition: background var(--transition-fast), border-color var(--transition-fast);
 }
-
 .landing-header-cta:hover {
   background: var(--surface-secondary);
   border-color: var(--text-disabled);
@@ -589,52 +589,34 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  min-height: auto;
-  padding: 80px 24px 48px;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 120px 24px 80px;
   text-align: center;
   position: relative;
-}
-
-/* ── Hero video ── */
-.landing-video-section {
-  padding-top: 0;
-}
-
-.landing-video-container {
-  width: 100%;
-  max-width: 720px;
-  margin-bottom: 40px;
-}
-
-.landing-video-wrapper {
-  position: relative;
-  width: 100%;
-  padding-bottom: 56.25%; /* 16:9 aspect ratio */
-  border-radius: 12px;
   overflow: hidden;
-  border: 1px solid var(--border-default);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
-  background: var(--surface-secondary);
 }
 
-.landing-video-iframe {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  border: none;
+/* Subtle animated dot grid background */
+.landing-hero-grid {
+  position: absolute !important;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--text-disabled) 20%, transparent) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(ellipse 70% 50% at 50% 50%, black 20%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 50% at 50% 50%, black 20%, transparent 100%);
 }
 
 .landing-hero-glow {
-  position: absolute !important;  /* must override .landing-hero > * specificity tie */
-  top: 30%;
+  position: absolute !important;
+  top: 20%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(circle, color-mix(in srgb, var(--color-primary) 6%, transparent), transparent 70%);
+  width: 800px;
+  height: 800px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-primary) 8%, transparent), transparent 60%);
   pointer-events: none;
   z-index: 0;
 }
@@ -644,18 +626,58 @@ body {
   z-index: 1;
 }
 
-.landing-logo-container {
-  width: 180px;
-  height: 180px;
+/* ── Badge pill ── */
+.landing-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--surface-secondary) 80%, transparent);
+  border: 1px solid var(--border-default);
   margin-bottom: 32px;
+  backdrop-filter: blur(8px);
+}
+.landing-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-success);
+  animation: badgePulse 2s ease-in-out infinite;
+}
+@keyframes badgePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
+/* Logo — smaller accent role */
+.landing-logo-container {
+  width: 72px;
+  height: 72px;
+  margin-bottom: 28px;
+}
+
+/* ── Hero title — gradient text ── */
 .landing-title {
-  font-size: clamp(28px, 4vw, 42px);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  margin-bottom: 12px;
-  color: var(--text-primary);
+  font-size: clamp(36px, 5vw, 64px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin-bottom: 20px;
+  background: linear-gradient(
+    135deg,
+    var(--text-primary) 0%,
+    var(--text-primary) 40%,
+    var(--color-primary) 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  max-width: 700px;
 }
 
 .landing-hero-tagline {
@@ -663,19 +685,26 @@ body {
 }
 
 .landing-subtitle {
-  font-size: clamp(13px, 2vw, 15px);
-  color: var(--text-disabled);
-  margin-bottom: 40px;
-  letter-spacing: 0.05em;
+  font-size: clamp(15px, 2vw, 18px);
+  color: var(--text-secondary);
+  margin-bottom: 48px;
+  line-height: 1.6;
+  max-width: 540px;
 }
 
-/* ── CTA button ── */
+/* ── CTA group ── */
+.landing-cta-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .landing-cta-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 14px 36px;
+  gap: 8px;
+  padding: 14px 32px;
   border-radius: 12px;
   font-size: 15px;
   font-weight: 600;
@@ -683,84 +712,288 @@ body {
   background: var(--color-primary);
   border: none;
   cursor: pointer;
-  transition: background var(--transition-normal), transform var(--transition-fast), box-shadow var(--transition-normal);
-  box-shadow: 0 0 20px color-mix(in srgb, var(--color-primary) 25%, transparent);
+  transition: background 200ms, transform 150ms, box-shadow 200ms;
+  box-shadow: 0 0 24px color-mix(in srgb, var(--color-primary) 20%, transparent),
+              0 1px 2px rgba(0, 0, 0, 0.2);
 }
 .landing-cta-button:hover {
   background: var(--color-primary-hover);
   transform: translateY(-1px);
-  box-shadow: 0 0 30px color-mix(in srgb, var(--color-primary) 35%, transparent);
+  box-shadow: 0 0 40px color-mix(in srgb, var(--color-primary) 30%, transparent),
+              0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-/* ── Generic section ── */
-.landing-section {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 48px 24px;
-}
-
-.landing-section-title {
-  font-size: clamp(20px, 3vw, 28px);
+.landing-cta-secondary {
+  display: inline-flex;
+  align-items: center;
+  padding: 14px 28px;
+  border-radius: 12px;
+  font-size: 15px;
   font-weight: 500;
-  text-align: center;
-  margin-bottom: 32px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-emphasis);
+  cursor: pointer;
+  transition: background 150ms, color 150ms, border-color 150ms;
+}
+.landing-cta-secondary:hover {
+  background: var(--surface-secondary);
   color: var(--text-primary);
-  letter-spacing: -0.01em;
+  border-color: var(--text-disabled);
 }
 
-.landing-features-block {
-  max-width: 600px;
+/* ── Hero video ── */
+.landing-video-section {
+  padding-top: 0;
+}
+.landing-video-container {
+  width: 100%;
+  max-width: 800px;
+  margin-bottom: 40px;
+}
+.landing-video-wrapper {
+  position: relative;
+  width: 100%;
+  padding-bottom: 56.25%;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+  background: var(--surface-secondary);
+}
+.landing-video-iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+/* ═══ Trust Bar ═══ */
+.landing-trust {
+  max-width: 800px;
   margin: 0 auto;
+  padding: 48px 24px 32px;
+}
+.landing-trust-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border-default);
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.landing-trust-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 28px 16px;
+  background: var(--surface-primary);
+}
+.landing-trust-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-primary);
+  letter-spacing: -0.02em;
+}
+.landing-trust-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
-/* ── How-it-works steps ── */
-.landing-steps-grid {
+/* ═══ Generic section ═══ */
+.landing-section {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 80px 24px;
+}
+.landing-section-eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-primary);
+  text-align: center;
+  margin-bottom: 12px;
+}
+.landing-section-title {
+  font-size: clamp(24px, 3.5vw, 36px);
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 48px;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+/* ═══ Feature Cards ═══ */
+.landing-features-section {
+  padding-top: 64px;
+}
+.landing-features-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 20px;
 }
-
-.landing-step-card {
-  background: var(--surface-secondary);
+.landing-feature-card {
+  background: var(--surface-primary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
-  padding: 24px 20px;
-  text-align: center;
+  border-radius: 16px;
+  padding: 32px 24px;
+  transition: border-color 200ms, box-shadow 200ms, transform 200ms;
 }
-
-.landing-step-number {
-  display: inline-flex;
+.landing-feature-card:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 30%, var(--border-default));
+  box-shadow: 0 0 32px color-mix(in srgb, var(--color-primary) 6%, transparent);
+  transform: translateY(-2px);
+}
+.landing-feature-icon {
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
   color: var(--color-primary);
-  font-size: 14px;
-  font-weight: 700;
-  margin-bottom: 12px;
+  margin-bottom: 20px;
 }
-
-.landing-step-title {
-  font-size: 14px;
+.landing-feature-title {
+  font-size: 16px;
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 8px;
+  letter-spacing: -0.01em;
 }
-
-.landing-step-desc {
-  font-size: 12px;
+.landing-feature-desc {
+  font-size: 14px;
   color: var(--text-secondary);
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
-/* ── Footer CTA ── */
+/* ═══ How It Works — Steps ═══ */
+.landing-steps-section {
+  padding-top: 64px;
+}
+.landing-steps-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  position: relative;
+}
+.landing-step-card {
+  background: var(--surface-primary);
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  padding: 32px 24px 28px;
+  position: relative;
+}
+.landing-step-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.landing-step-number {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.landing-step-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  color: var(--color-primary);
+}
+.landing-step-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  letter-spacing: -0.01em;
+}
+.landing-step-desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+/* Connector arrow between step cards (desktop only) */
+.landing-step-connector {
+  display: none;
+}
+@media (min-width: 641px) {
+  .landing-step-connector {
+    display: block;
+    position: absolute;
+    top: 52px;
+    right: -16px;
+    width: 8px;
+    height: 8px;
+    border-top: 2px solid var(--border-emphasis);
+    border-right: 2px solid var(--border-emphasis);
+    transform: rotate(45deg);
+    opacity: 0.5;
+  }
+}
+
+/* ═══ Highlight Banner ═══ */
+.landing-highlight {
+  position: relative;
+  border-radius: 20px;
+  padding: 2px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent-from));
+  overflow: hidden;
+}
+.landing-highlight-content {
+  background: var(--surface-primary);
+  border-radius: 18px;
+  padding: 48px 40px;
+  text-align: center;
+}
+.landing-highlight-title {
+  font-size: clamp(20px, 3vw, 28px);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  letter-spacing: -0.02em;
+}
+.landing-highlight-desc {
+  font-size: 15px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* ═══ Footer CTA ═══ */
 .landing-footer-cta {
   text-align: center;
-  padding-bottom: 80px;
+  padding-bottom: 96px;
 }
-
+.landing-cta-headline {
+  font-size: clamp(28px, 4vw, 44px);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.03em;
+  margin-bottom: 12px;
+}
+.landing-cta-subtext {
+  font-size: 16px;
+  color: var(--text-secondary);
+  margin-bottom: 36px;
+}
 .landing-signin-link {
   margin-top: 16px;
   font-size: 13px;
@@ -773,12 +1006,10 @@ body {
 
 .site-footer {
   position: relative;
-  padding: 80px 24px 60px;
+  padding: 64px 24px 48px;
   text-align: center;
   background: var(--surface-primary);
 }
-
-/* Gradient glow separator at top of footer */
 .site-footer::before {
   content: "";
   position: absolute;
@@ -797,45 +1028,39 @@ body {
     transparent
   );
 }
-
 .site-footer-logo {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   object-fit: contain;
-  margin: 0 auto 12px;
+  margin: 0 auto 10px;
 }
-
 .site-footer-name {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   letter-spacing: -0.01em;
 }
-
 .site-footer-love {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-secondary);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
-
 .site-footer-heart {
   display: inline-flex;
   color: var(--color-danger);
   opacity: 0.8;
 }
-
 .site-footer-creator {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-disabled);
-  margin-bottom: 32px;
+  margin-bottom: 28px;
 }
-
 .site-footer-creator a {
   color: var(--text-secondary);
   text-decoration: none;
@@ -844,30 +1069,26 @@ body {
   gap: 5px;
   transition: color var(--transition-fast);
 }
-
 .site-footer-creator a:hover {
   color: var(--color-primary);
 }
-
 .site-footer-linkedin-icon {
   display: inline-flex;
   width: 14px;
   height: 14px;
 }
-
 .site-footer-divider {
   width: 40px;
   height: 1px;
   background: var(--border-default);
-  margin: 0 auto 20px;
+  margin: 0 auto 16px;
 }
-
 .site-footer-copyright {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-disabled);
 }
 
-/* ── Mobile responsive ── */
+/* ═══ Mobile responsive ═══ */
 @media (max-width: 640px) {
   .landing-header {
     padding: 0 16px;
@@ -875,28 +1096,51 @@ body {
   .landing-header-name {
     display: none;
   }
+  .landing-hero {
+    min-height: auto;
+    padding: 100px 20px 48px;
+  }
   .landing-logo-container {
-    width: 80px;
-    height: 80px;
+    width: 56px;
+    height: 56px;
     margin-bottom: 20px;
+  }
+  .landing-title {
+    font-size: 32px;
+  }
+  .landing-cta-group {
+    flex-direction: column;
+    width: 100%;
+    gap: 10px;
+  }
+  .landing-cta-button,
+  .landing-cta-secondary {
+    width: 100%;
+    justify-content: center;
+  }
+  .landing-trust-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .landing-features-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
   }
   .landing-steps-grid {
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: 16px;
   }
-  .landing-cta-button {
-    width: 100%;
-    padding: 16px 24px;
+  .landing-section {
+    padding: 48px 20px;
   }
-  .landing-hero {
-    padding: 72px 16px 32px;
+  .landing-highlight-content {
+    padding: 32px 24px;
   }
   .landing-video-container {
     max-width: 100%;
     margin-bottom: 28px;
   }
   .site-footer {
-    padding: 60px 16px 40px;
+    padding: 48px 16px 36px;
   }
 }
 
