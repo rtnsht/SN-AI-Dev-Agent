@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import ThemeToggle from "@/components/ThemeToggle";
 import ConnectModal from "@/components/ConnectModal";
+import Footer from "@/components/Footer";
 import { APP_NAME, APP_LOGO, APP_HERO_TAGLINE, APP_SUBTITLE, HERO_FEATURES, HERO_VIDEO_URL } from "@/lib/branding";
 
 /** Normalise any YouTube/Vimeo URL to a proper embed URL with autoplay */
@@ -33,13 +34,43 @@ function getVideoEmbedUrl(url: string): string {
 
 export default function LandingPage() {
   const [showModal, setShowModal] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 50);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   return (
     <div className="landing-page" style={{ background: "var(--surface-app)", color: "var(--text-primary)" }}>
-      {/* Theme toggle — top right */}
-      <div className="landing-theme-toggle">
-        <ThemeToggle />
-      </div>
+      {/* ═══ Sticky Header ═══ */}
+      <header className={`landing-header${scrolled ? " scrolled" : ""}`}>
+        <div className="landing-header-left">
+          {APP_LOGO && (
+            <Image
+              src={APP_LOGO}
+              alt={APP_NAME || "Logo"}
+              width={32}
+              height={32}
+              className="landing-header-logo"
+              unoptimized
+            />
+          )}
+          <span className="landing-header-name">{APP_NAME}</span>
+        </div>
+        <div className="landing-header-right">
+          <ThemeToggle />
+          <button
+            onClick={() => setShowModal(true)}
+            className="landing-header-cta"
+          >
+            Get Started
+          </button>
+        </div>
+      </header>
 
       {/* ═══ Section 1: Hero ═══ */}
       <section className="landing-hero">
@@ -174,6 +205,9 @@ export default function LandingPage() {
           </button>
         </p>
       </section>
+
+      {/* ═══ Site Footer ═══ */}
+      <Footer />
 
       {/* Smart login modal */}
       <ConnectModal open={showModal} onClose={() => setShowModal(false)} />

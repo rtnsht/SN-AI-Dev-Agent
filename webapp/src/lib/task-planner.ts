@@ -14,6 +14,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { chatCompletion, OpenRouterMessage, OpenRouterTool } from "./openrouter";
 import { logger } from "./logger";
 import { SessionCache } from "./session-cache";
+import { APP_NAME } from "./branding";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -201,7 +202,7 @@ export async function generatePlan(
         { role: "user", content: userMessage },
       ];
       const response = await chatCompletion(
-        { apiKey: llmConfig.openRouterApiKey, siteName: "Yantra AI Dev Agent" },
+        { apiKey: llmConfig.openRouterApiKey, siteName: APP_NAME || "AI Dev Agent" },
         { model: llmConfig.model, messages: orMessages, max_tokens: 2048 }
       );
       responseText = response.choices[0]?.message?.content || "";

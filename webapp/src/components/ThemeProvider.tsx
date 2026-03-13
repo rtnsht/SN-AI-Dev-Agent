@@ -38,7 +38,7 @@ export default function ThemeProvider({ children }: { children: React.ReactNode 
     setTheme(initial);
     document.documentElement.setAttribute("data-theme", initial);
     applyBrandColors(initial);
-    localStorage.setItem("yantra-theme", initial);
+    localStorage.setItem("app-theme", initial);
     setMounted(true);
   }, []);
 
@@ -47,7 +47,7 @@ export default function ThemeProvider({ children }: { children: React.ReactNode 
     if (!mounted) return;
     document.documentElement.setAttribute("data-theme", theme);
     applyBrandColors(theme);
-    localStorage.setItem("yantra-theme", theme);
+    localStorage.setItem("app-theme", theme);
   }, [theme, mounted]);
 
   const toggleTheme = useCallback(() => {
