@@ -19,6 +19,7 @@ import { buildSystemPrompt, buildDynamicContext } from "./system-prompt";
 import { logger } from "./logger";
 import { chatCompletion, OpenRouterRequest, OpenRouterMessage, OpenRouterContentBlock, OpenRouterTool } from "./openrouter";
 import { getSessionCache, SessionCache } from "./session-cache";
+import { APP_NAME } from "./branding";
 import { shouldPlan, generatePlan, executePlan, formatGatheredData, type PlanStreamEvent, type ExecutionPlan } from "./task-planner";
 
 /* ── Context management constants ─────────────────────────────── */
@@ -770,7 +771,7 @@ async function chatOpenRouter(
     logger.info(sessionId, "openrouter_api", `Round ${rounds}: Calling OpenRouter API`, { messageCount: orMessages.length, model });
 
     const response = await chatCompletion(
-      { apiKey: credentials.openRouterApiKey!, siteName: "Yantra AI Dev Agent" },
+      { apiKey: credentials.openRouterApiKey!, siteName: APP_NAME || "AI Dev Agent" },
       { model, messages: orMessages, tools, tool_choice: "auto", max_tokens: 8192 }
     );
 
@@ -1381,7 +1382,7 @@ async function* chatStreamOpenRouter(
     for (let attempt = 0; ; attempt++) {
       try {
         response = await chatCompletion(
-          { apiKey: credentials.openRouterApiKey!, siteName: "Yantra AI Dev Agent" },
+          { apiKey: credentials.openRouterApiKey!, siteName: APP_NAME || "AI Dev Agent" },
           { model, messages: orMessages, tools, tool_choice: "auto", max_tokens: 8192 }
         );
         break;

@@ -1,7 +1,7 @@
 /**
  * Centralized branding configuration.
  * All values are configurable via NEXT_PUBLIC_ environment variables.
- * Defaults match the original Yantra branding.
+ * Defaults match the original branding.
  */
 
 // ── App Identity ────────────────────────────────────────────────────────────
@@ -12,6 +12,8 @@ export const APP_DESCRIPTION = process.env.NEXT_PUBLIC_APP_DESCRIPTION || "";
 export const APP_LOGO        = process.env.NEXT_PUBLIC_APP_LOGO        || "";
 export const APP_HERO_TAGLINE = process.env.NEXT_PUBLIC_HERO_TAGLINE   || "";
 export const HERO_VIDEO_URL   = process.env.NEXT_PUBLIC_HERO_VIDEO_URL  || "";
+export const CREATOR_NAME     = process.env.NEXT_PUBLIC_CREATOR_NAME     || "Ratnesh";
+export const CREATOR_LINKEDIN = process.env.NEXT_PUBLIC_CREATOR_LINKEDIN || "";
 export const SHOW_INFO_BUTTON = process.env.NEXT_PUBLIC_SHOW_INFO_BUTTON !== "false"; // default: true
 
 // ── Landing Page Feature Pills ──────────────────────────────────────────────

@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   YANTRA DESIGN SYSTEM — Dark-first, Linear-inspired
+   DESIGN SYSTEM — Dark-first, Linear-inspired
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
@@ -515,11 +515,73 @@ body {
   position: relative;
 }
 
-.landing-theme-toggle {
+/* ── Landing header (sticky, glass effect) ── */
+.landing-header {
   position: fixed;
-  top: 16px;
-  right: 16px;
-  z-index: 10;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background: transparent;
+  border-bottom: 1px solid transparent;
+  transition: background var(--transition-normal), border-color var(--transition-normal), backdrop-filter var(--transition-normal);
+}
+
+.landing-header.scrolled {
+  background: color-mix(in srgb, var(--surface-primary) 85%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom-color: var(--border-default);
+}
+
+.landing-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.landing-header-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+.landing-header-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.landing-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.landing-header-cta {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--border-emphasis);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.landing-header-cta:hover {
+  background: var(--surface-secondary);
+  border-color: var(--text-disabled);
 }
 
 /* ── Hero section ── */
@@ -529,7 +591,7 @@ body {
   align-items: center;
   justify-content: flex-start;
   min-height: auto;
-  padding: 60px 24px 48px;
+  padding: 80px 24px 48px;
   text-align: center;
   position: relative;
 }
@@ -705,8 +767,114 @@ body {
   color: var(--text-disabled);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   SITE FOOTER
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.site-footer {
+  position: relative;
+  padding: 80px 24px 60px;
+  text-align: center;
+  background: var(--surface-primary);
+}
+
+/* Gradient glow separator at top of footer */
+.site-footer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60%;
+  max-width: 400px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--border-emphasis) 20%,
+    color-mix(in srgb, var(--color-primary) 40%, transparent) 50%,
+    var(--border-emphasis) 80%,
+    transparent
+  );
+}
+
+.site-footer-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  object-fit: contain;
+  margin: 0 auto 12px;
+}
+
+.site-footer-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 24px;
+  letter-spacing: -0.01em;
+}
+
+.site-footer-love {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.site-footer-heart {
+  display: inline-flex;
+  color: var(--color-danger);
+  opacity: 0.8;
+}
+
+.site-footer-creator {
+  font-size: 13px;
+  color: var(--text-disabled);
+  margin-bottom: 32px;
+}
+
+.site-footer-creator a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: color var(--transition-fast);
+}
+
+.site-footer-creator a:hover {
+  color: var(--color-primary);
+}
+
+.site-footer-linkedin-icon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+}
+
+.site-footer-divider {
+  width: 40px;
+  height: 1px;
+  background: var(--border-default);
+  margin: 0 auto 20px;
+}
+
+.site-footer-copyright {
+  font-size: 12px;
+  color: var(--text-disabled);
+}
+
 /* ── Mobile responsive ── */
 @media (max-width: 640px) {
+  .landing-header {
+    padding: 0 16px;
+  }
+  .landing-header-name {
+    display: none;
+  }
   .landing-logo-container {
     width: 80px;
     height: 80px;
@@ -721,11 +889,14 @@ body {
     padding: 16px 24px;
   }
   .landing-hero {
-    padding: 48px 16px 32px;
+    padding: 72px 16px 32px;
   }
   .landing-video-container {
     max-width: 100%;
     margin-bottom: 28px;
+  }
+  .site-footer {
+    padding: 60px 16px 40px;
   }
 }
 
