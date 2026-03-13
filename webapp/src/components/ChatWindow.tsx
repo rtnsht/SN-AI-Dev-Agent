@@ -158,6 +158,9 @@ function friendlyToolLabel(toolName: string, input?: Record<string, unknown>): s
   const table = input?.table as string | undefined;
   const name = input?.name as string | undefined;
   const query = input?.query as string | undefined;
+  // For generic sn_create_record / sn_update_record, artifact name lives inside data
+  const dataName = (input?.data as Record<string, unknown>)?.name as string | undefined;
+  const effectiveName = name || dataName;
 
   // sn_get_* tools — "Looking up X" or "X on table"
   const getMap: Record<string, string> = {
@@ -179,19 +182,30 @@ function friendlyToolLabel(toolName: string, input?: Record<string, unknown>): s
   if (getMap[toolName]) return getMap[toolName];
 
   // sn_query_records / sn_read_record
-  if (toolName === "sn_query_records") return table ? `Querying ${table} records` : "Querying records";
+  if (toolName === "sn_query_records") {
+    const filter = (input?.encoded_query as string | undefined) || query;
+    if (table && filter) {
+      const short = filter.length > 40 ? filter.slice(0, 40) + "..." : filter;
+      return `Querying ${table}: ${short}`;
+    }
+    return table ? `Querying ${table}` : "Querying records";
+  }
   if (toolName === "sn_read_record" || toolName === "sn_get_record") return table ? `Reading ${table} record` : "Reading record";
 
   // sn_create_* tools
   if (toolName.startsWith("sn_create_")) {
     const entity = toolName.replace("sn_create_", "").replace(/_/g, " ");
-    return name ? `Creating ${entity}: ${name}${table ? ` on ${table}` : ""}` : `Creating ${entity}${table ? ` on ${table}` : ""}`;
+    return effectiveName
+      ? `Creating ${entity}: ${effectiveName}${table ? ` on ${table}` : ""}`
+      : `Creating ${entity}${table ? ` on ${table}` : ""}`;
   }
 
   // sn_update_* tools
   if (toolName.startsWith("sn_update_")) {
     const entity = toolName.replace("sn_update_", "").replace(/_/g, " ");
-    return name ? `Updating ${entity}: ${name}` : `Updating ${entity}`;
+    return effectiveName
+      ? `Updating ${entity}: ${effectiveName}`
+      : `Updating ${entity}`;
   }
 
   // sn_list_* tools
@@ -207,7 +221,11 @@ function friendlyToolLabel(toolName: string, input?: Record<string, unknown>): s
 
   // sn_set_* / sn_move_*
   if (toolName === "sn_set_current_update_set") return "Setting active update set";
-  if (toolName === "sn_move_to_update_set") return "Moving artifact to update set";
+  if (toolName === "sn_move_to_update_set") {
+    return table ? `Moving ${table} to update set` : "Moving artifact to update set";
+  }
+  if (toolName === "sn_complete_update_set") return "Completing update set";
+  if (toolName === "sn_verify_update_set_capture") return "Verifying update set capture";
 
   // Flow designer
   if (toolName === "sn_get_flow") return "Reading flow details";
