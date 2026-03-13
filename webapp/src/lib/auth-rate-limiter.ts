@@ -65,3 +65,8 @@ export function checkInviteRegister(ip: string) {
   return check(`invite:${ip}`, 10, 60 * 60 * 1000);
 }
 
+/** Email lookup (check-email): 20 per IP per 15 min */
+export function checkEmailLookup(ip: string) {
+  return check(`emaillookup:${ip}`, 20, 15 * 60 * 1000);
+}
+

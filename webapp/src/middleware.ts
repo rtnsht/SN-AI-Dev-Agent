@@ -25,14 +25,10 @@ const PUBLIC_PATHS = [
   "/auth/verify",
   "/auth/verify-email",
   "/auth/set-password",
-  "/api/auth/",
+  "/api/auth/",           // includes /api/auth/check-email
   "/api/config",
-  "/api/test-connection",
-  "/api/session-start",
   "/api/instance-prompts",
   "/api/openrouter-models",
-  "/api/chat-stream",
-  "/api/chat",
 ];
 
 /** Check if a path is public (no auth needed) */
@@ -61,6 +57,13 @@ function isAdminPath(pathname: string): boolean {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // ── Dev bypass: skip all auth when BYPASS_AUTH=true ──────────────────────
+  // Safe because: (a) webapp/.env is never deployed to Render,
+  // (b) render.yaml explicitly sets BYPASS_AUTH=false.
+  if (process.env.BYPASS_AUTH === "true") {
+    return NextResponse.next();
+  }
 
   // Seed admin on first request (idempotent)
   try {

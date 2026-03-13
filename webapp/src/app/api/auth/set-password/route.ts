@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     // Upgrade temporary session to full session
     if (session.is_temporary) {
       const expiresAt = await upgradeSession(sessionToken);
-      const response = NextResponse.json({ success: true, redirect: "/" });
+      const response = NextResponse.json({ success: true, redirect: "/app" });
       response.headers.set("Set-Cookie", buildSetCookieHeader(sessionToken, expiresAt));
       return response;
     }

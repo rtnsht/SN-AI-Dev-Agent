@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json({
       success: true,
       mustSetPassword: false,
-      redirect: "/",
+      redirect: "/app",
       user: { id: user.id, email: user.email, name: user.name, role: user.role },
     });
     response.headers.set("Set-Cookie", buildSetCookieHeader(sessionToken, expiresAt));

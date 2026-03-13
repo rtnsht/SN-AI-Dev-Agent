@@ -8,9 +8,9 @@
 | **Spec Version** | 1.0 |
 | **Author** | AI Agent |
 | **Created** | 2026-03-12 |
-| **Last Updated** | 2026-03-12 |
-| **Version** | 1.0 |
-| **Status** | Draft |
+| **Last Updated** | 2026-03-13 |
+| **Version** | 2.0 |
+| **Status** | Approved |
 
 ---
 
@@ -124,7 +124,7 @@ Visitor → /request-access
     │   │   │   └─ Redirect → /auth/set-password
     │   │   └─ user.must_set_password === false?
     │   │       ├─ Create full session (SESSION_MAX_AGE_DAYS)
-    │   │       └─ Redirect → / (app)
+    │   │       └─ Redirect → /app
     │   └─ Token invalid? → "Invalid or expired link"
     │
     └─ User sets password → /auth/set-password
@@ -133,7 +133,7 @@ Visitor → /request-access
         ├─ bcrypt hash (cost 12), store in users.password_hash
         ├─ Set must_set_password → false
         ├─ Upgrade temp session → full session (SESSION_MAX_AGE_DAYS)
-        └─ Redirect → / (app)
+        └─ Redirect → /app
 ```
 
 ### 3.3 Auth Flow — Invite Code Path
@@ -153,13 +153,50 @@ Visitor → /invite/:code
         ├─ Create user (status: active, must_set_password: false, password_hash: bcrypt)
         ├─ Increment invite_codes.times_used
         ├─ Create session (SESSION_MAX_AGE_DAYS)
-        └─ Redirect → / (app)
+        └─ Redirect → /app
 ```
 
-### 3.4 Auth Flow — Login (Returning Users)
+### 3.4 Auth Flow — Smart Email-First Login (Landing Page)
+
+> **Updated 2026-03-13:** The landing page (`/`) now uses a smart email-first login modal instead of redirecting to `/login`. The `/login` page still exists as a fallback for direct URL access and middleware redirects.
 
 ```
-User → /login
+Visitor → / (landing page)
+    │
+    ├─ Clicks "Connect Now" → opens ConnectModal
+    │
+    ├─ Step 1: Email Input
+    │   ├─ POST /api/auth/check-email
+    │   │   ├─ Rate limit: 20 per IP per 15 min
+    │   │   ├─ Lookup email in users table
+    │   │   ├─ Result: "known" (active user) or "unknown"
+    │   │   ├─ HMAC-sign: HMAC-SHA256(email|result, AUTH_HINT_SECRET)
+    │   │   ├─ Set HttpOnly cookie: auth_hint=<hmac>.<result>; Max-Age=300
+    │   │   └─ Response: { continue: true } (always identical — anti-enumeration)
+    │   │
+    │   └─ GET /api/auth/check-email/step
+    │       ├─ Read auth_hint cookie
+    │       ├─ Verify HMAC, extract result
+    │       ├─ Clear cookie
+    │       └─ Response: { step: "password" } or { step: "request" }
+    │
+    ├─ Step 2a: Known User → Password Input
+    │   ├─ POST /api/auth/login (existing endpoint)
+    │   ├─ Success → redirect to /app
+    │   ├─ Failure → inline error, retry
+    │   └─ "Forgot password?" → POST /api/auth/forgot-password (existing)
+    │
+    └─ Step 2b: Unknown User → Request Access Form
+        ├─ Pre-filled email from Step 1
+        ├─ Additional fields: name, company (optional), use_case (optional)
+        ├─ POST /api/auth/request-access (existing endpoint)
+        └─ Success → "Check your email" confirmation
+```
+
+### 3.5 Auth Flow — Login via /login (Fallback)
+
+```
+User → /login (direct URL or middleware redirect)
     │
     ├─ POST /api/auth/login
     │   ├─ Rate limit: 5 attempts per email per 15 min
@@ -169,7 +206,7 @@ User → /login
     │   ├─ User found, password matches, user.status === 'active'?
     │   │   ├─ Create session (SESSION_MAX_AGE_DAYS)
     │   │   ├─ Update users.last_login
-    │   │   └─ Set cookie → redirect to / (app)
+    │   │   └─ Set cookie → redirect to /app
     │   └─ User found but status === 'suspended'?
     │       └─ 401: "Invalid email or password" (no enumeration)
     │
@@ -181,7 +218,7 @@ User → /login
         └─ User clicks magic link → /auth/verify → set-password flow
 ```
 
-### 3.5 Session Validation (Every Request)
+### 3.6 Session Validation (Every Request)
 
 ```
 middleware.ts runs on every request
@@ -207,7 +244,13 @@ middleware.ts runs on every request
     └─ Public routes (bypass auth):
         /, /login, /request-access, /invite/:code,
         /auth/verify, /auth/verify-email, /auth/set-password,
-        /api/auth/*, /_next/*, /favicon.ico, static assets
+        /api/auth/* (includes /api/auth/check-email),
+        /api/config, /api/instance-prompts, /api/openrouter-models,
+        /_next/*, /favicon.ico, static assets
+
+    Protected API routes (require session):
+        /api/chat-stream, /api/chat, /api/test-connection,
+        /api/session-start, /api/admin/*
 ```
 
 
@@ -215,22 +258,30 @@ middleware.ts runs on every request
 
 ## 4. Page & Route Structure
 
-### 4.1 New Pages
+### 4.1 Pages
+
+> **Updated 2026-03-13:** Added `/` (landing page) and `/app` (protected app UI). The root path now renders a public landing page with a smart login modal, while the full app UI lives at `/app` behind auth.
 
 | Route | Component | Auth Required | Purpose |
 |-------|-----------|---------------|---------|
-| `/login` | `LoginPage` | No | Email + password form, "Forgot password?" link |
-| `/request-access` | `RequestAccessPage` | No | Name, email, company, use_case form |
+| `/` | `LandingPage` | No | Public landing page with hero, features, CTA, smart login modal |
+| `/app` | `Home` | **Yes** | Full app UI — chat, settings, phase tracker (moved from `/`) |
+| `/login` | `LoginPage` | No | Email + password form, "Forgot password?" link (fallback) |
+| `/request-access` | `RequestAccessPage` | No | Name, email, company, use_case form (standalone fallback) |
 | `/auth/verify` | `VerifyPage` | No | Magic link landing — validates token |
 | `/auth/verify-email` | `VerifyEmailPage` | No | Email verification landing |
 | `/auth/set-password` | `SetPasswordPage` | Temp session | Set password form (min 8 chars) |
 | `/invite/[code]` | `InvitePage` | No | Invite code registration form |
 | `/admin` | `AdminDashboard` | Admin only | Approve/reject requests, manage users, invite codes |
 
-### 4.2 New API Routes
+### 4.2 API Routes
+
+> **Updated 2026-03-13:** Added `check-email` endpoints for the smart login flow. Moved `/api/chat-stream`, `/api/chat`, `/api/test-connection`, `/api/session-start` behind auth.
 
 | Endpoint | Method | Auth | Purpose |
 |----------|--------|------|---------|
+| `/api/auth/check-email` | POST | No | Check email existence, set HMAC hint cookie (anti-enumeration) |
+| `/api/auth/check-email/step` | GET | No | Read hint cookie, return next step (password or request) |
 | `/api/auth/request-access` | POST | No | Submit access request |
 | `/api/auth/verify-email` | POST | No | Verify email token |
 | `/api/auth/verify-magic-link` | POST | No | Validate magic link, create session |
@@ -239,6 +290,13 @@ middleware.ts runs on every request
 | `/api/auth/forgot-password` | POST | No | Request password reset magic link |
 | `/api/auth/logout` | POST | Yes | Clear session |
 | `/api/auth/register-invite` | POST | No | Register via invite code |
+| `/api/chat-stream` | POST | **Yes** | AI chat (streaming) — moved behind auth |
+| `/api/chat` | POST | **Yes** | AI chat (non-streaming) — moved behind auth |
+| `/api/test-connection` | POST | **Yes** | Test SN connection — moved behind auth |
+| `/api/session-start` | POST | **Yes** | Log session telemetry — moved behind auth |
+| `/api/config` | GET | No | Server config (feature flags, SN creds check) |
+| `/api/instance-prompts` | POST | No | Instance-specific example prompts |
+| `/api/openrouter-models` | GET | No | Available OpenRouter models |
 | `/api/admin/requests` | GET | Admin | List access requests |
 | `/api/admin/requests/[id]` | PATCH | Admin | Approve/reject a request |
 | `/api/admin/users` | GET | Admin | List users |
@@ -248,13 +306,19 @@ middleware.ts runs on every request
 
 ### 4.3 Modified Existing Routes
 
-| Route | Change |
+> **Updated 2026-03-13:** Reflects landing page + smart login flow changes.
+
+| Route / File | Change |
 |-------|--------|
-| `middleware.ts` (new) | Auth gate — intercepts all requests |
-| `page.tsx` | Wrapped: only renders for authenticated users |
-| `/api/chat/route.ts` | Protected by middleware (no code change needed) |
-| `/api/chat-stream/route.ts` | Protected by middleware (no code change needed) |
-| All other `/api/*` routes | Protected by middleware (no code change needed) |
+| `middleware.ts` | Removed `/api/chat-stream`, `/api/chat`, `/api/test-connection`, `/api/session-start` from `PUBLIC_PATHS` |
+| `page.tsx` | Replaced `Home` component with `LandingPage` import |
+| `app/app/page.tsx` | **New** — renders `Home` component (moved from `page.tsx`) |
+| `login/page.tsx` | Default redirect changed from `"/"` to `"/app"` |
+| `auth/set-password/page.tsx` | Fallback redirect changed to `"/app"` |
+| `api/auth/set-password/route.ts` | Response redirect changed to `"/app"` |
+| `api/auth/verify-magic-link/route.ts` | Response redirect changed to `"/app"` |
+| `auth/verify/page.tsx` | Fallback redirect changed to `"/app"` |
+| `invite/[code]/page.tsx` | `router.push("/")` changed to `router.push("/app")` |
 
 ---
 
@@ -375,19 +439,25 @@ Row Level Security is **disabled** on all tables. All queries go through the `SU
 
 ### 6.4 Brute Force Protection
 
+> **Updated 2026-03-13:** Added email lookup rate limiter for the smart login flow.
+
 | Target | Limit | Window | Key |
 |--------|-------|--------|-----|
 | Login (`/api/auth/login`) | 5 attempts | 15 min | email |
 | Magic link request (`/api/auth/forgot-password`) | 3 requests | 1 hour | email |
 | Request access (`/api/auth/request-access`) | 10 requests | 1 hour | IP |
 | Invite code registration (`/api/auth/register-invite`) | 10 attempts | 1 hour | IP |
+| **Email lookup (`/api/auth/check-email`)** | **20 requests** | **15 min** | **IP** |
 
 Implementation: In-memory map with sliding window (same pattern as existing `rate-limiter.ts`). Keyed by email or IP depending on endpoint.
 
 ### 6.5 User Enumeration Prevention
 
+> **Updated 2026-03-13:** Added HMAC-signed cookie approach for the smart email-first login flow.
+
 | Endpoint | Response (regardless of email existence) |
 |----------|------------------------------------------|
+| **Email check (`/api/auth/check-email`)** | **Always `{ continue: true }`. Account existence encoded in HMAC-signed HttpOnly cookie (see Section 3.4).** |
 | Login | "Invalid email or password" |
 | Forgot password | "If this email is registered, you'll receive a link" |
 | Request access | "We've received your request" (silently deduplicates) |
@@ -548,6 +618,10 @@ ZEPTOMAIL_BOUNCE_ADDRESS=bounce@bounce.yourdomain.com
 LOGIN_MAX_ATTEMPTS=5
 LOGIN_WINDOW_MINUTES=15
 
+# Smart login flow (email-check anti-enumeration)
+# Generate with: openssl rand -hex 32
+AUTH_HINT_SECRET=<64-char-hex-string>
+
 # Feature flags
 REQUIRE_ACCESS_APPROVAL=true
 REQUIRE_EMAIL_VERIFICATION=true
@@ -557,6 +631,8 @@ REQUIRE_EMAIL_VERIFICATION=true
 
 ## 9. File Structure (New Files)
 
+> **Updated 2026-03-13:** Added landing page, smart login modal, `/app` route, and check-email API endpoints.
+
 ```
 webapp/src/
 ├── middleware.ts                          # Auth gate — intercepts all requests
@@ -564,10 +640,15 @@ webapp/src/
 │   ├── supabase.ts                       # Supabase server client (service_role)
 │   ├── auth.ts                           # Session creation, validation, password hashing
 │   ├── email.ts                          # ZeptoMail send helper
-│   └── auth-rate-limiter.ts              # Brute force protection (per-endpoint)
+│   └── auth-rate-limiter.ts              # Brute force protection (per-endpoint, incl. email lookup)
+├── components/
+│   ├── LandingPage.tsx                   # Public landing page (hero, features, CTA)
+│   └── ConnectModal.tsx                  # Smart email-first login modal (state machine)
 ├── app/
-│   ├── login/page.tsx                    # Login form
-│   ├── request-access/page.tsx           # Request access form
+│   ├── page.tsx                          # Root route — renders LandingPage (public)
+│   ├── app/page.tsx                      # /app route — renders Home (protected, auth required)
+│   ├── login/page.tsx                    # Login form (fallback, redirects to /app)
+│   ├── request-access/page.tsx           # Request access form (standalone fallback)
 │   ├── invite/[code]/page.tsx            # Invite code registration
 │   ├── auth/
 │   │   ├── verify/page.tsx               # Magic link landing
@@ -576,6 +657,8 @@ webapp/src/
 │   ├── admin/page.tsx                    # Admin dashboard
 │   └── api/
 │       ├── auth/
+│       │   ├── check-email/route.ts      # POST: email lookup + HMAC hint cookie
+│       │   ├── check-email/step/route.ts # GET: read hint cookie, return next step
 │       │   ├── request-access/route.ts
 │       │   ├── verify-email/route.ts
 │       │   ├── verify-magic-link/route.ts

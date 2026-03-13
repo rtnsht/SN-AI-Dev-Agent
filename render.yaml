@@ -102,6 +102,10 @@ services:
       - key: NODE_ENV
         value: "production"
 
+      # Auth bypass — MUST stay "false" in production
+      - key: BYPASS_AUTH
+        value: "false"
+
       # ── Auth Gate (Invite-Only Access) ──────────────────────────
       # Supabase (required for auth gate)
       - key: SUPABASE_URL
@@ -142,6 +146,10 @@ services:
         value: "72"
       - key: EMAIL_VERIFY_EXPIRY_HOURS
         value: "24"
+
+      # HMAC secret for email-check hint cookies (anti-enumeration)
+      - key: AUTH_HINT_SECRET
+        sync: false
 
       # Email provider (Zeptomail)
       - key: ZEPTOMAIL_API_KEY
