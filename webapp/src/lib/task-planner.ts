@@ -43,6 +43,7 @@ export interface PlanStreamEvent {
   taskId?: number;
   taskName?: string;
   toolName?: string;
+  input?: Record<string, unknown>;
   durationMs?: number;
   success?: boolean;
 }
@@ -384,7 +385,7 @@ export async function* executePlan(
         if (settledResult.status === "fulfilled") {
           const { task, toolCall, result, durationMs, success, fromCache } = settledResult.value;
           if (!fromCache) {
-            yield { type: "plan_tool_start", taskId: task.id, toolName: toolCall.name };
+            yield { type: "plan_tool_start", taskId: task.id, toolName: toolCall.name, input: toolCall.args as Record<string, unknown> };
             yield { type: "plan_tool_end", taskId: task.id, toolName: toolCall.name, durationMs, success };
           }
           // Store result keyed by tool call for injection

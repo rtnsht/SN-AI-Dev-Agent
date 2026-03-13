@@ -569,7 +569,9 @@ export default function Home() {
                       } catch { toolInput = undefined; }
                       setLiveStatus({ message: `Executing: ${event.toolName}`, phase: "tool", toolName: event.toolName });
                       setActivityLog((prev) => {
-                        const entry = { message: event.toolName, phase: "tool", timestamp: Date.now(), toolName: event.toolName, toolInput, done: false };
+                        // Only store display-relevant fields to keep state lightweight
+                        const displayInput = toolInput ? { name: toolInput.name, table: toolInput.table, query: toolInput.query, encoded_query: toolInput.encoded_query, data: toolInput.data } as Record<string, unknown> : undefined;
+                        const entry = { message: event.toolName, phase: "tool", timestamp: Date.now(), toolName: event.toolName, toolInput: displayInput, done: false };
                         const updated = [...prev, entry];
                         return updated.length > 100 ? updated.slice(-100) : updated;
                       });

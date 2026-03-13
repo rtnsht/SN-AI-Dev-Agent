@@ -963,6 +963,23 @@ export async function fetchInstancePrompts(
   return shuffled.slice(0, 4);
 }
 
+/** Extract only display-relevant fields from tool input to keep SSE payloads small.
+ *  This avoids sending full script bodies (which can be 10-50KB) to the browser. */
+function pickDisplayFields(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== "object") return {};
+  const src = input as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  if (src.name) out.name = src.name;
+  if (src.table) out.table = src.table;
+  if (src.query) out.query = src.query;
+  if (src.encoded_query) out.encoded_query = src.encoded_query;
+  // For generic sn_create_record / sn_update_record — artifact name is inside data
+  if (src.data && typeof src.data === "object" && (src.data as Record<string, unknown>).name) {
+    out.data = { name: (src.data as Record<string, unknown>).name };
+  }
+  return out;
+}
+
 /* ── Streaming Chat Types ─────────────────────────────────────── */
 
 export type StreamEvent =
@@ -1069,7 +1086,7 @@ export async function* chatStream(
         } else if (planEvent.type === "task_complete") {
           yield { type: "task_complete", taskId: planEvent.taskId!, taskName: planEvent.taskName! } as StreamEvent;
         } else if (planEvent.type === "plan_tool_start") {
-          yield { type: "tool_start", toolName: planEvent.toolName!, input: {}, taskId: planEvent.taskId } as StreamEvent;
+          yield { type: "tool_start", toolName: planEvent.toolName!, input: pickDisplayFields(planEvent.input), taskId: planEvent.taskId } as StreamEvent;
         } else if (planEvent.type === "plan_tool_end") {
           yield { type: "tool_end", toolName: planEvent.toolName!, durationMs: planEvent.durationMs!, success: planEvent.success!, taskId: planEvent.taskId } as StreamEvent;
         }
@@ -1226,7 +1243,7 @@ export async function* chatStream(
             logger.warn(sessionId, "dedup", `Duplicate tool call detected: ${block.name} (call #${callCount})`, { round: rounds });
           }
 
-          yield { type: "tool_start", toolName: block.name, input: block.input };
+          yield { type: "tool_start", toolName: block.name, input: pickDisplayFields(block.input) };
           yield { type: "status", message: `Executing: ${block.name}`, phase: "tool" };
 
           const { execution, resultJson, success } = await executeAndLogTool(registry, snClient, block.name, block.input, sessionId);
@@ -1349,7 +1366,7 @@ async function* chatStreamOpenRouter(
         } else if (planEvent.type === "task_complete") {
           yield { type: "task_complete", taskId: planEvent.taskId!, taskName: planEvent.taskName! } as StreamEvent;
         } else if (planEvent.type === "plan_tool_start") {
-          yield { type: "tool_start", toolName: planEvent.toolName!, input: {}, taskId: planEvent.taskId } as StreamEvent;
+          yield { type: "tool_start", toolName: planEvent.toolName!, input: pickDisplayFields(planEvent.input), taskId: planEvent.taskId } as StreamEvent;
         } else if (planEvent.type === "plan_tool_end") {
           yield { type: "tool_end", toolName: planEvent.toolName!, durationMs: planEvent.durationMs!, success: planEvent.success!, taskId: planEvent.taskId } as StreamEvent;
         }
@@ -1432,7 +1449,7 @@ async function* chatStreamOpenRouter(
           logger.warn(sessionId, "dedup", `OpenRouter: Duplicate tool call: ${toolCall.function.name} (call #${callCount})`, { round: rounds });
         }
 
-        yield { type: "tool_start", toolName: toolCall.function.name, input: toolCall.function.arguments };
+        yield { type: "tool_start", toolName: toolCall.function.name, input: pickDisplayFields(typeof toolCall.function.arguments === "string" ? (() => { try { return JSON.parse(toolCall.function.arguments); } catch { return {}; } })() : toolCall.function.arguments) };
         yield { type: "status", message: `Executing: ${toolCall.function.name}`, phase: "tool" };
 
         const { execution, resultJson, success } = await executeAndLogTool(registry, snClient, toolCall.function.name, args, sessionId);
