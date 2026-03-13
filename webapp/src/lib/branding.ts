@@ -16,6 +16,32 @@ export const CREATOR_NAME     = process.env.NEXT_PUBLIC_CREATOR_NAME     || "Rat
 export const CREATOR_LINKEDIN = process.env.NEXT_PUBLIC_CREATOR_LINKEDIN || "";
 export const SHOW_INFO_BUTTON = process.env.NEXT_PUBLIC_SHOW_INFO_BUTTON !== "false"; // default: true
 
+// ── Landing Page Section Text (all configurable via env vars) ────────────────
+export const FEATURES_EYEBROW = process.env.NEXT_PUBLIC_FEATURES_EYEBROW || "Capabilities";
+export const FEATURES_TITLE   = process.env.NEXT_PUBLIC_FEATURES_TITLE   || "Everything you need to ship on ServiceNow";
+export const STEPS_EYEBROW    = process.env.NEXT_PUBLIC_STEPS_EYEBROW    || "Workflow";
+export const STEPS_TITLE      = process.env.NEXT_PUBLIC_STEPS_TITLE      || "Three steps from idea to development";
+export const HIGHLIGHT_TITLE  = process.env.NEXT_PUBLIC_HIGHLIGHT_TITLE  || "Built for teams. Open for everyone.";
+export const HIGHLIGHT_DESC   = process.env.NEXT_PUBLIC_HIGHLIGHT_DESC   || "Phase-gated SDLC. Full audit trail. Update set management. Brownfield-safe approach. Every artifact is traceable, every decision is documented, every change is reversible.";
+export const CTA_HEADLINE     = process.env.NEXT_PUBLIC_CTA_HEADLINE     || "Your next build starts here.";
+export const CTA_SUBTEXT      = process.env.NEXT_PUBLIC_CTA_SUBTEXT      || "Go from idea to a working ServiceNow solution — faster than you think.";
+
+// ── Trust Bar Items (pipe-delimited: "Value|Label") ─────────────────────────
+function parseTrustItem(raw: string | undefined, fallback: { value: string; label: string }): { value: string; label: string } {
+  if (!raw) return fallback;
+  const [value, ...rest] = raw.split("|");
+  const label = rest.join("|");
+  if (!value?.trim() || !label?.trim()) return fallback;
+  return { value: value.trim(), label: label.trim() };
+}
+
+export const TRUST_ITEMS: { value: string; label: string }[] = [
+  parseTrustItem(process.env.NEXT_PUBLIC_TRUST_ITEM_1, { value: "100%", label: "Auditable" }),
+  parseTrustItem(process.env.NEXT_PUBLIC_TRUST_ITEM_2, { value: "Zero", label: "Black-box decisions" }),
+  parseTrustItem(process.env.NEXT_PUBLIC_TRUST_ITEM_3, { value: "Safe", label: "Rollback ready" }),
+  parseTrustItem(process.env.NEXT_PUBLIC_TRUST_ITEM_4, { value: "SDLC", label: "Phase-gated" }),
+];
+
 // ── Landing Page Feature Pills ──────────────────────────────────────────────
 // Format: "Title|Description" — parsed into { title, desc }
 function parseFeaturePill(raw: string | undefined): { title: string; desc: string } | null {

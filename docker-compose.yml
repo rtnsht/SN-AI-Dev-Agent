@@ -26,6 +26,18 @@ services:
         NEXT_PUBLIC_HERO_FEATURE_1: "Describe what you need. We'll build it.|Tell the AI what you want in plain English — forms, automations, workflows, or custom features — and it handles the rest."
         NEXT_PUBLIC_HERO_FEATURE_2: "A guided workflow, not a black box.|Every feature follows a structured path: spec → design → build → test → deploy. You review and approve each step before moving on."
         NEXT_PUBLIC_HERO_FEATURE_3: "You're always in control.|Nothing gets deployed without your sign-off. The AI checks what already exists, reuses what it can, and tracks every change."
+        NEXT_PUBLIC_TRUST_ITEM_1: ""
+        NEXT_PUBLIC_TRUST_ITEM_2: ""
+        NEXT_PUBLIC_TRUST_ITEM_3: ""
+        NEXT_PUBLIC_TRUST_ITEM_4: ""
+        NEXT_PUBLIC_FEATURES_EYEBROW: ""
+        NEXT_PUBLIC_FEATURES_TITLE: ""
+        NEXT_PUBLIC_STEPS_EYEBROW: ""
+        NEXT_PUBLIC_STEPS_TITLE: ""
+        NEXT_PUBLIC_HIGHLIGHT_TITLE: ""
+        NEXT_PUBLIC_HIGHLIGHT_DESC: ""
+        NEXT_PUBLIC_CTA_HEADLINE: ""
+        NEXT_PUBLIC_CTA_SUBTEXT: ""
     ports:
       - "3000:3000"
     env_file:

@@ -7,7 +7,9 @@ import ConnectModal from "@/components/ConnectModal";
 import Footer from "@/components/Footer";
 import {
   APP_NAME, APP_LOGO, APP_HERO_TAGLINE, APP_SUBTITLE,
-  HERO_FEATURES, HERO_VIDEO_URL,
+  HERO_FEATURES, HERO_VIDEO_URL, TRUST_ITEMS,
+  FEATURES_EYEBROW, FEATURES_TITLE, STEPS_EYEBROW, STEPS_TITLE,
+  HIGHLIGHT_TITLE, HIGHLIGHT_DESC, CTA_HEADLINE, CTA_SUBTEXT,
 } from "@/lib/branding";
 
 /** Normalise any YouTube/Vimeo URL to a proper embed URL with autoplay */
@@ -157,12 +159,7 @@ export default function LandingPage() {
       {/* ═══ Trust Bar ═══ */}
       <section ref={trustRef} className="landing-trust reveal-section">
         <div className="landing-trust-grid">
-          {[
-            { value: "100%", label: "Auditable" },
-            { value: "Zero", label: "Black-box decisions" },
-            { value: "Full", label: "Rollback support" },
-            { value: "SDLC", label: "Phase-gated" },
-          ].map((t) => (
+          {TRUST_ITEMS.map((t) => (
             <div key={t.label} className="landing-trust-item">
               <span className="landing-trust-value">{t.value}</span>
               <span className="landing-trust-label">{t.label}</span>
@@ -173,8 +170,8 @@ export default function LandingPage() {
 
       {/* ═══ Features ═══ */}
       <section ref={featuresRef} className="landing-section landing-features-section reveal-section">
-        <div className="landing-section-eyebrow">Capabilities</div>
-        <h2 className="landing-section-title">Everything you need to ship on ServiceNow</h2>
+        <div className="landing-section-eyebrow">{FEATURES_EYEBROW}</div>
+        <h2 className="landing-section-title">{FEATURES_TITLE}</h2>
         <div className="landing-features-grid">
           {(HERO_FEATURES.length > 0 ? HERO_FEATURES : [
             { title: "Describe what you need. We'll build it.", desc: "Tell the AI what you want in plain English — forms, automations, workflows, or custom features — and it handles the rest." },
@@ -192,8 +189,8 @@ export default function LandingPage() {
 
       {/* ═══ How It Works ═══ */}
       <section ref={stepsRef} className="landing-section landing-steps-section reveal-section">
-        <div className="landing-section-eyebrow">Workflow</div>
-        <h2 className="landing-section-title">Three steps from idea to production</h2>
+        <div className="landing-section-eyebrow">{STEPS_EYEBROW}</div>
+        <h2 className="landing-section-title">{STEPS_TITLE}</h2>
         <div className="landing-steps-grid">
           {[
             { step: "01", title: "Describe your requirement", desc: "Type what you need in natural language. The AI understands ServiceNow tables, fields, workflows, and best practices.", icon: StepIcons[0] },
@@ -217,21 +214,16 @@ export default function LandingPage() {
       <section ref={highlightRef} className="landing-section reveal-section">
         <div className="landing-highlight">
           <div className="landing-highlight-content">
-            <h3 className="landing-highlight-title">Built for enterprise. Open for everyone.</h3>
-            <p className="landing-highlight-desc">
-              Phase-gated SDLC. Full audit trail. Update set management. Brownfield-safe deployments.
-              Every artifact is traceable, every decision is documented, every deployment is reversible.
-            </p>
+            <h3 className="landing-highlight-title">{HIGHLIGHT_TITLE}</h3>
+            <p className="landing-highlight-desc">{HIGHLIGHT_DESC}</p>
           </div>
         </div>
       </section>
 
       {/* ═══ Footer CTA ═══ */}
       <section ref={ctaRef} className="landing-section landing-footer-cta reveal-section">
-        <h2 className="landing-cta-headline">Stop clicking. Start building.</h2>
-        <p className="landing-cta-subtext">
-          Go from idea to deployed ServiceNow solution in minutes, not weeks.
-        </p>
+        <h2 className="landing-cta-headline">{CTA_HEADLINE}</h2>
+        <p className="landing-cta-subtext">{CTA_SUBTEXT}</p>
         <button onClick={openModal} className="landing-cta-button">
           Get Started Free
           <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
