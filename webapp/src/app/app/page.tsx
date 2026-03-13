@@ -9,7 +9,7 @@ import InfoModal from "@/components/InfoModal";
 import ThemeToggle from "@/components/ThemeToggle";
 import type { ChatMessage, ConnectionResult, UsageInfo, SDLCPhase, LiveStatus, AIProvider, ModelOption, FileAttachment } from "@/lib/types";
 import { parsePhaseGate, parseUserChoices, ANTHROPIC_MODELS, SDLC_PHASES, openRouterModelToOption } from "@/lib/types";
-import { APP_NAME, APP_LOGO, SHOW_INFO_BUTTON } from "@/lib/branding";
+import { APP_NAME, APP_LOGO, SHOW_INFO_BUTTON, CREATOR_NAME, CREATOR_LINKEDIN } from "@/lib/branding";
 
 /* ── Session persistence keys (sessionStorage) ──────────────── */
 const SK = {
@@ -90,6 +90,9 @@ export default function Home() {
   const [mobileStep, setMobileStep] = useState<"hero" | "connect">("hero");
   // Logged-in webapp user info (name, role) from /api/auth/me
   const [appUser, setAppUser] = useState<{ name: string; email: string; role: string } | null>(null);
+  // Profile dropdown
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
   // Persistent session ID for logging — survives refresh via sessionStorage
   const [clientSessionId] = useState(() => {
     if (typeof window !== "undefined") {
@@ -226,6 +229,18 @@ export default function Home() {
   useEffect(() => {
     sessionStorage.setItem(SK.COMPLETED_PHASES, JSON.stringify(completedPhases));
   }, [completedPhases]);
+
+  // Close profile dropdown on outside click or Escape
+  useEffect(() => {
+    if (!profileOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) setProfileOpen(false);
+    };
+    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") setProfileOpen(false); };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => { document.removeEventListener("mousedown", handleClick); document.removeEventListener("keydown", handleKey); };
+  }, [profileOpen]);
 
   // Fetch server config on mount (API key + SN credentials)
   useEffect(() => {
@@ -1191,43 +1206,58 @@ export default function Home() {
                 </button>
               </>
             )}
-            {/* Logged-in user name */}
-            {appUser?.name && (
-              <span
-                className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-md"
-                style={{ color: "var(--text-secondary)" }}
-                title={appUser.email}
+            {/* Profile avatar + dropdown */}
+            <div ref={profileRef} className="relative">
+              <button
+                onClick={() => setProfileOpen(!profileOpen)}
+                className="flex items-center justify-center rounded-full transition-opacity hover:opacity-80"
+                style={{ width: 30, height: 30, background: "var(--color-primary)", color: "#fff", fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em" }}
+                title={appUser?.name || "Profile"}
               >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                {appUser.name}
-              </span>
-            )}
-            {/* Admin link — only visible for admin-role users */}
-            {appUser?.role === "admin" && (
-              <a
-                href="/admin"
-                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-[11px] font-medium rounded-md transition-colors"
-                style={{ background: "var(--surface-secondary)", color: "var(--text-secondary)" }}
-                onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-elevated)"; e.currentTarget.style.color = "var(--text-primary)"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "var(--surface-secondary)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
-                title="Admin Dashboard"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                <span className="hidden sm:inline">Admin</span>
-              </a>
-            )}
-            {/* Logout */}
-            <button
-              onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-[11px] font-medium rounded-md transition-colors"
-              style={{ background: "var(--surface-secondary)", color: "var(--text-secondary)" }}
-              onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-elevated)"; e.currentTarget.style.color = "var(--text-primary)"; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "var(--surface-secondary)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
-              title="Sign out"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-              <span className="hidden sm:inline">Sign Out</span>
-            </button>
+                {appUser?.name ? appUser.name.charAt(0).toUpperCase() : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                )}
+              </button>
+              {profileOpen && (
+                <div
+                  className="absolute right-0 mt-1.5 rounded-lg overflow-hidden shadow-lg"
+                  style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-default)", minWidth: 210, zIndex: 50 }}
+                >
+                  {/* User info */}
+                  {appUser && (
+                    <div className="px-3.5 py-3" style={{ borderBottom: "1px solid var(--border-default)" }}>
+                      <div className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{appUser.name}</div>
+                      <div className="text-[11px] mt-0.5" style={{ color: "var(--text-disabled)" }}>{appUser.email}</div>
+                    </div>
+                  )}
+                  {/* Menu items */}
+                  <div className="py-1">
+                    {appUser?.role === "admin" && (
+                      <a
+                        href="/admin"
+                        className="flex items-center gap-2.5 px-3.5 py-2 text-[12px] transition-colors"
+                        style={{ color: "var(--text-secondary)" }}
+                        onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-secondary)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                        Admin Dashboard
+                      </a>
+                    )}
+                    <button
+                      onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}
+                      className="flex items-center gap-2.5 px-3.5 py-2 text-[12px] w-full transition-colors"
+                      style={{ color: "var(--text-secondary)" }}
+                      onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-secondary)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -1251,8 +1281,8 @@ export default function Home() {
         />
       </main>
 
-      {/* ═══ Right Panel — Metadata / Status (visible when connected + has context) ═══ */}
-      {connected && (currentPhase || completedPhases.length > 0 || messages.length > 2) && (
+      {/* ═══ Right Panel — Metadata / Status (visible when connected) ═══ */}
+      {connected && (
         <aside
           className="hidden lg:flex flex-col w-72 xl:w-80 flex-shrink-0 overflow-y-auto"
           style={{ background: "var(--surface-primary)", borderLeft: "1px solid var(--border-default)" }}
@@ -1278,8 +1308,48 @@ export default function Home() {
                 </div>
               </div>
             )}
+          </div>
 
-
+          {/* Sidebar branding (footer-style) */}
+          <div className="flex-1" />
+          <div className="p-4 pt-6 text-center" style={{ borderTop: "1px solid var(--border-default)" }}>
+            {APP_LOGO && (
+              <Image src={APP_LOGO} alt={APP_NAME || "Logo"} width={36} height={36} className="rounded-[10px] mx-auto mb-2.5" style={{ objectFit: "contain" }} unoptimized />
+            )}
+            {APP_NAME && (
+              <div className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>{APP_NAME}</div>
+            )}
+            <div className="flex items-center justify-center gap-1.5 text-[13px] mb-1.5" style={{ color: "var(--text-secondary)" }}>
+              <span>Built with</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--color-danger)" xmlns="http://www.w3.org/2000/svg" style={{ opacity: 0.85 }}>
+                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+              </svg>
+              <span>for the community</span>
+            </div>
+            <div className="text-xs mb-5" style={{ color: "var(--text-disabled)" }}>
+              {CREATOR_LINKEDIN ? (
+                <a
+                  href={CREATOR_LINKEDIN}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 transition-colors"
+                  style={{ color: "var(--text-secondary)", textDecoration: "none" }}
+                  onMouseEnter={e => (e.currentTarget.style.color = "var(--color-primary)")}
+                  onMouseLeave={e => (e.currentTarget.style.color = "var(--text-secondary)")}
+                >
+                  by {CREATOR_NAME}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                  </svg>
+                </a>
+              ) : (
+                <span>by {CREATOR_NAME}</span>
+              )}
+            </div>
+            <div className="mx-auto mb-3" style={{ width: 40, height: 1, background: "var(--border-default)" }} />
+            <div className="text-[11px]" style={{ color: "var(--text-disabled)" }}>
+              &copy; {new Date().getFullYear()} {APP_NAME || "All rights reserved"}.
+            </div>
           </div>
         </aside>
       )}
