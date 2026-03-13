@@ -34,7 +34,7 @@ function VerifyContent() {
         }
 
         // Redirect based on response
-        router.push(data.redirect || "/");
+        router.push(data.redirect || "/app");
       } catch {
         setStatus("error");
         setError("Something went wrong. Please try again.");

@@ -34,7 +34,7 @@ export default function SetPasswordPage() {
         return;
       }
 
-      router.push(data.redirect || "/");
+      router.push(data.redirect || "/app");
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {

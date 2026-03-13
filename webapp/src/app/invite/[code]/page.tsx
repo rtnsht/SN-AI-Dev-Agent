@@ -50,7 +50,7 @@ export default function InvitePage() {
         return;
       }
 
-      router.push("/");
+      router.push("/app");
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {

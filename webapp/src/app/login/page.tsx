@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/";
+  const redirect = searchParams.get("redirect") || "/app";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
