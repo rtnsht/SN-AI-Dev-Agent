@@ -4,6 +4,7 @@ import "./globals.css";
 import { APP_NAME, APP_DESCRIPTION, CSS_VARS } from "@/lib/branding";
 import ThemeProvider from "@/components/ThemeProvider";
 import FeedbackFAB from "@/components/FeedbackFAB";
+import BannerDisplay from "@/components/BannerDisplay";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -40,6 +41,7 @@ export default function RootLayout({
         className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}
       >
         <ThemeProvider>
+          <BannerDisplay />
           {children}
           <FeedbackFAB />
         </ThemeProvider>
