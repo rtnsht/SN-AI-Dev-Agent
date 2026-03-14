@@ -133,3 +133,43 @@ If you didn't request this, ignore this email.
   });
 }
 
+export function sendFeedbackNotification(
+  adminEmail: string,
+  adminName: string,
+  feedback: {
+    type: string;
+    description: string;
+    email: string | null;
+    page_url: string;
+    user_agent: string;
+    attachment_urls: string[];
+    created_at: string;
+  }
+) {
+  const typeLabel = feedback.type === "bug_report" ? "Bug Report" : "Feedback";
+  const attachmentSection =
+    feedback.attachment_urls.length > 0
+      ? `\nAttachments:\n${feedback.attachment_urls.map((url, i) => `  ${i + 1}. ${url}`).join("\n")}\n`
+      : "";
+
+  return sendEmail({
+    to: adminEmail,
+    toName: adminName,
+    subject: `[New Feedback] ${typeLabel}`,
+    body: `Hi ${adminName},
+
+A new ${typeLabel.toLowerCase()} has been submitted.
+
+Type: ${typeLabel}
+Description: ${feedback.description}
+Submitted by: ${feedback.email || "Anonymous"}
+Page: ${feedback.page_url}
+Browser/Device: ${feedback.user_agent}
+Submitted: ${feedback.created_at}
+${attachmentSection}
+Review at: ${APP_URL}/admin
+
+— ${FROM_NAME}`,
+  });
+}
+

@@ -29,6 +29,7 @@ const PUBLIC_PATHS = [
   "/api/config",
   "/api/instance-prompts",
   "/api/openrouter-models",
+  "/api/feedback",
 ];
 
 /** Check if a path is public (no auth needed) */
