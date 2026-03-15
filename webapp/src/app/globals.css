@@ -1094,7 +1094,11 @@ body {
     padding: 0 16px;
   }
   .landing-header-name {
-    display: none;
+    font-size: 13px;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .landing-hero {
     min-height: auto;

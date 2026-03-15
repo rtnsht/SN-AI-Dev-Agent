@@ -119,12 +119,12 @@ export default function LandingPage() {
 
         {/* Headline — gradient text */}
         <h1 className="landing-title">
-          {APP_HERO_TAGLINE || <>Build on ServiceNow<br/>at the speed of thought.</>}
+          {APP_HERO_TAGLINE || <>Ship ServiceNow Features<br/>with AI.</>}
         </h1>
 
         {/* Subtitle */}
         <p className="landing-subtitle">
-          {APP_SUBTITLE || "Describe what you need in plain English. The AI creates specs, designs, code, and deploys — you approve every step."}
+          {APP_SUBTITLE || "Describe what you need in plain English. The AI generates specs, code, and deployments — you review and approve every step."}
         </p>
 
         {/* CTA group */}
@@ -174,9 +174,9 @@ export default function LandingPage() {
         <h2 className="landing-section-title">{FEATURES_TITLE}</h2>
         <div className="landing-features-grid">
           {(HERO_FEATURES.length > 0 ? HERO_FEATURES : [
-            { title: "Describe what you need. We'll build it.", desc: "Tell the AI what you want in plain English — forms, automations, workflows, or custom features — and it handles the rest." },
-            { title: "A guided workflow, not a black box.", desc: "Every feature follows a structured path: spec > design > build > test > deploy. You review and approve each step before moving on." },
-            { title: "You're always in control.", desc: "Nothing gets deployed without your sign-off. The AI checks what already exists, reuses what it can, and tracks every change." },
+            { title: "Business Rules to Client Scripts — generated.", desc: "Describe what you need. The AI creates Script Includes, Business Rules, Client Scripts, UI Policies, and custom fields — deployed directly to your instance." },
+            { title: "A guided workflow, not a black box.", desc: "Every feature follows a structured path: spec, design, build, test, deploy. You review and approve each phase before it moves forward." },
+            { title: "Update sets, rollbacks, and full audit trail.", desc: "Every artifact is captured in an update set. Nothing gets deployed without your sign-off. Every change is traceable and reversible." },
           ]).map((f, i) => (
             <div key={i} className="landing-feature-card">
               <div className="landing-feature-icon">{FeatureIcons[i] || FeatureIcons[0]}</div>
@@ -193,9 +193,9 @@ export default function LandingPage() {
         <h2 className="landing-section-title">{STEPS_TITLE}</h2>
         <div className="landing-steps-grid">
           {[
-            { step: "01", title: "Describe your requirement", desc: "Type what you need in natural language. The AI understands ServiceNow tables, fields, workflows, and best practices.", icon: StepIcons[0] },
-            { step: "02", title: "Review and approve", desc: "Watch the AI create specs, designs, and code. You approve each phase before it moves forward — nothing is a surprise.", icon: StepIcons[1] },
-            { step: "03", title: "Deploy with confidence", desc: "Ship directly to your ServiceNow instance with a full audit trail, update set capture, and rollback support.", icon: StepIcons[2] },
+            { step: "01", title: "Describe your requirement", desc: "Type what you need in plain English. The AI understands ServiceNow tables, fields, and best practices.", icon: StepIcons[0] },
+            { step: "02", title: "Review and approve", desc: "The AI generates specs, designs, and code. You approve each phase before it moves forward.", icon: StepIcons[1] },
+            { step: "03", title: "Deploy with confidence", desc: "Ship to your ServiceNow instance with update set capture, audit trail, and rollback support.", icon: StepIcons[2] },
           ].map((item, i) => (
             <div key={item.step} className="landing-step-card">
               <div className="landing-step-header">
@@ -225,7 +225,7 @@ export default function LandingPage() {
         <h2 className="landing-cta-headline">{CTA_HEADLINE}</h2>
         <p className="landing-cta-subtext">{CTA_SUBTEXT}</p>
         <button onClick={openModal} className="landing-cta-button">
-          Get Started Free
+          Request Early Access
           <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
         </button>
       </section>
