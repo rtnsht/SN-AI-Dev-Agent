@@ -21,10 +21,10 @@ export const FEATURES_EYEBROW = process.env.NEXT_PUBLIC_FEATURES_EYEBROW || "Cap
 export const FEATURES_TITLE   = process.env.NEXT_PUBLIC_FEATURES_TITLE   || "Everything you need to ship on ServiceNow";
 export const STEPS_EYEBROW    = process.env.NEXT_PUBLIC_STEPS_EYEBROW    || "Workflow";
 export const STEPS_TITLE      = process.env.NEXT_PUBLIC_STEPS_TITLE      || "Three steps from idea to development";
-export const HIGHLIGHT_TITLE  = process.env.NEXT_PUBLIC_HIGHLIGHT_TITLE  || "Built for teams. Open for everyone.";
-export const HIGHLIGHT_DESC   = process.env.NEXT_PUBLIC_HIGHLIGHT_DESC   || "Phase-gated SDLC. Full audit trail. Update set management. Brownfield-safe approach. Every artifact is traceable, every decision is documented, every change is reversible.";
+export const HIGHLIGHT_TITLE  = process.env.NEXT_PUBLIC_HIGHLIGHT_TITLE  || "Built for ServiceNow teams. Phase-gated by design.";
+export const HIGHLIGHT_DESC   = process.env.NEXT_PUBLIC_HIGHLIGHT_DESC   || "Full audit trail. Update set capture. Rollback support. Every artifact is traceable, every decision is documented, every deployment is reversible.";
 export const CTA_HEADLINE     = process.env.NEXT_PUBLIC_CTA_HEADLINE     || "Your next build starts here.";
-export const CTA_SUBTEXT      = process.env.NEXT_PUBLIC_CTA_SUBTEXT      || "Go from idea to a working ServiceNow solution — faster than you think.";
+export const CTA_SUBTEXT      = process.env.NEXT_PUBLIC_CTA_SUBTEXT      || "Go from idea to a working ServiceNow solution — in minutes, not sprints.";
 
 // ── Trust Bar Items (pipe-delimited: "Value|Label") ─────────────────────────
 function parseTrustItem(raw: string | undefined, fallback: { value: string; label: string }): { value: string; label: string } {
