@@ -13,16 +13,29 @@ import {
 } from "@/lib/branding";
 
 /** Normalise any YouTube/Vimeo URL to a proper embed URL with autoplay */
-function getVideoEmbedUrl(url: string): string {
+export function getVideoEmbedUrl(url: string): string {
   if (!url) return url;
-  const ytShort = url.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
-  const ytWatch = url.match(/youtube\.com\/watch\?.*v=([a-zA-Z0-9_-]{11})/);
-  const ytEmbed = url.match(/youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/);
-  const ytId = (ytShort || ytWatch || ytEmbed)?.[1];
+  const trimmed = url.trim();
+  // YouTube: short links, watch pages (with extra params like &si=), embeds
+  const ytShort = trimmed.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
+  const ytWatch = trimmed.match(/youtube\.com\/watch\?[^#]*v=([a-zA-Z0-9_-]{11})/);
+  const ytEmbed = trimmed.match(/youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/);
+  const ytLive  = trimmed.match(/youtube\.com\/live\/([a-zA-Z0-9_-]{11})/);
+  const ytId = (ytShort || ytWatch || ytEmbed || ytLive)?.[1];
   if (ytId) return `https://www.youtube.com/embed/${ytId}?autoplay=1&mute=1&rel=0`;
-  const vimeo = url.match(/vimeo\.com\/(?:video\/)?([0-9]+)/);
+  // Vimeo
+  const vimeo = trimmed.match(/vimeo\.com\/(?:video\/)?([0-9]+)/);
   if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}?autoplay=1&muted=1`;
-  return url;
+  return trimmed;
+}
+
+/** Render text that may contain literal \n as line breaks */
+function renderMultilineText(text: string): React.ReactNode {
+  if (!text.includes("\\n")) return text;
+  const parts = text.split("\\n");
+  return parts.map((part, i) => (
+    <span key={i}>{part.trim()}{i < parts.length - 1 && <br />}</span>
+  ));
 }
 
 /* ── Scroll-reveal hook ── */
@@ -119,7 +132,7 @@ export default function LandingPage() {
 
         {/* Headline — gradient text */}
         <h1 className="landing-title">
-          {APP_HERO_TAGLINE || <>Ship ServiceNow Features<br/>with AI.</>}
+          {APP_HERO_TAGLINE ? renderMultilineText(APP_HERO_TAGLINE) : <>Ship ServiceNow Features<br/>with AI.</>}
         </h1>
 
         {/* Subtitle */}
@@ -149,6 +162,9 @@ export default function LandingPage() {
                 title="See it in action"
                 allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
                 allowFullScreen
+                frameBorder={0}
+                referrerPolicy="no-referrer-when-downgrade"
+                loading="lazy"
                 className="landing-video-iframe"
               />
             </div>

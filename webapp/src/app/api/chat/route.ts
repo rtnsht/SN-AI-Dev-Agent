@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { chat, type UserCredentials, type ChatMessage } from "@/lib/sn-engine";
 import { consume, getUsage } from "@/lib/rate-limiter";
+import { checkTrialLimit, consumeTrialRequest } from "@/lib/trial-limiter";
 import { logger, generateSessionId } from "@/lib/logger";
 
 export const maxDuration = 120; // Allow up to 2 minutes for tool-use loops
@@ -102,6 +103,43 @@ export async function POST(request: NextRequest) {
           },
           { status: 429 }
         );
+      }
+    }
+
+    // Trial limit check (per-user daily limits)
+    if (!userSuppliedKey) {
+      const userId = request.headers.get("x-user-id");
+      if (userId) {
+        try {
+          const { allowed, status: trialStatus } = await checkTrialLimit(userId, credentials.instanceUrl);
+          if (!allowed && trialStatus.isConfigured) {
+            const reason = trialStatus.trialExpired
+              ? `Your ${trialStatus.trialDays}-day free trial has ended.`
+              : `You've used all ${trialStatus.dailyLimit} free requests for today.`;
+            logger.warn(sessionId, "trial_limit", reason, {
+              userId,
+              dailyUsed: trialStatus.dailyUsed,
+              dailyLimit: trialStatus.dailyLimit,
+              daysLeft: trialStatus.daysLeft,
+            });
+            return NextResponse.json(
+              {
+                error: "trial_limit_exceeded",
+                message: allowUserKeys
+                  ? `${reason} Connect your own API key to continue with no limits.`
+                  : `${reason} Please try again tomorrow.`,
+                trialStatus,
+                allowUserApiKeys: allowUserKeys,
+              },
+              { status: 429 }
+            );
+          }
+          if (trialStatus.isConfigured) {
+            await consumeTrialRequest(userId, credentials.instanceUrl);
+          }
+        } catch (trialErr) {
+          logger.warn(sessionId, "trial_limit", "Trial check failed, allowing request", { error: String(trialErr) });
+        }
       }
     }
 

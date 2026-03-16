@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import type { Credentials, ConnectionResult, UsageInfo, AIProvider, ModelOption } from "@/lib/types";
+import type { Credentials, ConnectionResult, UsageInfo, TrialStatus, AIProvider, ModelOption } from "@/lib/types";
 import { ANTHROPIC_MODELS } from "@/lib/types";
 import { APP_LOGO } from "@/lib/branding";
 
@@ -32,6 +32,8 @@ interface Props {
   modelLocked: boolean;
   /** When false, the user API key input is hidden entirely (server-only mode) */
   allowUserApiKeys?: boolean;
+  /** Trial status for per-user daily limits */
+  trialStatus?: TrialStatus | null;
   /** Mobile full-screen mode: back button callback */
   onBack?: () => void;
 }
@@ -43,7 +45,7 @@ export default function SettingsPanel({
   serverApiKeyConfigured, serverOpenRouterKeyConfigured, serverSnCredsConfigured,
   usage, rateLimitHit, onApiKeyProvided,
   aiProvider, setAiProvider, selectedModel, setSelectedModel, modelOptions, modelsLoading = false,
-  modelLocked, allowUserApiKeys = true, onBack
+  modelLocked, allowUserApiKeys = true, trialStatus, onBack
 }: Props) {
   const update = (field: keyof Credentials, value: string) =>
     setCredentials({ ...credentials, [field]: value });
@@ -242,6 +244,36 @@ export default function SettingsPanel({
                   }}
                 />
               </div>
+            </div>
+          )}
+
+          {/* Trial status */}
+          {trialStatus?.isConfigured && (
+            <div className="mt-2 space-y-1.5" style={{ padding: "8px", borderRadius: "8px", background: "var(--surface-secondary)" }}>
+              <div className="flex items-center justify-between text-[10px]">
+                <span style={{ color: "var(--text-secondary)" }}>
+                  {trialStatus.dailyUsed}/{trialStatus.dailyLimit} daily requests
+                </span>
+                <span className="font-medium" style={{
+                  color: trialStatus.trialExpired ? "var(--color-danger)" : trialStatus.daysLeft <= 2 ? "var(--color-warning)" : "var(--text-disabled)"
+                }}>
+                  {trialStatus.trialExpired ? "Trial ended" : `${trialStatus.daysLeft}d left`}
+                </span>
+              </div>
+              <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "var(--surface-app)" }}>
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${Math.min(100, (trialStatus.dailyUsed / trialStatus.dailyLimit) * 100)}%`,
+                    background: trialStatus.dailyUsed >= trialStatus.dailyLimit ? "var(--color-danger)" : "var(--color-info)",
+                  }}
+                />
+              </div>
+              {(trialStatus.trialExpired || trialStatus.dailyUsed >= trialStatus.dailyLimit) && allowUserApiKeys && (
+                <p className="text-[10px] mt-1" style={{ color: "var(--color-warning)" }}>
+                  Connect your own API key to continue
+                </p>
+              )}
             </div>
           )}
         </div>

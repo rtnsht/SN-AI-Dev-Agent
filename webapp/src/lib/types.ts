@@ -216,6 +216,18 @@ export interface UsageInfo {
   windowHours: number;
 }
 
+/** Trial status for per-user daily request limits */
+export interface TrialStatus {
+  trialActive: boolean;
+  trialExpired: boolean;
+  daysLeft: number;
+  dailyUsed: number;
+  dailyLimit: number;
+  totalUsed: number;
+  trialDays: number;
+  isConfigured: boolean;
+}
+
 /** Live status update during streaming chat */
 export interface LiveStatus {
   message: string;
