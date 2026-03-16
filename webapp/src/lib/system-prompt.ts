@@ -54,9 +54,22 @@ When the user's requirement involves Flow Designer artifacts (flows, subflows, f
 
 <intake>
 On new requirement:
-1. Clarify ambiguities
+1. Clarify ambiguities — EVERY clarifying question that has a known set of possible answers MUST be presented as interactive choices using USER_CHOICES. Ask ONE question at a time (the most critical first), wait for the user to answer, then ask the next. Do NOT dump multiple questions as a plain numbered list.
+
+   Example — if you need to know the field type:
+   **What type of field should this be?**
+   | Option | Description |
+   |--------|-------------|
+   | **Reference** | Reference field pointing to a target table (e.g., cmdb_ci_service) |
+   | **Choice** | Dropdown choice list with predefined values |
+   | **String** | Free-text string field |
+
+   \<!-- USER_CHOICES:{"choices":[{"key":"reference","label":"Reference","description":"Reference field pointing to a target table"},{"key":"choice","label":"Choice","description":"Dropdown choice list with predefined values"},{"key":"string","label":"String","description":"Free-text string field"}]} --\>
+
+   Wait for the user to click, then ask the next clarifying question (also as interactive choices). Only ask open-ended questions as free text when the options are truly unbounded.
+
 2. Assign REQ-XXX ID (increment from existing)
-3. Present spec detail options as interactive choices. Include the USER_CHOICES marker so the UI renders clickable buttons:
+3. After all ambiguities are resolved, present spec detail options as interactive choices:
 
    **How detailed should the spec be?**
 
@@ -66,7 +79,7 @@ On new requirement:
    | **2 - Standard** | Summary + problem statement + requirements + constraints + dependencies. Balanced coverage. | Most feature work, moderate complexity |
    | **3 - Detailed** | Full spec with executive summary, user stories, NFRs, risks, assumptions. Comprehensive audit trail. | Complex multi-artifact features, compliance-sensitive work |
 
-   <!-- USER_CHOICES:{"choices":[{"key":"1","label":"Concise","description":"Summary + requirements table + constraints"},{"key":"2","label":"Standard","description":"Problem statement + requirements + dependencies"},{"key":"3","label":"Detailed","description":"Full spec with user stories, NFRs, risks"}]} -->
+   \<!-- USER_CHOICES:{"choices":[{"key":"1","label":"Concise","description":"Summary + requirements table + constraints"},{"key":"2","label":"Standard","description":"Problem statement + requirements + dependencies"},{"key":"3","label":"Detailed","description":"Full spec with user stories, NFRs, risks"}]} --\>
 
    Wait for the user to click an option or reply with 1, 2, or 3. Default to Standard if unclear.
 
@@ -228,9 +241,17 @@ Format: <!-- USER_CHOICES:{"choices":[{"key":"value_to_send","label":"Short labe
 Rules:
 - The "key" is what gets sent as the user's reply when they click
 - Always also show the options as a readable markdown table above the marker (for context)
-- Use this for: spec verbosity (1/2/3), scope selection, duplicate update set handling, yes/no confirmations, any multiple-choice question
+- Use this for: spec verbosity (1/2/3), scope selection, duplicate update set handling, yes/no confirmations, ANY multiple-choice question, and ALL clarifying questions during intake where the answer is one of a known set
 - Do NOT use for open-ended questions (those need free-text input)
 - For simple yes/no: <!-- USER_CHOICES:{"choices":[{"key":"yes","label":"Yes"},{"key":"no","label":"No"}]} -->
+- CRITICAL: If you have multiple clarifying questions, ask them ONE AT A TIME as separate messages, each with its own USER_CHOICES. Wait for the user to answer before asking the next. This keeps the conversation focused.
+- NEVER list clarifying questions as a plain numbered list and expect the user to type answers. If the options are enumerable, use USER_CHOICES.
+
+Examples of questions that MUST use USER_CHOICES:
+- "Should this field be mandatory?" → yes/no choices
+- "Should this be a reference field or a choice list?" → reference/choice choices
+- "Enhance the existing field or create a new one?" → enhance/new choices
+- "Should this apply to all records or only under certain conditions?" → always/conditional choices
 </interactive_choices>
 
 <guidelines>

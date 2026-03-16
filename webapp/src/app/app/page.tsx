@@ -14,6 +14,7 @@ import SuggestionPanel from "@/components/SuggestionPanel";
 import type { ChatMessage, ConnectionResult, UsageInfo, TrialStatus, SDLCPhase, LiveStatus, AIProvider, ModelOption, FileAttachment, CategorizedPrompts } from "@/lib/types";
 import { parsePhaseGate, parseUserChoices, ANTHROPIC_MODELS, SDLC_PHASES, openRouterModelToOption } from "@/lib/types";
 import { APP_NAME, APP_LOGO, SHOW_INFO_BUTTON, CREATOR_NAME, CREATOR_LINKEDIN, FOOTER_TAGLINE, FOOTER_COPYRIGHT } from "@/lib/branding";
+import { Menu, User } from "lucide-react";
 
 /* ── Session persistence keys (sessionStorage) ──────────────── */
 const SK = {
@@ -61,6 +62,7 @@ export default function Home() {
   const [rightWidth, setRightWidth] = useState(288);
   const isResizingLeft = useRef(false);
   const isResizingRight = useRef(false);
+  const rafRef = useRef<number | null>(null);
   const [serverApiKeyConfigured, setServerApiKeyConfigured] = useState(false);
   const [serverOpenRouterKeyConfigured, setServerOpenRouterKeyConfigured] = useState(false);
   const [serverSnCredsConfigured, setServerSnCredsConfigured] = useState(false);
@@ -523,6 +525,8 @@ export default function Home() {
       messagesRef.current = newMessages;
 
       setIsLoading(true);
+      setActivityLog([]);
+      setTaskPlan(null);
       // Lock model selection after first message
       if (!modelLocked) setModelLocked(true);
 
@@ -556,7 +560,7 @@ export default function Home() {
 
         // Use streaming API when enabled for live status updates
         if (streamingEnabled) {
-          setLiveStatus({ message: "Starting...", phase: "thinking" });
+          setLiveStatus({ message: "Analyzing your request...", phase: "thinking" });
 
           const res = await fetch("/api/chat-stream", {
             method: "POST",
@@ -1112,95 +1116,16 @@ export default function Home() {
     setPromptsLastRefreshed(null);
   }, []);
 
-  /** Download entire conversation as a markdown file with embedded images */
-  const handleDownloadConversation = useCallback(() => {
-    const lines: string[] = [];
-
-    // Header
-    const now = new Date();
-    lines.push(`# ${APP_NAME} — Conversation Export`);
-    lines.push("");
-    lines.push(`**Date:** ${now.toLocaleString()}`);
-    if (connected && connInfo?.userInfo) {
-      lines.push(`**User:** ${connInfo.userInfo.name} (${credentials.username})`);
-      lines.push(`**Instance:** ${credentials.instanceUrl}`);
-    }
-    const currentModels = aiProvider === "openrouter" ? openRouterModels : ANTHROPIC_MODELS;
-    const modelLabel = currentModels.find((m) => m.key === selectedModel)?.label || selectedModel;
-    lines.push(`**Model:** ${modelLabel}`);
-    lines.push("");
-    lines.push("---");
-    lines.push("");
-
-    for (const msg of messages) {
-      if (msg.role === "system") {
-        lines.push(`> **System:** ${msg.content}`);
-        lines.push("");
-      } else if (msg.role === "user") {
-        lines.push("## 🧑 User");
-        lines.push("");
-        // Embedded images
-        if (msg.images && msg.images.length > 0) {
-          for (const img of msg.images) {
-            lines.push(`![User attachment](${img})`);
-            lines.push("");
-          }
-        }
-        if (msg.content) {
-          lines.push(msg.content);
-          lines.push("");
-        }
-      } else {
-        lines.push("## 🤖 Assistant");
-        lines.push("");
-        lines.push(msg.content);
-        lines.push("");
-        // Tool executions
-        if (msg.toolExecutions && msg.toolExecutions.length > 0) {
-          lines.push(`<details><summary>🔧 ${msg.toolExecutions.length} tool${msg.toolExecutions.length > 1 ? "s" : ""} executed</summary>`);
-          lines.push("");
-          for (const exec of msg.toolExecutions) {
-            lines.push(`### ${exec.toolName} (${exec.durationMs}ms)`);
-            lines.push("");
-            lines.push("**Input:**");
-            lines.push("```json");
-            lines.push(JSON.stringify(exec.input, null, 2));
-            lines.push("```");
-            lines.push("**Output:**");
-            lines.push("```json");
-            lines.push(typeof exec.output === "string" ? exec.output : JSON.stringify(exec.output, null, 2));
-            lines.push("```");
-            lines.push("");
-          }
-          lines.push("</details>");
-          lines.push("");
-        }
-      }
-      lines.push("---");
-      lines.push("");
-    }
-
-    const md = lines.join("\n");
-    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${APP_NAME.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-conversation-${now.toISOString().slice(0, 19).replace(/[T:]/g, "-")}.md`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, [messages, connected, connInfo, credentials, selectedModel]);
 
   /** Sidebar resize handlers (mouse + touch) */
   useEffect(() => {
     const handleMove = (clientX: number) => {
-      if (isResizingLeft.current) {
-        setLeftWidth(Math.min(Math.max(clientX, 240), 480));
-      }
-      if (isResizingRight.current) {
-        setRightWidth(Math.min(Math.max(window.innerWidth - clientX, 240), 480));
-      }
+      if (!isResizingLeft.current && !isResizingRight.current) return;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (isResizingLeft.current) setLeftWidth(Math.min(Math.max(clientX, 240), 480));
+        if (isResizingRight.current) setRightWidth(Math.min(Math.max(window.innerWidth - clientX, 240), 480));
+      });
     };
     const handleMouseMove = (e: MouseEvent) => handleMove(e.clientX);
     const handleTouchMove = (e: TouchEvent) => { if (e.touches[0]) handleMove(e.touches[0].clientX); };
@@ -1308,9 +1233,7 @@ export default function Home() {
               onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
               title="Toggle settings (Cmd+1)"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-              </svg>
+              <Menu className="w-5 h-5" strokeWidth={1.5} />
             </button>
 
             {/* App identity */}
@@ -1352,18 +1275,6 @@ export default function Home() {
             )}
             <PhaseTracker currentPhase={currentPhase} completedPhases={completedPhases} reqId={activeReqId} />
             {messages.length > 0 && (
-              <>
-                <button
-                  onClick={handleDownloadConversation}
-                  className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-[11px] font-medium rounded-md transition-colors"
-                  style={{ background: "var(--surface-secondary)", color: "var(--text-secondary)" }}
-                  onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-elevated)"; e.currentTarget.style.color = "var(--text-primary)"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = "var(--surface-secondary)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
-                  title="Download conversation as Markdown"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                  <span className="hidden sm:inline">Export</span>
-                </button>
                 <button
                   onClick={handleNewChat}
                   className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-[11px] font-medium rounded-md transition-colors"
@@ -1374,7 +1285,6 @@ export default function Home() {
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                   <span className="hidden sm:inline">New Chat</span>
                 </button>
-              </>
             )}
             {/* Right panel toggle (lg+ only, when connected) */}
             {connected && (
@@ -1400,7 +1310,7 @@ export default function Home() {
                 title={appUser?.name || "Profile"}
               >
                 {appUser?.name ? appUser.name.charAt(0).toUpperCase() : (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                  <User className="w-4 h-4" strokeWidth={2} />
                 )}
               </button>
               {profileOpen && (

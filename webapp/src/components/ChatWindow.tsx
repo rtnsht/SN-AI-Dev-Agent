@@ -160,15 +160,19 @@ function friendlyToolLabel(toolName: string, input?: Record<string, unknown>): s
   const table = input?.table as string | undefined;
   const name = input?.name as string | undefined;
   const query = input?.query as string | undefined;
-  // For generic sn_create_record / sn_update_record, artifact name lives inside data
   const dataName = (input?.data as Record<string, unknown>)?.name as string | undefined;
   const effectiveName = name || dataName;
 
-  // sn_get_* tools — "Looking up X" or "X on table"
-  const getMap: Record<string, string> = {
+  // Explicit friendly labels for known tools
+  const explicitMap: Record<string, string> = {
+    // Instance & connection
     sn_get_instance_info: "Checking instance info",
+    sn_test_connection: "Testing connection",
+    sn_initialize_instance: "Initializing instance",
     sn_get_tables: "Listing available tables",
     sn_get_table_schema: table ? `Reading ${table} table schema` : "Reading table schema",
+    sn_analyze_instance: "Analyzing instance",
+    // Discovery — artifact reads
     sn_get_business_rules: table ? `Business rules on ${table}` : "Business rules",
     sn_get_client_scripts: table ? `Client scripts on ${table}` : "Client scripts",
     sn_get_ui_policies: table ? `UI policies on ${table}` : "UI policies",
@@ -179,11 +183,80 @@ function friendlyToolLabel(toolName: string, input?: Record<string, unknown>): s
     sn_get_notifications: table ? `Notifications for ${table}` : "Notifications",
     sn_get_scheduled_jobs: "Scheduled jobs",
     sn_get_fix_scripts: "Fix scripts",
+    sn_get_events: table ? `Events on ${table}` : "Reading events",
+    sn_get_roles: "Checking roles",
+    sn_get_requests: "Reading service requests",
+    // Catalog
+    sn_get_catalog_items: "Browsing service catalog",
+    sn_get_catalog_item: "Reading catalog item details",
+    sn_get_catalog_variables: "Catalog item variables",
+    // Update sets
+    sn_get_update_set: "Reading update set",
     sn_get_update_set_contents: "Update set contents",
+    sn_set_current_update_set: "Setting active update set",
+    sn_complete_update_set: "Completing update set",
+    sn_move_to_update_set: table ? `Moving ${table} to update set` : "Moving artifact to update set",
+    sn_verify_update_set_capture: "Verifying update set capture",
+    // Analysis & quality
+    sn_detect_ootb_overrides: "Checking for OOTB overrides",
+    sn_get_dependency_graph: "Mapping dependencies",
+    sn_find_anti_patterns: "Scanning for anti-patterns",
+    sn_code_quality_score: "Evaluating code quality",
+    sn_find_dead_code: "Scanning for unused code",
+    sn_preview_change_impact: "Previewing change impact",
+    sn_detect_conflicts: table ? `Checking conflicts on ${table}` : "Checking for conflicts",
+    sn_validate_change: "Validating changes",
+    sn_check_breaking_changes: "Checking for breaking changes",
+    sn_diff_artifact: "Comparing artifact versions",
+    // Audit & change tracking
+    sn_log_change: "Logging change",
+    sn_get_audit_history: table ? `Audit history for ${table}` : "Reading audit history",
+    // Approvals
+    sn_request_approval: "Requesting approval",
+    sn_process_approval: "Processing approval",
+    sn_get_approval_status: "Checking approval status",
+    // Persona & framework
+    sn_detect_persona: "Detecting user persona",
+    sn_apply_4g_framework: "Applying 4G analysis",
+    // Multi-instance
+    sn_register_instance: "Registering instance",
+    sn_register_instance_v2: "Registering instance",
+    sn_switch_instance: "Switching instance",
+    sn_get_active_instance: "Checking active instance",
+    sn_test_instance_connection: "Testing instance connection",
+    sn_compare_instances: "Comparing instances",
+    sn_assess_upgrade_readiness: "Assessing upgrade readiness",
+    sn_predict_conflicts: "Predicting conflicts",
+    sn_compare_to_ootb: "Comparing to OOTB baseline",
+    // Knowledge & recommendations
+    sn_get_fix_recommendations: "Finding fix recommendations",
+    sn_get_best_practices: "Looking up best practices",
+    sn_get_code_templates: "Loading code templates",
+    // Reporting
+    sn_generate_report: "Generating report",
+    sn_get_dashboard_data: "Loading dashboard data",
+    // Scope & apps
+    sn_get_scope_selection_options: "Loading scope options",
+    sn_get_custom_apps: "Reading custom applications",
+    // Promotion
+    sn_create_promotion_package: "Creating promotion package",
+    sn_preview_promotion: "Previewing promotion",
+    sn_validate_promotion: "Validating promotion",
+    sn_execute_promotion: "Executing promotion",
+    sn_rollback_promotion: "Rolling back promotion",
+    sn_list_promotion_history: "Promotion history",
+    sn_list_promotion_packages: "Listing promotion packages",
+    // Flow Designer
+    sn_get_flow: "Reading flow details",
+    sn_analyze_flow: "Analyzing flow",
+    sn_scaffold_flow: "Scaffolding flow",
+    sn_get_action_type_schema: "Reading action type schema",
+    sn_get_flow_execution_status: "Checking flow execution status",
+    sn_export_flow_as_template: "Exporting flow template",
   };
-  if (getMap[toolName]) return getMap[toolName];
+  if (explicitMap[toolName]) return explicitMap[toolName];
 
-  // sn_query_records / sn_read_record
+  // sn_query_records
   if (toolName === "sn_query_records") {
     const filter = (input?.encoded_query as string | undefined) || query;
     if (table && filter) {
@@ -211,29 +284,55 @@ function friendlyToolLabel(toolName: string, input?: Record<string, unknown>): s
   }
 
   // sn_list_* tools
-  if (toolName === "sn_list_flows") return "Listing flows";
-  if (toolName === "sn_list_update_sets") return "Listing update sets";
-  if (toolName.startsWith("sn_list_")) return `Listing ${toolName.replace("sn_list_", "").replace(/_/g, " ")}`;
-
-  // sn_analyze_instance
-  if (toolName === "sn_analyze_instance") return "Analyzing instance";
+  if (toolName.startsWith("sn_list_")) {
+    const entity = toolName.replace("sn_list_", "").replace(/_/g, " ");
+    return `Listing ${entity}`;
+  }
 
   // sn_execute_* / sn_run_*
-  if (toolName.startsWith("sn_execute_") || toolName.startsWith("sn_run_")) return `Running ${toolName.replace(/^sn_(execute|run)_/, "").replace(/_/g, " ")}`;
-
-  // sn_set_* / sn_move_*
-  if (toolName === "sn_set_current_update_set") return "Setting active update set";
-  if (toolName === "sn_move_to_update_set") {
-    return table ? `Moving ${table} to update set` : "Moving artifact to update set";
+  if (toolName.startsWith("sn_execute_") || toolName.startsWith("sn_run_")) {
+    return `Running ${toolName.replace(/^sn_(execute|run)_/, "").replace(/_/g, " ")}`;
   }
-  if (toolName === "sn_complete_update_set") return "Completing update set";
-  if (toolName === "sn_verify_update_set_capture") return "Verifying update set capture";
 
-  // Flow designer
-  if (toolName === "sn_get_flow") return "Reading flow details";
-  if (toolName === "sn_scaffold_flow") return "Scaffolding flow";
+  // Action-oriented fallback for remaining sn_ prefixed tools
+  const verbMap: [RegExp, string][] = [
+    [/^sn_get_/, "Reading"],
+    [/^sn_detect_/, "Detecting"],
+    [/^sn_check_/, "Checking"],
+    [/^sn_find_/, "Finding"],
+    [/^sn_validate_/, "Validating"],
+    [/^sn_assess_/, "Assessing"],
+    [/^sn_compare_/, "Comparing"],
+    [/^sn_predict_/, "Predicting"],
+    [/^sn_analyze_/, "Analyzing"],
+    [/^sn_set_/, "Setting"],
+    [/^sn_move_/, "Moving"],
+    [/^sn_export_/, "Exporting"],
+    [/^sn_import_/, "Importing"],
+    [/^sn_register_/, "Registering"],
+    [/^sn_switch_/, "Switching"],
+    [/^sn_call_/, "Calling"],
+    [/^sn_rollback_/, "Rolling back"],
+    [/^sn_preview_/, "Previewing"],
+    [/^sn_scaffold_/, "Scaffolding"],
+    [/^sn_complete_/, "Completing"],
+    [/^sn_generate_/, "Generating"],
+    [/^sn_log_/, "Logging"],
+    [/^sn_request_/, "Requesting"],
+    [/^sn_process_/, "Processing"],
+    [/^sn_apply_/, "Applying"],
+    [/^sn_diff_/, "Comparing"],
+    [/^sn_test_/, "Testing"],
+    [/^sn_initialize_/, "Initializing"],
+  ];
+  for (const [pattern, verb] of verbMap) {
+    if (pattern.test(toolName)) {
+      const entity = toolName.replace(pattern, "").replace(/_/g, " ");
+      return `${verb} ${entity}`;
+    }
+  }
 
-  // Generic fallback — humanize the tool name
+  // Final fallback — humanize
   return toolName.replace(/^sn_/, "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
 
@@ -285,12 +384,18 @@ function processActivityLog(entries: ActivityLogEntry[]): ActivityLogEntry[] {
     if (msg.startsWith("Executing:") || msg.includes("completed")) continue;
     // Skip planner status messages that are redundant with task events
     if (msg === "Planning execution..." || msg === "Executing plan...") continue;
-    if (msg.startsWith("Task:")) continue; // Covered by task entries
-    // Collapse "Starting..." and "Round N: Analyzing request..." — only keep the first one
+    if (msg.startsWith("Task:")) continue;
+    // Keep the initial "Analyzing your request..." as-is, collapse subsequent round messages
+    if (msg === "Analyzing your request...") {
+      const last = result[result.length - 1];
+      if (last?.message === "Analyzing your request...") continue;
+      result.push(entry);
+      continue;
+    }
     if (msg === "Starting..." || /^Round \d+/.test(msg)) {
       const last = result[result.length - 1];
       if (last?.phase === "thinking") continue;
-      result.push({ ...entry, message: "Reasoning" });
+      result.push({ ...entry, message: "Analyzing your request..." });
       continue;
     }
     // Collapse "Generating response..." messages
@@ -298,6 +403,16 @@ function processActivityLog(entries: ActivityLogEntry[]): ActivityLogEntry[] {
       const last = result[result.length - 1];
       if (last?.message === "Composing response") continue;
       result.push({ ...entry, message: "Composing response" });
+      continue;
+    }
+    // Rate limit retries — keep as-is (useful feedback)
+    if (msg.includes("Rate limited") || msg.includes("retrying")) {
+      result.push(entry);
+      continue;
+    }
+    // Resuming messages — keep
+    if (msg.includes("Resuming")) {
+      result.push(entry);
       continue;
     }
     // Keep other status messages as-is

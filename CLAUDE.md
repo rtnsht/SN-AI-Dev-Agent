@@ -458,5 +458,5 @@ Shows **only Connection info** (user, instance URL, roles). Pipeline Status and 
 User and AI avatars are **hidden** from the chat UI. The `userName` data is still available in the backend for telemetry/logging.
 
 ### Header Bar
-Contains: Settings toggle, app title, connection badge, PhaseTracker (SDLC pipeline), theme toggle, Export button, New Chat button.
+Contains: Settings toggle, app title, connection badge, PhaseTracker (SDLC pipeline), theme toggle, New Chat button.
 
