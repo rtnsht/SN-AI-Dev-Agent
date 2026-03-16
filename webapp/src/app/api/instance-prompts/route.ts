@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchInstancePrompts } from "@/lib/sn-engine";
+import { fetchCategorizedPrompts } from "@/lib/sn-engine";
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,15 +10,18 @@ export async function POST(request: NextRequest) {
     const password = body.password || process.env.SN_PASSWORD || "";
 
     if (!instanceUrl || !username || !password) {
-      return NextResponse.json({ prompts: [] });
+      return NextResponse.json({ prompts: null });
     }
 
-    const prompts = await fetchInstancePrompts({ instanceUrl, username, password });
+    const userContext = body.userContext || undefined;
+
+    const prompts = await fetchCategorizedPrompts(
+      { instanceUrl, username, password },
+      userContext
+    );
     return NextResponse.json({ prompts });
   } catch (error) {
     console.error("Instance prompts error:", error);
-    // Non-critical — return empty so the UI falls back to defaults
-    return NextResponse.json({ prompts: [] });
+    return NextResponse.json({ prompts: null });
   }
 }
-

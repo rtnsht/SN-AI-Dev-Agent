@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, type RefObject } from "react";
-import type { ChatMessage, SDLCPhase, LiveStatus, FileAttachment } from "@/lib/types";
+import type { ChatMessage, SDLCPhase, LiveStatus, FileAttachment, CategorizedPrompts, ExamplePrompt, UpdateSetSummary } from "@/lib/types";
 import MessageBubble from "./MessageBubble";
 import Image from "next/image";
 import { APP_NAME, APP_LOGO, APP_HERO_TAGLINE, APP_SUBTITLE, APP_TAGLINE, HERO_FEATURES, WELCOME_BADGE } from "@/lib/branding";
@@ -46,36 +46,38 @@ const SUGGESTION_TABS = [
   { key: "build", label: "Build a feature", icon: "folder" },
   { key: "explore", label: "Explore instance", icon: "code" },
   { key: "quick", label: "Quick queries", icon: "list" },
+  { key: "updates", label: "Latest Updates", icon: "globe" },
 ] as const;
 
 type TabKey = typeof SUGGESTION_TABS[number]["key"];
 
-/** Categorized suggestions */
-const SUGGESTION_DATA: Record<TabKey, string[]> = {
+/** Static fallback suggestions (used when disconnected or fetch failed) */
+const SUGGESTION_FALLBACK: Record<TabKey, ExamplePrompt[]> = {
   foryou: [
-    "Build a high-priority incident justification feature with manager approval",
-    "Create a catalog item for requesting a new laptop with approval workflow",
-    "Analyze my instance health and show me any anti-patterns",
-    "List all custom business rules on the incident table",
+    { icon: "🏗️", text: "Build a high-priority incident justification feature with manager approval", desc: "Feature build" },
+    { icon: "📦", text: "Create a catalog item for requesting a new laptop with approval workflow", desc: "Catalog" },
+    { icon: "🔍", text: "Analyze my instance health and show me any anti-patterns", desc: "Health check" },
+    { icon: "⚙️", text: "List all custom business rules on the incident table", desc: "Instance review" },
   ],
   build: [
-    "Build an onboarding workflow that provisions accounts across IT systems",
-    "Create a change request template with risk assessment and CAB approval",
-    "Add a custom field to incident that tracks customer sentiment",
-    "Build a knowledge article approval workflow with draft and publish states",
+    { icon: "🏗️", text: "Build an onboarding workflow that provisions accounts across IT systems", desc: "Workflow" },
+    { icon: "📝", text: "Create a change request template with risk assessment and CAB approval", desc: "Template" },
+    { icon: "💡", text: "Add a custom field to incident that tracks customer sentiment", desc: "Enhancement" },
+    { icon: "📖", text: "Build a knowledge article approval workflow with draft and publish states", desc: "Workflow" },
   ],
   explore: [
-    "Show me all active business rules on the incident table",
-    "Audit my ACLs and find any overly permissive rules",
-    "List all scheduled jobs and their run frequencies",
-    "Find unused script includes in my instance",
+    { icon: "⚙️", text: "Show me all active business rules on the incident table", desc: "Business rules" },
+    { icon: "🛡️", text: "Audit my ACLs and find any overly permissive rules", desc: "Security audit" },
+    { icon: "⏰", text: "List all scheduled jobs and their run frequencies", desc: "Scheduled jobs" },
+    { icon: "🔍", text: "Find unused script includes in my instance", desc: "Cleanup" },
   ],
   quick: [
-    "How many open incidents are assigned to my group?",
-    "What update sets are in progress right now?",
-    "Show the schema for the cmdb_ci_server table",
-    "List all notification email templates for incidents",
+    { icon: "❓", text: "How many open incidents are assigned to my group?", desc: "Incidents" },
+    { icon: "📝", text: "What update sets are in progress right now?", desc: "Update sets" },
+    { icon: "🗂️", text: "Show the schema for the cmdb_ci_server table", desc: "Schema" },
+    { icon: "📧", text: "List all notification email templates for incidents", desc: "Notifications" },
   ],
+  updates: [],
 };
 
 
@@ -250,8 +252,8 @@ interface Props {
   liveStatus?: LiveStatus | null;
   /** Authenticated user's display name (from ServiceNow connection) */
   userName?: string;
-  /** Dynamic example prompts generated from instance data */
-  instancePrompts?: { icon: string; text: string; desc: string }[];
+  /** Dynamic categorized prompts generated from instance data (all 4 tabs) */
+  categorizedPrompts?: CategorizedPrompts;
   /** Agent activity log entries for inline display */
   activityLog?: ActivityLogEntry[];
   /** Structured task plan from the planner */
@@ -559,12 +561,13 @@ function InlineAgentActivity({ activityLog, liveStatus, onCancel }: { activityLo
   );
 }
 
-export default function ChatWindow({ messages, isLoading, onSend, onCancel, onApprove, onChoiceSelect, connected, inputRef, showToolDetails = true, liveStatus, userName, instancePrompts, activityLog = [], taskPlan, onGetStarted }: Props) {
+export default function ChatWindow({ messages, isLoading, onSend, onCancel, onApprove, onChoiceSelect, connected, inputRef, showToolDetails = true, liveStatus, userName, categorizedPrompts, activityLog = [], taskPlan, onGetStarted }: Props) {
   const [input, setInput] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [files, setFiles] = useState<FileAttachment[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("foryou");
+  const [expandedUpdates, setExpandedUpdates] = useState<Set<string>>(new Set());
   const [showAttachDropdown, setShowAttachDropdown] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -799,9 +802,13 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
   const showEmptyState = messages.every((m) => m.role === "system");
 
   /* ── Resolve which suggestions to show based on active tab ── */
-  const currentSuggestions = activeTab === "foryou" && instancePrompts && instancePrompts.length > 0
-    ? instancePrompts.map((p) => p.text)
-    : SUGGESTION_DATA[activeTab];
+  const isUpdatesTab = activeTab === "updates";
+  const promptTabKey = isUpdatesTab ? null : activeTab;
+  const dynamicList = promptTabKey ? categorizedPrompts?.[promptTabKey] as ExamplePrompt[] | undefined : undefined;
+  const currentSuggestions: ExamplePrompt[] =
+    dynamicList && dynamicList.length > 0 ? dynamicList : SUGGESTION_FALLBACK[activeTab];
+  const isDynamic = !!(dynamicList && dynamicList.length > 0);
+  const updatesList: UpdateSetSummary[] = categorizedPrompts?.updates ?? [];
 
   /* ── Tab icon helper ── */
   const tabIcon = (icon: string) => {
@@ -810,6 +817,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
       case "folder": return <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" /></svg>;
       case "code": return <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" /></svg>;
       case "list": return <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.25 6.75h12M8.25 12h12M8.25 17.25h12M3.75 6.75h.007v.008H3.75V6.75zm0 5.25h.007v.008H3.75V12zm0 5.25h.007v.008H3.75v-.008z" /></svg>;
+      case "globe": return <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21a9 9 0 100-18 9 9 0 000 18zM3.6 9h16.8M3.6 15h16.8M12 3a15.3 15.3 0 014 9 15.3 15.3 0 01-4 9 15.3 15.3 0 01-4-9 15.3 15.3 0 014-9z" /></svg>;
       default: return null;
     }
   };
@@ -1109,27 +1117,97 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
                 {/* Suggestion tabs */}
                 <div className="mt-6 w-full">
                   <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-                    {SUGGESTION_TABS.map((tab) => (
-                      <button
-                        key={tab.key}
-                        className={`suggestion-tab ${activeTab === tab.key ? "active" : ""}`}
-                        onClick={() => setActiveTab(tab.key)}
-                      >
-                        {tabIcon(tab.icon)}
-                        {tab.label}
-                      </button>
-                    ))}
+                    {SUGGESTION_TABS.map((tab) => {
+                      const isUpd = tab.key === "updates";
+                      const tabHasDynamic = isUpd
+                        ? !!(categorizedPrompts?.updates?.length)
+                        : !!(categorizedPrompts?.[tab.key]?.length);
+                      return (
+                        <button
+                          key={tab.key}
+                          className={`suggestion-tab ${activeTab === tab.key ? "active" : ""}`}
+                          onClick={() => setActiveTab(tab.key)}
+                        >
+                          {tabIcon(tab.icon)}
+                          {tab.label}
+                          {isUpd && categorizedPrompts?.updates?.length ? (
+                            <span
+                              className="text-[9px] font-semibold min-w-[16px] h-4 inline-flex items-center justify-center rounded-full px-1"
+                              style={{ background: activeTab === "updates" ? "color-mix(in srgb, var(--color-primary) 15%, transparent)" : "var(--surface-secondary)", color: activeTab === "updates" ? "var(--color-primary)" : "var(--text-secondary)" }}
+                            >
+                              {categorizedPrompts.updates.length}
+                            </span>
+                          ) : tabHasDynamic && !isUpd ? (
+                            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--color-primary)", opacity: 0.7 }} />
+                          ) : null}
+                        </button>
+                      );
+                    })}
                   </div>
                   <div className="mt-3 space-y-0.5">
-                    {currentSuggestions.map((text, i) => (
-                      <button
-                        key={`${activeTab}-${i}`}
-                        className="suggestion-item"
-                        onClick={() => onSend(text)}
-                      >
-                        {text}
-                      </button>
-                    ))}
+                    {isUpdatesTab ? (
+                      updatesList.length > 0 ? (
+                        updatesList.map((us) => {
+                          const isExp = expandedUpdates.has(us.sysId);
+                          const stateClr = us.state.toLowerCase() === "in progress" ? "var(--color-primary)"
+                            : us.state.toLowerCase() === "complete" ? "var(--color-success)"
+                            : "var(--text-disabled)";
+                          return (
+                            <div key={us.sysId} className="sp-update-row" style={{ animation: "spFadeIn 0.25s ease-out" }}>
+                              <button
+                                className="sp-update-header"
+                                onClick={() => {
+                                  setExpandedUpdates((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(us.sysId)) next.delete(us.sysId); else next.add(us.sysId);
+                                    return next;
+                                  });
+                                }}
+                              >
+                                <span className="sp-update-state-dot" style={{ background: stateClr }} />
+                                <span className="sp-update-name">{us.name}</span>
+                                <svg className={`sp-update-chevron ${isExp ? "sp-update-chevron-open" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </button>
+                              {isExp && (
+                                <div className="sp-update-detail">
+                                  <div className="sp-update-meta">
+                                    <span className="sp-update-badge" style={{ color: stateClr }}>{us.state}</span>
+                                    {us.application && us.application !== "Global" && <span>{us.application}</span>}
+                                  </div>
+                                  <p className="sp-update-desc">{us.description || "No description"}</p>
+                                  <button
+                                    className="sp-update-action"
+                                    onClick={(e) => { e.stopPropagation(); onSend(`Show the contents of update set "${us.name}" and summarize what it changes`); }}
+                                  >
+                                    Explore this update set
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="text-center text-xs py-4" style={{ color: "var(--text-disabled)" }}>No recent update sets found</div>
+                      )
+                    ) : (
+                      currentSuggestions.map((prompt, i) => (
+                        <button
+                          key={`${activeTab}-${i}`}
+                          className="suggestion-item"
+                          onClick={() => onSend(prompt.text)}
+                        >
+                          <span className="suggestion-item-icon">{prompt.icon}</span>
+                          <span className="suggestion-item-content">
+                            <span>{prompt.text}</span>
+                            {isDynamic && prompt.desc && (
+                              <span className="suggestion-item-desc">{prompt.desc}</span>
+                            )}
+                          </span>
+                        </button>
+                      ))
+                    )}
                   </div>
                 </div>
               </>

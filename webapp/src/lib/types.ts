@@ -198,14 +198,48 @@ export interface HelperApisInfo {
   addToUpdateSetHelper?: HelperApiStatus;
 }
 
+export interface AssignmentGroup {
+  sysId: string;
+  name: string;
+}
+
 export interface ConnectionResult {
   success: boolean;
   message: string;
-  userInfo?: { name: string; username: string };
+  userInfo?: {
+    name: string;
+    username: string;
+    sysId?: string;
+    email?: string;
+    assignmentGroups?: AssignmentGroup[];
+  };
   roles?: string[];
   hasAdmin?: boolean;
   hasSecurityAdmin?: boolean;
   helperApis?: HelperApisInfo;
+}
+
+export interface ExamplePrompt {
+  icon: string;
+  text: string;
+  desc: string;
+}
+
+export interface UpdateSetSummary {
+  name: string;
+  state: string;
+  description: string;
+  updatedOn: string;
+  application: string;
+  sysId: string;
+}
+
+export interface CategorizedPrompts {
+  foryou: ExamplePrompt[];
+  build: ExamplePrompt[];
+  explore: ExamplePrompt[];
+  quick: ExamplePrompt[];
+  updates: UpdateSetSummary[];
 }
 
 export interface UsageInfo {

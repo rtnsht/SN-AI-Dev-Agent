@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import Image from "next/image";
 import { APP_NAME, APP_LOGO, APP_SUBTITLE, INFO_MODAL_FEATURES } from "@/lib/branding";
+import type { InfoModalFeature } from "@/lib/branding";
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  onTryPrompt?: (text: string) => void;
 }
 
-export default function InfoModal({ open, onClose }: Props) {
+export default function InfoModal({ open, onClose, onTryPrompt }: Props) {
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -17,7 +19,23 @@ export default function InfoModal({ open, onClose }: Props) {
     return () => window.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
+  const { primary, compact } = useMemo(() => {
+    const p: InfoModalFeature[] = [];
+    const c: InfoModalFeature[] = [];
+    for (const f of INFO_MODAL_FEATURES) {
+      if (f.tier === "compact") c.push(f);
+      else p.push(f);
+    }
+    return { primary: p, compact: c };
+  }, []);
+
   if (!open) return null;
+
+  const handleTry = (example: string) => {
+    const cleaned = example.replace(/^[""]|[""]$/g, "").trim();
+    onTryPrompt?.(cleaned);
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -46,23 +64,57 @@ export default function InfoModal({ open, onClose }: Props) {
           </button>
         </div>
 
-        {/* Feature list */}
-        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-3 sm:py-4 space-y-2 sm:space-y-3">
-          {INFO_MODAL_FEATURES.map((f, i) => (
-            <div
-              key={i}
-              className="group flex gap-2 sm:gap-3 p-2 sm:p-3 rounded-md transition-colors"
-              onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-secondary)")}
-              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-            >
-              <span className="text-lg sm:text-xl flex-shrink-0 mt-0.5">{f.icon}</span>
-              <div className="min-w-0">
-                <h3 className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{f.title}</h3>
-                <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "var(--text-secondary)" }}>{f.desc}</p>
-                <p className="text-[10px] sm:text-[11px] mt-1 italic truncate" style={{ color: "rgba(76,125,255,0.6)" }} title={f.example}>💡 {f.example}</p>
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-3 sm:py-4">
+
+          {/* Tier 1: Primary features — full cards */}
+          {primary.length > 0 && (
+            <div>
+              <p className="info-section-label">How it works</p>
+              <div className="space-y-1.5">
+                {primary.map((f, i) => (
+                  <div key={i} className="info-primary-card" style={{ animationDelay: `${i * 60}ms` }}>
+                    <span className="text-lg sm:text-xl flex-shrink-0 mt-0.5">{f.icon}</span>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{f.title}</h3>
+                      <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "var(--text-secondary)" }}>{f.desc}</p>
+                      <div className="flex items-start gap-1.5 mt-1.5">
+                        <p className="info-example-text" title={f.example}>
+                          {f.example}
+                        </p>
+                        {onTryPrompt && f.example.startsWith('"') && (
+                          <button
+                            className="info-try-btn"
+                            onClick={(e) => { e.stopPropagation(); handleTry(f.example); }}
+                          >
+                            Try it
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          ))}
+          )}
+
+          {/* Tier 2: Compact features — 2-col grid */}
+          {compact.length > 0 && (
+            <div className="mt-4">
+              <p className="info-section-label">Tools &amp; controls</p>
+              <div className="info-compact-grid">
+                {compact.map((f, i) => (
+                  <div key={i} className="info-compact-card" style={{ animationDelay: `${(primary.length + i) * 60}ms` }}>
+                    <span className="text-base flex-shrink-0">{f.icon}</span>
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>{f.title}</h4>
+                      <p className="text-[10px] sm:text-[11px] leading-snug mt-0.5" style={{ color: "var(--text-secondary)" }}>{f.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -76,4 +128,3 @@ export default function InfoModal({ open, onClose }: Props) {
     </div>
   );
 }
-
