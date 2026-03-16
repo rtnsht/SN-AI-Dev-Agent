@@ -1,20 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getTrialStatus } from "@/lib/trial-limiter";
+import { getAccessStatus, getTierLimits } from "@/lib/access-tier";
 
-/** GET /api/trial-status — return current user's trial status */
+/** GET /api/trial-status — return current access tier status */
 export async function GET(request: NextRequest) {
   try {
-    const userId = request.headers.get("x-user-id");
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const userId = request.headers.get("x-user-id") || null;
 
-    const instanceUrl = request.nextUrl.searchParams.get("instanceUrl") || undefined;
-    const status = await getTrialStatus(userId, instanceUrl);
+    const status = await getAccessStatus(ip, userId, false);
+    const limits = await getTierLimits();
 
-    return NextResponse.json(status);
+    return NextResponse.json({
+      ...status,
+      tierLimits: limits,
+      isAuthenticated: !!userId,
+    });
   } catch (err) {
     console.error("[trial-status] GET error:", err);
-    return NextResponse.json({ error: "Failed to fetch trial status" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to fetch access status" }, { status: 500 });
   }
 }

@@ -7,6 +7,8 @@ import ChatWindow from "@/components/ChatWindow";
 import PhaseTracker from "@/components/PhaseTracker";
 import InfoModal from "@/components/InfoModal";
 import WelcomeModal from "@/components/WelcomeModal";
+import SignupGateModal from "@/components/SignupGateModal";
+import APIKeyGateModal from "@/components/APIKeyGateModal";
 import ThemeToggle from "@/components/ThemeToggle";
 import type { ChatMessage, ConnectionResult, UsageInfo, TrialStatus, SDLCPhase, LiveStatus, AIProvider, ModelOption, FileAttachment } from "@/lib/types";
 import { parsePhaseGate, parseUserChoices, ANTHROPIC_MODELS, SDLC_PHASES, openRouterModelToOption } from "@/lib/types";
@@ -81,6 +83,12 @@ export default function Home() {
   const [showInfo, setShowInfo] = useState(false);
   // Welcome modal (first-time user experience)
   const [showWelcome, setShowWelcome] = useState(false);
+  // Gate modals (3-tier access system)
+  const [showSignupGate, setShowSignupGate] = useState(false);
+  const [showApiKeyGate, setShowApiKeyGate] = useState(false);
+  const [gateInfo, setGateInfo] = useState<{ dailyUsed: number; dailyLimit: number; authDailyLimit: number }>({ dailyUsed: 0, dailyLimit: 10, authDailyLimit: 20 });
+  // Whether current user is authenticated (set from /api/config)
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   // Live status streaming (controlled via NEXT_PUBLIC_SHOW_LIVE_STATUS env)
   const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
   const [streamingEnabled, setStreamingEnabled] = useState(true);
@@ -273,7 +281,22 @@ export default function Home() {
       .then((data) => {
         setServerApiKeyConfigured(!!data.serverApiKeyConfigured);
         setServerOpenRouterKeyConfigured(!!data.serverOpenRouterKeyConfigured);
-        if (data.usage) setUsage(data.usage);
+
+        // 3-tier access info
+        if (typeof data.isAuthenticated === "boolean") setIsAuthenticated(data.isAuthenticated);
+        if (data.accessStatus) {
+          setGateInfo((prev) => ({
+            ...prev,
+            dailyUsed: data.accessStatus.dailyUsed ?? prev.dailyUsed,
+            dailyLimit: data.accessStatus.dailyLimit ?? prev.dailyLimit,
+          }));
+        }
+        if (data.tierLimits) {
+          setGateInfo((prev) => ({
+            ...prev,
+            authDailyLimit: data.tierLimits.authDailyLimit ?? prev.authDailyLimit,
+          }));
+        }
 
         // Tool detail visibility
         if (typeof data.showToolDetails === "boolean") setShowToolDetails(data.showToolDetails);
@@ -528,11 +551,36 @@ export default function Home() {
             setLiveStatus(null);
 
             if (res.status === 429) {
-              if (errorData.error === "anthropic_rate_limit") {
+              if (errorData.error === "signup_required") {
+                // Anonymous user hit daily limit — show signup gate
+                setPendingRetry({ text, images, files });
+                setGateInfo((prev) => ({
+                  ...prev,
+                  dailyUsed: errorData.dailyUsed ?? prev.dailyUsed,
+                  dailyLimit: errorData.dailyLimit ?? prev.dailyLimit,
+                }));
+                setShowSignupGate(true);
+                setMessages((prev) => [
+                  ...prev,
+                  { role: "system", type: "error", content: errorData.message || "Free request limit reached. Sign up to continue.", timestamp: new Date().toISOString() },
+                ]);
+              } else if (errorData.error === "apikey_required") {
+                // Authenticated user hit daily limit — show API key gate
+                setPendingRetry({ text, images, files });
+                setGateInfo((prev) => ({
+                  ...prev,
+                  dailyUsed: errorData.dailyUsed ?? prev.dailyUsed,
+                  dailyLimit: errorData.dailyLimit ?? prev.dailyLimit,
+                }));
+                setShowApiKeyGate(true);
+                setMessages((prev) => [
+                  ...prev,
+                  { role: "system", type: "error", content: errorData.message || "Daily limit reached. Add your API key to continue.", timestamp: new Date().toISOString() },
+                ]);
+              } else if (errorData.error === "anthropic_rate_limit") {
                 if (allowUserApiKeys) {
                   setPendingRetry({ text, images, files });
-                  setRateLimitHit(true);
-                  setShowSettings(true);
+                  setShowApiKeyGate(true);
                 }
                 setMessages((prev) => [
                   ...prev,
@@ -540,46 +588,16 @@ export default function Home() {
                     role: "system",
                     type: "error",
                     content: allowUserApiKeys
-                      ? `**API rate limit hit** -- The server's Claude API key hit its token limit. Enter your own API key in Settings to continue. Your conversation is preserved and will auto-retry.`
-                      : `**API rate limit hit** -- The server's Claude API key hit its token limit. Please try again later.`,
-                    timestamp: new Date().toISOString(),
-                  },
-                ]);
-              } else if (errorData.error === "trial_limit_exceeded") {
-                // Trial daily limit or trial expired
-                if (errorData.trialStatus) setTrialStatus(errorData.trialStatus);
-                if (allowUserApiKeys) {
-                  setRateLimitHit(true);
-                  setShowSettings(true);
-                }
-                setMessages((prev) => [
-                  ...prev,
-                  {
-                    role: "system",
-                    type: "error",
-                    content: allowUserApiKeys
-                      ? `**Trial limit reached** -- ${errorData.message}\n\nTo continue chatting, **enter your own API key** in the Settings panel on the left.`
-                      : `**Trial limit reached** -- ${errorData.message}`,
+                      ? `**API rate limit hit** -- The server's Claude API key hit its token limit. Add your own API key to continue.`
+                      : `**API rate limit hit** -- Please try again later.`,
                     timestamp: new Date().toISOString(),
                   },
                 ]);
               } else {
-                // App-level rate limit (request count)
-                setUsage(errorData.usage);
-                if (allowUserApiKeys) {
-                  setRateLimitHit(true);
-                  setShowSettings(true);
-                }
+                // Generic rate limit
                 setMessages((prev) => [
                   ...prev,
-                  {
-                    role: "system",
-                    type: "error",
-                    content: allowUserApiKeys
-                      ? `**Rate limit reached** -- You've used all ${errorData.usage?.max ?? 10} free requests for this ${errorData.usage?.windowHours ?? 4}-hour window.\n\nTo continue chatting, **enter your own API key** in the Settings panel on the left. Your key is sent per-request over HTTPS and never stored.`
-                      : `**Rate limit reached** -- You've used all ${errorData.usage?.max ?? 10} requests for this ${errorData.usage?.windowHours ?? 4}-hour window. Please try again later.`,
-                    timestamp: new Date().toISOString(),
-                  },
+                  { role: "system", type: "error", content: errorData.message || "Rate limit reached. Please try again later.", timestamp: new Date().toISOString() },
                 ]);
               }
             } else {
@@ -862,16 +880,7 @@ export default function Home() {
             });
           }
 
-          if (data.usage && data.usage.remaining > 0 && data.usage.remaining <= 2 && serverApiKeyConfigured && !credentials.claudeApiKey) {
-            newMsgs.push({
-              role: "system",
-              type: "warning",
-              content: allowUserApiKeys
-                ? `⏳ **${data.usage.remaining} free request${data.usage.remaining === 1 ? "" : "s"} remaining** out of ${data.usage.max} per ${data.usage.windowHours} hours. Enter your own Claude API key in Settings to continue chatting with no limits.`
-                : `⏳ **${data.usage.remaining} request${data.usage.remaining === 1 ? "" : "s"} remaining** out of ${data.usage.max} per ${data.usage.windowHours} hours.`,
-              timestamp: new Date().toISOString(),
-            });
-          }
+          // Low remaining requests warning is now handled by the 3-tier gate modals
           // Update both state and ref together before potential auto-approve setTimeout
           const updatedMsgs = [...messagesRef.current, ...newMsgs];
           messagesRef.current = updatedMsgs;
@@ -882,60 +891,21 @@ export default function Home() {
             setTimeout(() => handleSendRef.current("approved"), 100);
           }
         } else if (res.status === 429) {
-          if (data.error === "anthropic_rate_limit") {
-            // Anthropic token limit
-            if (allowUserApiKeys) {
-              setPendingRetry({ text, images, files });
-              setRateLimitHit(true);
-              setShowSettings(true);
-            }
-            setMessages((prev) => [
-              ...prev,
-              {
-                role: "system",
-                type: "error",
-                content: allowUserApiKeys
-                  ? `🔑 **API rate limit hit** — The server's Claude API key hit its token limit. Enter your own API key in Settings to continue. Your conversation is preserved and will auto-retry.`
-                  : `🔑 **API rate limit hit** — The server's Claude API key hit its token limit. Please try again later.`,
-                timestamp: new Date().toISOString(),
-              },
-            ]);
-          } else if (data.error === "trial_limit_exceeded") {
-            // Trial daily limit or trial expired
-            if (data.trialStatus) setTrialStatus(data.trialStatus);
-            if (allowUserApiKeys) {
-              setRateLimitHit(true);
-              setShowSettings(true);
-            }
-            setMessages((prev) => [
-              ...prev,
-              {
-                role: "system",
-                type: "error",
-                content: allowUserApiKeys
-                  ? `**Trial limit reached** -- ${data.message}\n\nTo continue chatting, **enter your own API key** in the Settings panel on the left.`
-                  : `**Trial limit reached** -- ${data.message}`,
-                timestamp: new Date().toISOString(),
-              },
-            ]);
+          if (data.error === "signup_required") {
+            setPendingRetry({ text, images, files });
+            setGateInfo((prev) => ({ ...prev, dailyUsed: data.dailyUsed ?? prev.dailyUsed, dailyLimit: data.dailyLimit ?? prev.dailyLimit }));
+            setShowSignupGate(true);
+            setMessages((prev) => [...prev, { role: "system", type: "error", content: data.message || "Free request limit reached. Sign up to continue.", timestamp: new Date().toISOString() }]);
+          } else if (data.error === "apikey_required") {
+            setPendingRetry({ text, images, files });
+            setGateInfo((prev) => ({ ...prev, dailyUsed: data.dailyUsed ?? prev.dailyUsed, dailyLimit: data.dailyLimit ?? prev.dailyLimit }));
+            setShowApiKeyGate(true);
+            setMessages((prev) => [...prev, { role: "system", type: "error", content: data.message || "Daily limit reached. Add your API key to continue.", timestamp: new Date().toISOString() }]);
+          } else if (data.error === "anthropic_rate_limit") {
+            if (allowUserApiKeys) { setPendingRetry({ text, images, files }); setShowApiKeyGate(true); }
+            setMessages((prev) => [...prev, { role: "system", type: "error", content: allowUserApiKeys ? "**API rate limit hit** -- Add your own API key to continue." : "**API rate limit hit** -- Please try again later.", timestamp: new Date().toISOString() }]);
           } else {
-            // App-level rate limit (request count)
-            setUsage(data.usage);
-            if (allowUserApiKeys) {
-              setRateLimitHit(true);
-              setShowSettings(true);
-            }
-            setMessages((prev) => [
-              ...prev,
-              {
-                role: "system",
-                type: "error",
-                content: allowUserApiKeys
-                  ? `🚫 **Rate limit reached** — You've used all ${data.usage?.max ?? 10} free requests for this ${data.usage?.windowHours ?? 4}-hour window.\n\nTo continue chatting, **enter your own Claude API key** in the Settings panel on the left. Your key is sent per-request over HTTPS and never stored.`
-                  : `🚫 **Rate limit reached** — You've used all ${data.usage?.max ?? 10} requests for this ${data.usage?.windowHours ?? 4}-hour window. Please try again later.`,
-                timestamp: new Date().toISOString(),
-              },
-            ]);
+            setMessages((prev) => [...prev, { role: "system", type: "error", content: data.message || "Rate limit reached. Please try again later.", timestamp: new Date().toISOString() }]);
           }
         } else {
           setMessages((prev) => [
@@ -1417,6 +1387,37 @@ export default function Home() {
       {/* Info modal */}
       <InfoModal open={showInfo} onClose={() => setShowInfo(false)} />
       <WelcomeModal open={showWelcome} onClose={dismissWelcome} />
+
+      {/* Gate modals (3-tier access) */}
+      <SignupGateModal
+        open={showSignupGate}
+        onClose={() => setShowSignupGate(false)}
+        dailyUsed={gateInfo.dailyUsed}
+        dailyLimit={gateInfo.dailyLimit}
+        authDailyLimit={gateInfo.authDailyLimit}
+      />
+      <APIKeyGateModal
+        open={showApiKeyGate}
+        onClose={() => setShowApiKeyGate(false)}
+        onKeyProvided={(provider, key) => {
+          setShowApiKeyGate(false);
+          if (provider === "anthropic") {
+            setCredentials((prev) => ({ ...prev, claudeApiKey: key }));
+          } else {
+            setCredentials((prev) => ({ ...prev, openRouterApiKey: key }));
+            setAiProvider("openrouter");
+          }
+          setRateLimitHit(false);
+          // Auto-retry the pending message
+          if (pendingRetry) {
+            const retry = pendingRetry;
+            setPendingRetry(null);
+            setTimeout(() => handleSendRef.current(retry.text, retry.images, retry.files), 300);
+          }
+        }}
+        dailyUsed={gateInfo.dailyUsed}
+        dailyLimit={gateInfo.dailyLimit}
+      />
     </div>
   );
 }

@@ -20,6 +20,7 @@ export const config = {
 
 /** Routes that don't require authentication */
 const PUBLIC_PATHS = [
+  "/app",                 // open to everyone (3-tier rate limiting handles access)
   "/login",
   "/request-access",
   "/auth/verify",
@@ -31,6 +32,9 @@ const PUBLIC_PATHS = [
   "/api/openrouter-models",
   "/api/feedback",
   "/api/banners",
+  "/api/chat",            // open for anonymous access (rate-limited server-side)
+  "/api/chat-stream",     // open for anonymous access (rate-limited server-side)
+  "/api/trial-status",    // trial status check (works for anon too)
 ];
 
 /** Check if a path is public (no auth needed) */
@@ -96,7 +100,7 @@ export async function middleware(request: NextRequest) {
     // Non-fatal — don't block requests if seed fails
   }
 
-  // Public routes — allow through (but redirect authenticated users on "/" to /app)
+  // Public routes — allow through (but enrich with user headers if authenticated)
   if (isPublicPath(pathname)) {
     // If user is on the landing page and has a valid session, redirect to /app
     if (pathname === "/") {
@@ -106,6 +110,20 @@ export async function middleware(request: NextRequest) {
         if (session && !session.is_temporary) {
           return NextResponse.redirect(new URL("/app", request.url));
         }
+      }
+    }
+
+    // For public routes that benefit from user context (e.g., /app, /api/chat*),
+    // attach user headers if authenticated — but don't block if not.
+    const sessionToken = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+    if (sessionToken) {
+      try {
+        const session = await validateSession(sessionToken);
+        if (session && !session.is_temporary) {
+          return addUserHeaders(request, session.user);
+        }
+      } catch {
+        // Non-fatal — proceed without user context
       }
     }
     return NextResponse.next();

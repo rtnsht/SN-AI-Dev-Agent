@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { chat, type UserCredentials, type ChatMessage } from "@/lib/sn-engine";
-import { consume, getUsage } from "@/lib/rate-limiter";
-import { checkTrialLimit, consumeTrialRequest } from "@/lib/trial-limiter";
+import { checkAccess } from "@/lib/access-tier";
 import { logger, generateSessionId } from "@/lib/logger";
 
 export const maxDuration = 120; // Allow up to 2 minutes for tool-use loops
@@ -78,69 +77,33 @@ export async function POST(request: NextRequest) {
       credentials.claudeApiKey = claudeApiKey;
     }
 
-    // Rate limiting — only applies when using the server-provided key
-    let usageInfo = null;
-
-    if (!userSuppliedKey && process.env.CLAUDE_API_KEY) {
-      const { allowed, usage } = consume(ip);
-      usageInfo = usage;
-
-      if (!allowed) {
-        logger.warn(sessionId, "rate_limit", "Server API key rate limit exceeded", {
-          used: usage.used,
-          max: usage.max,
-          windowHours: usage.windowHours,
+    // 3-tier access check: anonymous (IP) → authenticated (user) → BYOK (unlimited)
+    const userId = request.headers.get("x-user-id");
+    try {
+      const access = await checkAccess(ip, userId, userSuppliedKey);
+      if (!access.allowed) {
+        logger.warn(sessionId, "access_tier", `Access denied: ${access.gate}`, {
+          tier: access.tier,
+          dailyUsed: access.dailyUsed,
+          dailyLimit: access.dailyLimit,
           ip,
+          userId,
         });
         return NextResponse.json(
           {
-            error: "rate_limit_exceeded",
-            message: allowUserKeys
-              ? `You've used all ${usage.max} free requests for this ${usage.windowHours}-hour window. Enter your own Claude API key to continue chatting with no limits.`
-              : `You've used all ${usage.max} requests for this ${usage.windowHours}-hour window. Please try again later.`,
-            usage,
+            error: access.gate === "signup" ? "signup_required" : "apikey_required",
+            gate: access.gate,
+            message: access.message,
+            tier: access.tier,
+            dailyUsed: access.dailyUsed,
+            dailyLimit: access.dailyLimit,
             allowUserApiKeys: allowUserKeys,
           },
           { status: 429 }
         );
       }
-    }
-
-    // Trial limit check (per-user daily limits)
-    if (!userSuppliedKey) {
-      const userId = request.headers.get("x-user-id");
-      if (userId) {
-        try {
-          const { allowed, status: trialStatus } = await checkTrialLimit(userId, credentials.instanceUrl);
-          if (!allowed && trialStatus.isConfigured) {
-            const reason = trialStatus.trialExpired
-              ? `Your ${trialStatus.trialDays}-day free trial has ended.`
-              : `You've used all ${trialStatus.dailyLimit} free requests for today.`;
-            logger.warn(sessionId, "trial_limit", reason, {
-              userId,
-              dailyUsed: trialStatus.dailyUsed,
-              dailyLimit: trialStatus.dailyLimit,
-              daysLeft: trialStatus.daysLeft,
-            });
-            return NextResponse.json(
-              {
-                error: "trial_limit_exceeded",
-                message: allowUserKeys
-                  ? `${reason} Connect your own API key to continue with no limits.`
-                  : `${reason} Please try again tomorrow.`,
-                trialStatus,
-                allowUserApiKeys: allowUserKeys,
-              },
-              { status: 429 }
-            );
-          }
-          if (trialStatus.isConfigured) {
-            await consumeTrialRequest(userId, credentials.instanceUrl);
-          }
-        } catch (trialErr) {
-          logger.warn(sessionId, "trial_limit", "Trial check failed, allowing request", { error: String(trialErr) });
-        }
-      }
+    } catch (accessErr) {
+      logger.warn(sessionId, "access_tier", "Access check failed, allowing request", { error: String(accessErr) });
     }
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -192,7 +155,7 @@ export async function POST(request: NextRequest) {
     // Don't end session - client may send more requests in this session
 
     // Include usage info and response timestamp so frontend can capture it
-    return NextResponse.json({ ...result, usage: usageInfo, responseTimestamp });
+    return NextResponse.json({ ...result, responseTimestamp });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Internal server error";
     logger.error(sessionId, "chat", "Chat API error", {

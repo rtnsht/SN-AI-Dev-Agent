@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 
-type Tab = "requests" | "users" | "invites" | "banners" | "trials";
+type Tab = "requests" | "users" | "invites" | "banners" | "trials" | "access-tiers";
 
 interface AccessRequest {
   id: string;
@@ -123,6 +123,11 @@ export default function AdminPage() {
   const [overrideDailyLimit, setOverrideDailyLimit] = useState("10");
   const [overrideTrialDays, setOverrideTrialDays] = useState("10");
 
+  // Access tier state
+  const [tierAnonLimit, setTierAnonLimit] = useState("10");
+  const [tierAuthLimit, setTierAuthLimit] = useState("20");
+  const [tierUsage, setTierUsage] = useState<{ userId: string; email: string; name: string; requestCount: number }[]>([]);
+
   const pendingCount = requests.filter((r) => r.status === "pending").length;
 
   const fetchData = useCallback(async () => {
@@ -155,6 +160,15 @@ export default function AdminPage() {
           setTrialDays(String(data.globalConfig.trial_days));
           setTrialActive(data.globalConfig.is_active);
         }
+      } else if (tab === "access-tiers") {
+        const res = await fetch("/api/admin/access-tiers");
+        if (res.status === 401 || res.status === 403) { router.push("/login"); return; }
+        const data = await res.json();
+        if (data.config) {
+          setTierAnonLimit(String(data.config.anon_daily_limit ?? 10));
+          setTierAuthLimit(String(data.config.auth_daily_limit ?? 20));
+        }
+        setTierUsage(data.todayUsage || []);
       } else {
         const res = await fetch("/api/admin/invite-codes");
         if (res.status === 401 || res.status === 403) { router.push("/login"); return; }
@@ -448,6 +462,30 @@ export default function AdminPage() {
     setActionLoading(null);
   }
 
+  async function handleSaveTierLimits(e: React.FormEvent) {
+    e.preventDefault();
+    setActionLoading("save-tiers");
+    setMessage("");
+    try {
+      const res = await fetch("/api/admin/access-tiers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          anon_daily_limit: parseInt(tierAnonLimit, 10),
+          auth_daily_limit: parseInt(tierAuthLimit, 10),
+        }),
+      });
+      if (res.ok) {
+        setMessage("Access tier limits saved.");
+        fetchData();
+      } else {
+        const data = await res.json();
+        setMessage(data.error || "Failed to save");
+      }
+    } catch { setMessage("Network error"); }
+    setActionLoading(null);
+  }
+
   const fmt = (d: string | null) => d ? new Date(d).toLocaleDateString() : "—";
 
   return (
@@ -467,6 +505,7 @@ export default function AdminPage() {
         <button className={`admin-tab ${tab === "invites" ? "active" : ""}`} onClick={() => setTab("invites")}>Invite Codes</button>
         <button className={`admin-tab ${tab === "banners" ? "active" : ""}`} onClick={() => setTab("banners")}>Banners</button>
         <button className={`admin-tab ${tab === "trials" ? "active" : ""}`} onClick={() => setTab("trials")}>Trials</button>
+        <button className={`admin-tab ${tab === "access-tiers" ? "active" : ""}`} onClick={() => setTab("access-tiers")}>Access Tiers</button>
       </div>
 
       {loading && <p className="admin-loading">Loading...</p>}
@@ -1062,6 +1101,96 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+        </>
+      )}
+
+      {/* ─── Access Tiers Tab ─── */}
+      {tab === "access-tiers" && !loading && (
+        <>
+          <form onSubmit={handleSaveTierLimits} style={{
+            background: "var(--surface-secondary)",
+            border: "1px solid var(--border-default)",
+            borderRadius: "12px",
+            padding: "20px",
+            marginBottom: "1.5rem",
+          }}>
+            <h3 style={{ color: "var(--text-primary)", fontSize: "15px", fontWeight: 600, margin: "0 0 8px" }}>
+              3-Tier Access Limits
+            </h3>
+            <p style={{ color: "var(--text-secondary)", fontSize: "12px", margin: "0 0 16px" }}>
+              Anonymous visitors get Tier 1. After login/signup they get Tier 2. Users with their own API key get unlimited (Tier 3).
+            </p>
+
+            <div style={{ display: "flex", gap: "16px", marginBottom: "16px", flexWrap: "wrap", alignItems: "end" }}>
+              <div>
+                <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}>
+                  Tier 1: Anonymous (daily)
+                </label>
+                <input
+                  className="auth-input"
+                  type="number"
+                  min="1"
+                  value={tierAnonLimit}
+                  onChange={(e) => setTierAnonLimit(e.target.value)}
+                  style={{ width: "120px", fontSize: "13px" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}>
+                  Tier 2: Authenticated (daily)
+                </label>
+                <input
+                  className="auth-input"
+                  type="number"
+                  min="1"
+                  value={tierAuthLimit}
+                  onChange={(e) => setTierAuthLimit(e.target.value)}
+                  style={{ width: "120px", fontSize: "13px" }}
+                />
+              </div>
+              <div style={{ paddingBottom: "2px" }}>
+                <span style={{ display: "block", color: "var(--text-disabled)", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}>
+                  Tier 3: BYOK
+                </span>
+                <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>Unlimited</span>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="admin-btn admin-btn-approve"
+              disabled={actionLoading === "save-tiers"}
+            >
+              {actionLoading === "save-tiers" ? "Saving..." : "Save Limits"}
+            </button>
+          </form>
+
+          {/* Today's authenticated usage */}
+          <div>
+            <h3 style={{ color: "var(--text-primary)", fontSize: "15px", fontWeight: 600, marginBottom: "12px" }}>
+              Today&apos;s Authenticated Usage
+            </h3>
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr><th>User</th><th>Email</th><th>Requests Today</th></tr>
+                </thead>
+                <tbody>
+                  {tierUsage.map((u) => (
+                    <tr key={u.userId}>
+                      <td>{u.name}</td>
+                      <td>{u.email}</td>
+                      <td>{u.requestCount}</td>
+                    </tr>
+                  ))}
+                  {tierUsage.length === 0 && <tr><td colSpan={3} className="admin-empty">No authenticated usage today</td></tr>}
+                </tbody>
+              </table>
+            </div>
+            <p style={{ color: "var(--text-disabled)", fontSize: "11px", marginTop: "8px" }}>
+              Anonymous (IP-based) usage is tracked in server memory and resets on restart. Authenticated usage is persisted in the database.
+            </p>
           </div>
         </>
       )}

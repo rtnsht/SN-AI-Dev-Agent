@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUsage, MAX_REQUESTS, WINDOW_MS } from "@/lib/rate-limiter";
+import { getAccessStatus, getTierLimits } from "@/lib/access-tier";
 
 /**
  * GET /api/config — returns public app configuration.
  * Never exposes the actual API key value, only whether one is configured.
- * Includes rate limit info when server key is active.
+ * Includes 3-tier access info.
  */
 export async function GET(request: NextRequest) {
   const serverApiKeyConfigured = !!process.env.CLAUDE_API_KEY;
@@ -16,23 +16,31 @@ export async function GET(request: NextRequest) {
   const snPass = process.env.SN_PASSWORD || "";
   const serverSnCredsConfigured = !!(snUrl && snUser && snPass);
 
-  // Get caller IP for usage tracking
+  // Get caller IP and user ID for access status
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  const usage = serverApiKeyConfigured ? getUsage(ip) : null;
+  const userId = request.headers.get("x-user-id") || null;
+
+  // Get current access tier status and limits
+  let accessStatus = null;
+  let tierLimits = null;
+  try {
+    accessStatus = await getAccessStatus(ip, userId, false);
+    tierLimits = await getTierLimits();
+  } catch {
+    // Non-fatal
+  }
 
   return NextResponse.json({
     serverApiKeyConfigured,
-    // OpenRouter server-side API key status
     serverOpenRouterKeyConfigured,
-    // Expose non-sensitive SN credential info (never send password)
     serverSnCredsConfigured,
     ...(serverSnCredsConfigured
       ? { serverSnCredentials: { instanceUrl: snUrl, username: snUser } }
       : {}),
-    rateLimit: serverApiKeyConfigured
-      ? { max: MAX_REQUESTS, windowHours: WINDOW_MS / 3600000 }
-      : null,
-    usage,
+    // 3-tier access info
+    accessStatus,
+    tierLimits,
+    isAuthenticated: !!userId,
     // Tool execution detail visibility (default: true)
     showToolDetails: process.env.NEXT_PUBLIC_SHOW_TOOL_DETAILS !== "false",
     // Live status visibility - shows what agent is doing (default: true)
