@@ -16,6 +16,19 @@ export const CREATOR_NAME     = process.env.NEXT_PUBLIC_CREATOR_NAME     || "Rat
 export const CREATOR_LINKEDIN = process.env.NEXT_PUBLIC_CREATOR_LINKEDIN || "https://www.linkedin.com/in/ratnesh-tiwari";
 export const SHOW_INFO_BUTTON = process.env.NEXT_PUBLIC_SHOW_INFO_BUTTON !== "false"; // default: true
 
+// ── Landing Mode ─────────────────────────────────────────────────────────────
+// "home"    → new minimal home page with welcome intro modal
+// "landing" → classic detailed marketing landing page (default)
+export const LANDING_MODE = process.env.NEXT_PUBLIC_LANDING_MODE || "landing";
+
+// ── Welcome Modal (shown on the home page) ───────────────────────────────────
+export const WELCOME_TITLE    = process.env.NEXT_PUBLIC_WELCOME_TITLE    || "";
+export const WELCOME_LINE_1   = process.env.NEXT_PUBLIC_WELCOME_LINE_1   || "Yantra is an AI-powered agent that builds ServiceNow solutions from plain-English descriptions — specs, designs, and deployable code, generated automatically.";
+export const WELCOME_LINE_2   = process.env.NEXT_PUBLIC_WELCOME_LINE_2   || "You stay in full control — review and approve every spec, design, and code artifact at each phase before anything moves forward.";
+export const WELCOME_LINE_3   = process.env.NEXT_PUBLIC_WELCOME_LINE_3   || "Every artifact is captured in a tracked update set with a full audit trail and rollback support — safe, transparent, production-ready development.";
+// Falls back to HERO_VIDEO_URL if not set
+export const WELCOME_VIDEO_URL = process.env.NEXT_PUBLIC_WELCOME_VIDEO_URL || process.env.NEXT_PUBLIC_HERO_VIDEO_URL || "";
+
 // ── Landing Page Section Text (all configurable via env vars) ────────────────
 export const FEATURES_EYEBROW = process.env.NEXT_PUBLIC_FEATURES_EYEBROW || "Capabilities";
 export const FEATURES_TITLE   = process.env.NEXT_PUBLIC_FEATURES_TITLE   || "Everything you need to ship on ServiceNow";
