@@ -1,13 +1,16 @@
 /**
  * 3-Tier Access System
  *
- * Tier 1 — Anonymous:  IP-based daily limit (default: 10/day, admin-configurable)
+ * Tier 1 — Anonymous:  IP + instance-aware daily limit (default: 10/day, admin-configurable)
  * Tier 2 — Authenticated: User-based daily limit (default: 20/day, admin-configurable)
  * Tier 3 — BYOK:       Unlimited (user provides their own API key)
  *
  * Limits are stored in Supabase `access_tier_config` table and cached in-memory.
- * Anonymous tracking uses in-memory IP buckets (reset on server restart).
+ * Anonymous tracking uses DB-backed `anon_request_log` table (survives server restarts).
  * Authenticated tracking uses Supabase `request_log` table.
+ *
+ * Anonymous dual-budget: a request is blocked if EITHER the IP or the instance
+ * has exceeded the daily limit. This prevents VPN/IP-hopping abuse.
  */
 
 import { getSupabase } from "@/lib/supabase";
@@ -79,44 +82,77 @@ export function invalidateTierCache(): void {
   cacheTimestamp = 0;
 }
 
-/* ── Anonymous (IP-based) tracking — in-memory ──────────── */
-
-interface AnonBucket {
-  date: string; // YYYY-MM-DD
-  count: number;
-}
-
-const anonBuckets = new Map<string, AnonBucket>();
+/* ── Anonymous tracking — DB-backed with dual budget ──────── */
 
 function todayStr(): string {
   return new Date().toISOString().split("T")[0];
 }
 
-function getAnonUsage(ip: string): number {
+/**
+ * Get anonymous usage — returns the higher of IP-total or instance-total.
+ * This ensures that switching IPs on the same instance doesn't bypass limits.
+ */
+async function getAnonUsage(ip: string, instanceUrl?: string): Promise<number> {
+  const sb = getSupabase();
   const today = todayStr();
-  const bucket = anonBuckets.get(ip);
-  if (!bucket || bucket.date !== today) return 0;
-  return bucket.count;
+
+  // IP-level usage (sum across all instances for this IP today)
+  const { data: ipRows } = await sb
+    .from("anon_request_log")
+    .select("request_count")
+    .eq("ip_address", ip)
+    .eq("request_date", today);
+
+  const ipTotal = (ipRows || []).reduce((sum, r) => sum + (r.request_count || 0), 0);
+
+  // Instance-level usage (sum across all IPs for this instance today)
+  let instanceTotal = 0;
+  if (instanceUrl) {
+    const { data: instRows } = await sb
+      .from("anon_request_log")
+      .select("request_count")
+      .eq("instance_url", instanceUrl)
+      .eq("request_date", today);
+
+    instanceTotal = (instRows || []).reduce((sum, r) => sum + (r.request_count || 0), 0);
+  }
+
+  // Return the higher count — either budget being exceeded blocks the request
+  return Math.max(ipTotal, instanceTotal);
 }
 
-function consumeAnon(ip: string): number {
+/**
+ * Record an anonymous request in the DB.
+ * Upserts: one row per (ip, instance_url, date).
+ */
+async function consumeAnon(ip: string, instanceUrl?: string): Promise<void> {
+  const sb = getSupabase();
   const today = todayStr();
-  let bucket = anonBuckets.get(ip);
-  if (!bucket || bucket.date !== today) {
-    bucket = { date: today, count: 0 };
-    anonBuckets.set(ip, bucket);
-  }
-  bucket.count++;
-  return bucket.count;
-}
+  const instVal = instanceUrl || null;
 
-// Cleanup stale entries every 30 minutes
-setInterval(() => {
-  const today = todayStr();
-  for (const [ip, bucket] of anonBuckets) {
-    if (bucket.date !== today) anonBuckets.delete(ip);
+  // Try upsert — increment request_count for existing row
+  const { data: existing } = await sb
+    .from("anon_request_log")
+    .select("id, request_count")
+    .eq("ip_address", ip)
+    .eq("request_date", today)
+    .eq("instance_url", instVal ?? "")
+    .maybeSingle();
+
+  if (existing) {
+    await sb
+      .from("anon_request_log")
+      .update({ request_count: existing.request_count + 1 })
+      .eq("id", existing.id);
+  } else {
+    await sb.from("anon_request_log").insert({
+      ip_address: ip,
+      instance_url: instVal,
+      request_date: today,
+      request_count: 1,
+    });
   }
-}, 30 * 60 * 1000);
+}
 
 /* ── Authenticated (user-based) tracking — Supabase ──────── */
 
@@ -154,14 +190,16 @@ async function consumeAuth(userId: string): Promise<void> {
 /**
  * Check and consume access for a request.
  *
- * @param ip       - Client IP address
- * @param userId   - Authenticated user ID (null for anonymous)
- * @param isByok   - Whether the user supplied their own API key
+ * @param ip          - Client IP address
+ * @param userId      - Authenticated user ID (null for anonymous)
+ * @param isByok      - Whether the user supplied their own API key
+ * @param instanceUrl - ServiceNow instance URL (for instance-aware anon limiting)
  */
 export async function checkAccess(
   ip: string,
   userId: string | null,
-  isByok: boolean
+  isByok: boolean,
+  instanceUrl?: string
 ): Promise<AccessCheckResult> {
   // Tier 3: BYOK — always allowed
   if (isByok) {
@@ -193,8 +231,8 @@ export async function checkAccess(
     };
   }
 
-  // Tier 1: Anonymous
-  const anonUsed = getAnonUsage(ip);
+  // Tier 1: Anonymous — dual budget (IP + instance)
+  const anonUsed = await getAnonUsage(ip, instanceUrl);
   if (anonUsed >= limits.anonDailyLimit) {
     return {
       allowed: false,
@@ -205,11 +243,11 @@ export async function checkAccess(
       message: `You've used all ${limits.anonDailyLimit} free requests for today. Sign up to get ${limits.authDailyLimit} daily requests.`,
     };
   }
-  const newCount = consumeAnon(ip);
+  await consumeAnon(ip, instanceUrl);
   return {
     allowed: true,
     tier: "anonymous",
-    dailyUsed: newCount,
+    dailyUsed: anonUsed + 1,
     dailyLimit: limits.anonDailyLimit,
     gate: "none",
   };
@@ -221,7 +259,8 @@ export async function checkAccess(
 export async function getAccessStatus(
   ip: string,
   userId: string | null,
-  isByok: boolean
+  isByok: boolean,
+  instanceUrl?: string
 ): Promise<AccessCheckResult> {
   if (isByok) {
     return { allowed: true, tier: "byok", dailyUsed: 0, dailyLimit: 0, gate: "none" };
@@ -240,7 +279,7 @@ export async function getAccessStatus(
     };
   }
 
-  const anonUsed = getAnonUsage(ip);
+  const anonUsed = await getAnonUsage(ip, instanceUrl);
   return {
     allowed: anonUsed < limits.anonDailyLimit,
     tier: "anonymous",

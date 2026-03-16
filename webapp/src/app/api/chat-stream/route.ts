@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     // 3-tier access check: anonymous (IP) → authenticated (user) → BYOK (unlimited)
     const userId = request.headers.get("x-user-id");
     try {
-      const access = await checkAccess(ip, userId, userSuppliedKey);
+      const access = await checkAccess(ip, userId, userSuppliedKey, credentials.instanceUrl);
       if (!access.allowed) {
         logger.warn(sessionId, "access_tier", `Access denied: ${access.gate}`, {
           tier: access.tier,
