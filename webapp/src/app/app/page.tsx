@@ -13,7 +13,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 import SuggestionPanel from "@/components/SuggestionPanel";
 import type { ChatMessage, ConnectionResult, UsageInfo, TrialStatus, SDLCPhase, LiveStatus, AIProvider, ModelOption, FileAttachment, CategorizedPrompts } from "@/lib/types";
 import { parsePhaseGate, parseUserChoices, ANTHROPIC_MODELS, SDLC_PHASES, openRouterModelToOption } from "@/lib/types";
-import { APP_NAME, APP_LOGO, SHOW_INFO_BUTTON, CREATOR_NAME, CREATOR_LINKEDIN } from "@/lib/branding";
+import { APP_NAME, APP_LOGO, SHOW_INFO_BUTTON, CREATOR_NAME, CREATOR_LINKEDIN, FOOTER_TAGLINE, FOOTER_COPYRIGHT } from "@/lib/branding";
 
 /* ── Session persistence keys (sessionStorage) ──────────────── */
 const SK = {
@@ -56,6 +56,11 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [showSettings, setShowSettings] = useState(true);
+  const [showRightPanel, setShowRightPanel] = useState(true);
+  const [leftWidth, setLeftWidth] = useState(320);
+  const [rightWidth, setRightWidth] = useState(288);
+  const isResizingLeft = useRef(false);
+  const isResizingRight = useRef(false);
   const [serverApiKeyConfigured, setServerApiKeyConfigured] = useState(false);
   const [serverOpenRouterKeyConfigured, setServerOpenRouterKeyConfigured] = useState(false);
   const [serverSnCredsConfigured, setServerSnCredsConfigured] = useState(false);
@@ -307,6 +312,21 @@ export default function Home() {
         if (typeof data.showLiveStatus === "boolean") setStreamingEnabled(data.showLiveStatus);
         // User API key control
         if (typeof data.allowUserApiKeys === "boolean") setAllowUserApiKeys(data.allowUserApiKeys);
+
+        // Seed usage display from access status when server API keys are in use
+        if (data.accessStatus && (data.serverApiKeyConfigured || data.serverOpenRouterKeyConfigured)) {
+          const dailyUsed = data.accessStatus.dailyUsed ?? 0;
+          const dailyLimit = data.accessStatus.dailyLimit ?? 0;
+          if (dailyLimit > 0) {
+            setUsage({
+              used: dailyUsed,
+              max: dailyLimit,
+              remaining: Math.max(0, dailyLimit - dailyUsed),
+              resetsAt: null,
+              windowHours: 24,
+            });
+          }
+        }
 
         // Pre-populate ServiceNow credentials if server-provided
         if (data.serverSnCredsConfigured && data.serverSnCredentials) {
@@ -1074,11 +1094,14 @@ export default function Home() {
     fetchCategorizedPromptsFromApi(credentials, userCtx);
   }, [connected, connInfo, credentials, fetchCategorizedPromptsFromApi]);
 
-  /** Click a sidebar suggestion -> new chat + send that prompt */
-  const handleNewChatWithPrompt = useCallback((prompt: string) => {
-    handleNewChat();
-    setTimeout(() => handleSendRef.current(prompt), 100);
-  }, [handleNewChat]);
+  /** Click a sidebar suggestion -> populate chat input (user sends manually) */
+  const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
+  const handlePopulateInput = useCallback((prompt: string) => {
+    setPendingPrompt(prompt);
+  }, []);
+  const clearPendingPrompt = useCallback(() => {
+    setPendingPrompt(null);
+  }, []);
 
   /** Disconnect and unlock fields so user can edit before reconnecting */
   const handleReconnect = useCallback(() => {
@@ -1169,6 +1192,50 @@ export default function Home() {
     URL.revokeObjectURL(url);
   }, [messages, connected, connInfo, credentials, selectedModel]);
 
+  /** Sidebar resize handlers (mouse + touch) */
+  useEffect(() => {
+    const handleMove = (clientX: number) => {
+      if (isResizingLeft.current) {
+        setLeftWidth(Math.min(Math.max(clientX, 240), 480));
+      }
+      if (isResizingRight.current) {
+        setRightWidth(Math.min(Math.max(window.innerWidth - clientX, 240), 480));
+      }
+    };
+    const handleMouseMove = (e: MouseEvent) => handleMove(e.clientX);
+    const handleTouchMove = (e: TouchEvent) => { if (e.touches[0]) handleMove(e.touches[0].clientX); };
+    const handleEnd = () => {
+      isResizingLeft.current = false;
+      isResizingRight.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleEnd);
+    window.addEventListener("touchmove", handleTouchMove, { passive: true });
+    window.addEventListener("touchend", handleEnd);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleEnd);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleEnd);
+    };
+  }, []);
+
+  const startResizeLeft = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    isResizingLeft.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, []);
+
+  const startResizeRight = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    isResizingRight.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, []);
+
   /** Shared SettingsPanel props (reused for sidebar + mobile full-screen) */
   const settingsPanelProps = {
     credentials, setCredentials, connected, connInfo, isConnecting,
@@ -1208,12 +1275,20 @@ export default function Home() {
 
       {/* ═══ Left Sidebar — Navigation / Settings (sm+ only) ═══ */}
       <aside
-        className={`hidden sm:block ${
-          showSettings ? "w-80 xl:w-[22rem] translate-x-0" : "w-0 -translate-x-full md:translate-x-0"
+        className={`hidden sm:flex ${
+          showSettings ? "translate-x-0" : "!w-0 -translate-x-full md:translate-x-0"
         } fixed md:static inset-y-0 left-0 z-40 md:z-auto transition-all duration-300 overflow-hidden flex-shrink-0`}
-        style={{ background: "var(--surface-sidebar)", borderRight: "1px solid var(--border-default)" }}
+        style={{ background: "var(--surface-sidebar)", borderRight: "1px solid var(--border-default)", width: showSettings ? leftWidth : 0 }}
       >
-        <SettingsPanel {...settingsPanelProps} />
+        <div className="flex-1 overflow-hidden">
+          <SettingsPanel {...settingsPanelProps} />
+        </div>
+        {/* Resize handle */}
+        <div
+          className="sidebar-resize-handle"
+          onMouseDown={startResizeLeft}
+          onTouchStart={startResizeLeft}
+        />
       </aside>
 
       {/* ═══ Center Panel — Primary Context ═══ */}
@@ -1301,6 +1376,21 @@ export default function Home() {
                 </button>
               </>
             )}
+            {/* Right panel toggle (lg+ only, when connected) */}
+            {connected && (
+              <button
+                onClick={() => setShowRightPanel(!showRightPanel)}
+                className="hidden lg:flex items-center justify-center w-8 h-8 rounded-md transition-colors"
+                style={{ color: "var(--text-secondary)" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-secondary)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+                title={showRightPanel ? "Hide suggestions panel" : "Show suggestions panel"}
+              >
+                <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 3h12v18H9M9 3v18M3 6h6M3 12h6M3 18h6" />
+                </svg>
+              </button>
+            )}
             {/* Profile avatar + dropdown */}
             <div ref={profileRef} className="relative">
               <button
@@ -1383,15 +1473,24 @@ export default function Home() {
           activityLog={activityLog}
           taskPlan={taskPlan}
           onGetStarted={() => setMobileStep("connect")}
+          pendingPrompt={pendingPrompt}
+          onPendingPromptConsumed={clearPendingPrompt}
         />
       </main>
 
       {/* ═══ Right Panel — Metadata / Status / Suggestions (visible when connected) ═══ */}
-      {connected && (
+      {connected && showRightPanel && (
         <aside
-          className="hidden lg:flex flex-col w-72 xl:w-80 flex-shrink-0 overflow-y-auto"
-          style={{ background: "var(--surface-primary)", borderLeft: "1px solid var(--border-default)" }}
+          className="hidden lg:flex flex-shrink-0 overflow-hidden"
+          style={{ background: "var(--surface-primary)", borderLeft: "1px solid var(--border-default)", width: rightWidth }}
         >
+          {/* Resize handle */}
+          <div
+            className="sidebar-resize-handle sidebar-resize-handle-left"
+            onMouseDown={startResizeRight}
+            onTouchStart={startResizeRight}
+          />
+          <div className="flex-1 flex flex-col overflow-y-auto">
           <div className="p-4 space-y-4">
             {/* Connection info */}
             {connInfo && (
@@ -1417,7 +1516,7 @@ export default function Home() {
             {/* Suggestion panel */}
             <SuggestionPanel
               prompts={categorizedPrompts}
-              onSuggestionClick={handleNewChatWithPrompt}
+              onSuggestionClick={handlePopulateInput}
               onRefresh={handleRefreshPrompts}
               isRefreshing={promptsRefreshing}
               lastRefreshed={promptsLastRefreshed}
@@ -1433,12 +1532,8 @@ export default function Home() {
             {APP_NAME && (
               <div className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>{APP_NAME}</div>
             )}
-            <div className="flex items-center justify-center gap-1.5 text-[13px] mb-1.5" style={{ color: "var(--text-secondary)" }}>
-              <span>Built with</span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--color-danger)" xmlns="http://www.w3.org/2000/svg" style={{ opacity: 0.85 }}>
-                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-              </svg>
-              <span>for the community</span>
+            <div className="text-[13px] mb-1.5" style={{ color: "var(--text-secondary)" }}>
+              {FOOTER_TAGLINE}
             </div>
             <div className="text-xs mb-5" style={{ color: "var(--text-disabled)" }}>
               {CREATOR_LINKEDIN ? (
@@ -1462,8 +1557,9 @@ export default function Home() {
             </div>
             <div className="mx-auto mb-3" style={{ width: 40, height: 1, background: "var(--border-default)" }} />
             <div className="text-[11px]" style={{ color: "var(--text-disabled)" }}>
-              &copy; {new Date().getFullYear()} {APP_NAME || "All rights reserved"}.
+              &copy; {new Date().getFullYear()} {FOOTER_COPYRIGHT}
             </div>
+          </div>
           </div>
         </aside>
       )}

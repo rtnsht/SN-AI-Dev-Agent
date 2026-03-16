@@ -34,6 +34,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "sessionId required" }, { status: 400 });
     }
 
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+      || request.headers.get("x-real-ip")
+      || "unknown";
+    const userAgent = request.headers.get("user-agent") || "unknown";
+
     // Log the session connect event (level first, then sessionId)
     log("info", sessionId, "session_connect", "Session started — user connected to instance", {
       instanceUrl: instanceUrl || "",
@@ -44,6 +49,8 @@ export async function POST(request: NextRequest) {
       hasAdmin: !!hasAdmin,
       hasSecurityAdmin: !!hasSecurityAdmin,
       nodeVersion: nodeVersion || "",
+      ip,
+      userAgent,
       connectTime: new Date().toISOString(),
     });
 
@@ -71,6 +78,8 @@ export async function POST(request: NextRequest) {
       userFullName: userFullName || undefined,
       aiProvider: aiProvider || undefined,
       model: model || undefined,
+      ipAddress: ip,
+      userAgent,
     }).catch(() => { /* non-critical */ });
 
     return NextResponse.json({ success: true, sessionId });

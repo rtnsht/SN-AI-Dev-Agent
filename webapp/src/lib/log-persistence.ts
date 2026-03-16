@@ -43,6 +43,8 @@ interface SessionMetadata {
   userFullName?: string;
   aiProvider?: string;
   model?: string;
+  ipAddress?: string;
+  userAgent?: string;
 }
 
 interface SessionCounters {
@@ -103,6 +105,8 @@ class LogPersistence {
           user_full_name: metadata.userFullName || null,
           ai_provider: metadata.aiProvider || null,
           model: metadata.model || null,
+          ip_address: metadata.ipAddress || null,
+          user_agent: metadata.userAgent || null,
           status: "active",
           started_at: new Date().toISOString(),
         },

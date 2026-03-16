@@ -55,6 +55,9 @@ export default function SettingsPanel({
   // Display models based on provider
   const displayModels = aiProvider === "openrouter" ? modelOptions : ANTHROPIC_MODELS;
 
+  // All inputs disabled when connected or mid-connecting
+  const fieldsDisabled = connected || isConnecting;
+
   return (
     <div className="p-4 h-full flex flex-col" style={{ background: "var(--surface-sidebar)" }}>
       {/* Header */}
@@ -87,7 +90,7 @@ export default function SettingsPanel({
               <span className="text-[11px] truncate" style={{ color: "var(--color-success)" }}>{credentials.instanceUrl}</span>
             </div>
           ) : (
-            <input type="url" placeholder="https://dev12345.service-now.com" value={credentials.instanceUrl} onChange={(e) => update("instanceUrl", e.target.value)} className={INPUT_CLS} style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)" }} disabled={isConnecting} />
+            <input type="url" placeholder="https://dev12345.service-now.com" value={credentials.instanceUrl} onChange={(e) => update("instanceUrl", e.target.value)} className={INPUT_CLS} style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-secondary)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }} disabled={fieldsDisabled} />
           )}
         </div>
         <div>
@@ -98,7 +101,7 @@ export default function SettingsPanel({
               <span className="text-[11px]" style={{ color: "var(--color-success)" }}>{credentials.username}</span>
             </div>
           ) : (
-            <input type="text" placeholder="admin" value={credentials.username} onChange={(e) => update("username", e.target.value)} className={INPUT_CLS} style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)" }} disabled={isConnecting} />
+            <input type="text" placeholder="admin" value={credentials.username} onChange={(e) => update("username", e.target.value)} className={INPUT_CLS} style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-secondary)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }} disabled={fieldsDisabled} />
           )}
         </div>
         <div>
@@ -109,7 +112,7 @@ export default function SettingsPanel({
               <span className="text-[11px]" style={{ color: "var(--color-success)" }}>Provided by server</span>
             </div>
           ) : (
-            <input type="password" placeholder="••••••••" value={credentials.password} onChange={(e) => update("password", e.target.value)} className={INPUT_CLS} style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)" }} disabled={isConnecting} />
+            <input type="password" placeholder="••••••••" value={credentials.password} onChange={(e) => update("password", e.target.value)} className={INPUT_CLS} style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-secondary)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }} disabled={fieldsDisabled} />
           )}
         </div>
 
@@ -118,9 +121,9 @@ export default function SettingsPanel({
           <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>AI Provider</label>
           <div className="flex gap-2">
             <button
-              onClick={() => !modelLocked && setAiProvider("anthropic")}
-              disabled={modelLocked}
-              className={`flex-1 px-3 py-2 rounded-md text-[11px] font-medium transition-colors ${modelLocked ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+              onClick={() => !modelLocked && !fieldsDisabled && setAiProvider("anthropic")}
+              disabled={modelLocked || fieldsDisabled}
+              className={`flex-1 px-3 py-2 rounded-md text-[11px] font-medium transition-colors ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
               style={{
                 background: aiProvider === "anthropic" ? "rgba(76,125,255,0.1)" : "var(--surface-secondary)",
                 border: `1px solid ${aiProvider === "anthropic" ? "rgba(76,125,255,0.3)" : "var(--border-emphasis)"}`,
@@ -130,9 +133,9 @@ export default function SettingsPanel({
               Anthropic
             </button>
             <button
-              onClick={() => !modelLocked && setAiProvider("openrouter")}
-              disabled={modelLocked}
-              className={`flex-1 px-3 py-2 rounded-md text-[11px] font-medium transition-colors ${modelLocked ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+              onClick={() => !modelLocked && !fieldsDisabled && setAiProvider("openrouter")}
+              disabled={modelLocked || fieldsDisabled}
+              className={`flex-1 px-3 py-2 rounded-md text-[11px] font-medium transition-colors ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
               style={{
                 background: aiProvider === "openrouter" ? "rgba(168,85,247,0.1)" : "var(--surface-secondary)",
                 border: `1px solid ${aiProvider === "openrouter" ? "rgba(168,85,247,0.3)" : "var(--border-emphasis)"}`,
@@ -142,10 +145,10 @@ export default function SettingsPanel({
               OpenRouter
             </button>
           </div>
-          {modelLocked && (
+          {(modelLocked || connected) && (
             <p className="text-[10px] mt-1 flex items-center gap-1" style={{ color: "var(--text-disabled)" }}>
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-              Provider locked for this session
+              Locked — click Reconnect to change
             </p>
           )}
         </div>
@@ -187,12 +190,13 @@ export default function SettingsPanel({
                     }}
                     className={INPUT_CLS}
                     style={{
-                      background: "var(--surface-secondary)",
+                      background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-secondary)",
                       border: rateLimitHit ? "1px solid rgba(245,196,81,0.3)" : "1px solid var(--border-emphasis)",
                       color: "var(--text-primary)",
+                      opacity: fieldsDisabled ? 0.7 : 1,
                       ...(rateLimitHit ? { boxShadow: "0 0 0 2px rgba(245,196,81,0.15)" } : {}),
                     }}
-                    disabled={isConnecting}
+                    disabled={fieldsDisabled}
                   />
                 </>
               ) : (
@@ -216,8 +220,8 @@ export default function SettingsPanel({
                   value={credentials.openRouterApiKey}
                   onChange={(e) => update("openRouterApiKey", e.target.value)}
                   className={INPUT_CLS}
-                  style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)" }}
-                  disabled={isConnecting}
+                  style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-secondary)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }}
+                  disabled={fieldsDisabled}
                 />
               )}
               <p className="text-[10px] mt-1.5 leading-relaxed" style={{ color: "var(--text-disabled)" }}>
@@ -294,9 +298,9 @@ export default function SettingsPanel({
             <>
               <select
                 value={selectedModel}
-                onChange={(e) => !modelLocked && setSelectedModel(e.target.value)}
-                disabled={modelLocked}
-                className={`${INPUT_CLS} ${modelLocked ? "opacity-60 cursor-not-allowed" : ""}`}
+                onChange={(e) => !modelLocked && !fieldsDisabled && setSelectedModel(e.target.value)}
+                disabled={modelLocked || fieldsDisabled}
+                className={`${INPUT_CLS} ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : ""}`}
                 style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)" }}
               >
                 {displayModels.map((opt) => (
@@ -317,9 +321,9 @@ export default function SettingsPanel({
                 return (
                   <button
                     key={opt.key}
-                    onClick={() => !modelLocked && setSelectedModel(opt.key)}
-                    disabled={modelLocked}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors ${modelLocked ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+                    onClick={() => !modelLocked && !fieldsDisabled && setSelectedModel(opt.key)}
+                    disabled={modelLocked || fieldsDisabled}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
                     style={{
                       background: isSelected ? `color-mix(in srgb, ${accentColor} 8%, transparent)` : "var(--surface-secondary)",
                       border: `1px solid ${isSelected ? `color-mix(in srgb, ${accentColor} 30%, transparent)` : "var(--border-emphasis)"}`,
@@ -343,10 +347,10 @@ export default function SettingsPanel({
             </div>
           )}
 
-          {modelLocked && (
+          {(modelLocked || connected) && (
             <p className="text-[10px] mt-1.5 flex items-center gap-1" style={{ color: "var(--text-disabled)" }}>
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-              Locked for this session. Start a new chat to change.
+              Locked — click Reconnect to change
             </p>
           )}
 

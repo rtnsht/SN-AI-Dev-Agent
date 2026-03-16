@@ -260,6 +260,10 @@ interface Props {
   taskPlan?: TaskPlanDisplay | null;
   /** Mobile: callback when user taps "Get Started" on hero screen */
   onGetStarted?: () => void;
+  /** Text to populate into the input field (from sidebar suggestion clicks) */
+  pendingPrompt?: string | null;
+  /** Clear the pending prompt after it has been consumed */
+  onPendingPromptConsumed?: () => void;
 }
 
 /** Deduplicate and clean activity log for display — merge status noise, keep tool entries */
@@ -561,7 +565,7 @@ function InlineAgentActivity({ activityLog, liveStatus, onCancel }: { activityLo
   );
 }
 
-export default function ChatWindow({ messages, isLoading, onSend, onCancel, onApprove, onChoiceSelect, connected, inputRef, showToolDetails = true, liveStatus, userName, categorizedPrompts, activityLog = [], taskPlan, onGetStarted }: Props) {
+export default function ChatWindow({ messages, isLoading, onSend, onCancel, onApprove, onChoiceSelect, connected, inputRef, showToolDetails = true, liveStatus, userName, categorizedPrompts, activityLog = [], taskPlan, onGetStarted, pendingPrompt, onPendingPromptConsumed }: Props) {
   const [input, setInput] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [files, setFiles] = useState<FileAttachment[]>([]);
@@ -597,6 +601,15 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
       if (maxTimerRef.current) clearTimeout(maxTimerRef.current);
     };
   }, []);
+
+  /** Consume pendingPrompt: populate input and focus textarea */
+  useEffect(() => {
+    if (pendingPrompt) {
+      setInput(pendingPrompt);
+      onPendingPromptConsumed?.();
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  }, [pendingPrompt, onPendingPromptConsumed, inputRef]);
 
   /** Close attach dropdown on outside click */
   useEffect(() => {
@@ -1179,7 +1192,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
                                   <p className="sp-update-desc">{us.description || "No description"}</p>
                                   <button
                                     className="sp-update-action"
-                                    onClick={(e) => { e.stopPropagation(); onSend(`Show the contents of update set "${us.name}" and summarize what it changes`); }}
+                                    onClick={(e) => { e.stopPropagation(); setInput(`Show the contents of update set "${us.name}" and summarize what it changes`); setTimeout(() => inputRef.current?.focus(), 50); }}
                                   >
                                     Explore this update set
                                   </button>
@@ -1196,7 +1209,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
                         <button
                           key={`${activeTab}-${i}`}
                           className="suggestion-item"
-                          onClick={() => onSend(prompt.text)}
+                          onClick={() => { setInput(prompt.text); setTimeout(() => inputRef.current?.focus(), 50); }}
                         >
                           <span className="suggestion-item-icon">{prompt.icon}</span>
                           <span className="suggestion-item-content">
