@@ -10,7 +10,8 @@ import WelcomeModal from "@/components/WelcomeModal";
 import SignupGateModal from "@/components/SignupGateModal";
 import APIKeyGateModal from "@/components/APIKeyGateModal";
 import ThemeToggle from "@/components/ThemeToggle";
-import type { ChatMessage, ConnectionResult, UsageInfo, TrialStatus, SDLCPhase, LiveStatus, AIProvider, ModelOption, FileAttachment } from "@/lib/types";
+import SuggestionPanel from "@/components/SuggestionPanel";
+import type { ChatMessage, ConnectionResult, UsageInfo, TrialStatus, SDLCPhase, LiveStatus, AIProvider, ModelOption, FileAttachment, CategorizedPrompts } from "@/lib/types";
 import { parsePhaseGate, parseUserChoices, ANTHROPIC_MODELS, SDLC_PHASES, openRouterModelToOption } from "@/lib/types";
 import { APP_NAME, APP_LOGO, SHOW_INFO_BUTTON, CREATOR_NAME, CREATOR_LINKEDIN } from "@/lib/branding";
 
@@ -96,8 +97,10 @@ export default function Home() {
   const [activityLog, setActivityLog] = useState<{ message: string; phase: string; timestamp: number; toolName?: string; toolInput?: Record<string, unknown>; done?: boolean; taskId?: number; taskName?: string }[]>([]);
   // Task planner state — structured plan for current request
   const [taskPlan, setTaskPlan] = useState<{ analysis: string; tasks: { id: number; name: string; type: string; tools: { name: string; args: Record<string, unknown> }[] }[] } | null>(null);
-  // Dynamic example prompts from instance data
-  const [instancePrompts, setInstancePrompts] = useState<{ icon: string; text: string; desc: string }[] | null>(null);
+  // Dynamic categorized prompts from instance data (all 4 tabs)
+  const [categorizedPrompts, setCategorizedPrompts] = useState<CategorizedPrompts | null>(null);
+  const [promptsRefreshing, setPromptsRefreshing] = useState(false);
+  const [promptsLastRefreshed, setPromptsLastRefreshed] = useState<number | null>(null);
   // Mobile two-step flow: 'hero' = landing page, 'connect' = full-screen connection panel
   const [mobileStep, setMobileStep] = useState<"hero" | "connect">("hero");
   // Logged-in webapp user info (name, role) from /api/auth/me
@@ -452,19 +455,15 @@ export default function Home() {
           }),
         }).catch(() => { /* non-critical */ });
 
-        // Fetch instance-specific example prompts in background (non-blocking)
-        fetch("/api/instance-prompts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            instanceUrl: credentials.instanceUrl,
-            username: credentials.username,
-            password: credentials.password,
-          }),
-        })
-          .then((r) => r.json())
-          .then((d) => { if (d.prompts?.length) setInstancePrompts(d.prompts); })
-          .catch(() => { /* non-critical — defaults will be used */ });
+        // Fetch categorized instance prompts in background (non-blocking)
+        const userContext = data.userInfo?.sysId
+          ? {
+              sysId: data.userInfo.sysId,
+              roles: data.roles || [],
+              assignmentGroups: data.userInfo.assignmentGroups || [],
+            }
+          : undefined;
+        fetchCategorizedPromptsFromApi(credentials, userContext);
       } else {
         const errMsgs = [...messagesRef.current, { role: "system" as const, type: "error" as const, content: `Connection failed: ${data.message || "Unknown error"}`, timestamp: new Date().toISOString() }];
         messagesRef.current = errMsgs;
@@ -1027,13 +1026,67 @@ export default function Home() {
     ALL_SESSION_KEYS.forEach((k) => sessionStorage.removeItem(k));
   }, []);
 
+  /** Fetch categorized prompts from the API (used on connect + auto-refresh) */
+  const fetchCategorizedPromptsFromApi = useCallback(
+    (creds: typeof credentials, userCtx?: { sysId: string; roles: string[]; assignmentGroups: { sysId: string; name: string }[] }) => {
+      setPromptsRefreshing(true);
+      fetch("/api/instance-prompts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instanceUrl: creds.instanceUrl,
+          username: creds.username,
+          password: creds.password,
+          userContext: userCtx,
+        }),
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.prompts && typeof d.prompts === "object" && d.prompts.foryou) {
+            setCategorizedPrompts(d.prompts);
+            setPromptsLastRefreshed(Date.now());
+          }
+        })
+        .catch(() => { /* non-critical */ })
+        .finally(() => setPromptsRefreshing(false));
+    },
+    []
+  );
+
+  // Auto-refresh prompts every 5 minutes while connected
+  useEffect(() => {
+    if (!connected || !connInfo) return;
+    const userCtx = connInfo.userInfo?.sysId
+      ? { sysId: connInfo.userInfo.sysId, roles: connInfo.roles || [], assignmentGroups: connInfo.userInfo.assignmentGroups || [] }
+      : undefined;
+    const interval = setInterval(() => {
+      fetchCategorizedPromptsFromApi(credentials, userCtx);
+    }, 300_000); // 5 min
+    return () => clearInterval(interval);
+  }, [connected, connInfo, credentials, fetchCategorizedPromptsFromApi]);
+
+  /** Manual refresh trigger for the SuggestionPanel */
+  const handleRefreshPrompts = useCallback(() => {
+    if (!connected || !connInfo) return;
+    const userCtx = connInfo.userInfo?.sysId
+      ? { sysId: connInfo.userInfo.sysId, roles: connInfo.roles || [], assignmentGroups: connInfo.userInfo.assignmentGroups || [] }
+      : undefined;
+    fetchCategorizedPromptsFromApi(credentials, userCtx);
+  }, [connected, connInfo, credentials, fetchCategorizedPromptsFromApi]);
+
+  /** Click a sidebar suggestion -> new chat + send that prompt */
+  const handleNewChatWithPrompt = useCallback((prompt: string) => {
+    handleNewChat();
+    setTimeout(() => handleSendRef.current(prompt), 100);
+  }, [handleNewChat]);
+
   /** Disconnect and unlock fields so user can edit before reconnecting */
   const handleReconnect = useCallback(() => {
     setConnected(false);
     setConnInfo(null);
     setModelLocked(false);
-    setInstancePrompts(null);
-    // Keep credentials, messages, and chat state intact so user can modify fields and reconnect
+    setCategorizedPrompts(null);
+    setPromptsLastRefreshed(null);
   }, []);
 
   /** Download entire conversation as a markdown file with embedded images */
@@ -1326,14 +1379,14 @@ export default function Home() {
           showToolDetails={showToolDetails}
           liveStatus={liveStatus}
           userName={connInfo?.userInfo?.name}
-          instancePrompts={instancePrompts ?? undefined}
+          categorizedPrompts={categorizedPrompts ?? undefined}
           activityLog={activityLog}
           taskPlan={taskPlan}
           onGetStarted={() => setMobileStep("connect")}
         />
       </main>
 
-      {/* ═══ Right Panel — Metadata / Status (visible when connected) ═══ */}
+      {/* ═══ Right Panel — Metadata / Status / Suggestions (visible when connected) ═══ */}
       {connected && (
         <aside
           className="hidden lg:flex flex-col w-72 xl:w-80 flex-shrink-0 overflow-y-auto"
@@ -1360,6 +1413,15 @@ export default function Home() {
                 </div>
               </div>
             )}
+
+            {/* Suggestion panel */}
+            <SuggestionPanel
+              prompts={categorizedPrompts}
+              onSuggestionClick={handleNewChatWithPrompt}
+              onRefresh={handleRefreshPrompts}
+              isRefreshing={promptsRefreshing}
+              lastRefreshed={promptsLastRefreshed}
+            />
           </div>
 
           {/* Sidebar branding (footer-style) */}
@@ -1407,7 +1469,7 @@ export default function Home() {
       )}
 
       {/* Info modal */}
-      <InfoModal open={showInfo} onClose={() => setShowInfo(false)} />
+      <InfoModal open={showInfo} onClose={() => setShowInfo(false)} onTryPrompt={(text) => { setShowInfo(false); setTimeout(() => handleSendRef.current(text), 100); }} />
       <WelcomeModal open={showWelcome} onClose={dismissWelcome} />
 
       {/* Gate modals (3-tier access) */}

@@ -420,6 +420,364 @@ body {
 .suggestion-item:hover {
   color: var(--text-primary);
 }
+.suggestion-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.suggestion-item-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1;
+  margin-top: 2px;
+}
+.suggestion-item-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  text-align: left;
+}
+.suggestion-item-desc {
+  font-size: 11px;
+  color: var(--text-disabled);
+  line-height: 1.2;
+}
+
+/* ── Sidebar Suggestion Panel ── */
+.sp-root {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sp-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-disabled);
+}
+.sp-refresh-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-disabled);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.sp-refresh-btn:hover {
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+.sp-refresh-btn:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.sp-spin {
+  animation: spSpin 0.8s linear infinite;
+}
+@keyframes spSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.sp-tabs {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sp-tabs::-webkit-scrollbar { display: none; }
+.sp-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 14px;
+  font-size: 11px;
+  font-weight: 450;
+  color: var(--text-disabled);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+.sp-tab:hover {
+  color: var(--text-secondary);
+  background: var(--surface-secondary);
+}
+.sp-tab-active {
+  color: var(--text-primary);
+  background: var(--surface-elevated);
+  border-color: var(--border-emphasis);
+}
+.sp-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.sp-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
+  width: 100%;
+  animation: spFadeIn 0.25s ease-out;
+}
+@keyframes spFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.sp-item:hover {
+  background: var(--surface-secondary);
+  border-color: var(--border-default);
+}
+.sp-item-icon {
+  flex-shrink: 0;
+  font-size: 13px;
+  line-height: 1;
+  margin-top: 1px;
+}
+.sp-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.sp-item-text {
+  font-size: 12px;
+  font-weight: 450;
+  color: var(--text-secondary);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sp-item:hover .sp-item-text {
+  color: var(--text-primary);
+}
+.sp-item-desc {
+  font-size: 10px;
+  color: var(--text-disabled);
+  line-height: 1.2;
+}
+.sp-empty {
+  padding: 16px 8px;
+  font-size: 12px;
+  color: var(--text-disabled);
+  text-align: center;
+}
+.sp-tab-count {
+  font-size: 9px;
+  font-weight: 600;
+  min-width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  line-height: 1;
+}
+.sp-tab-active .sp-tab-count {
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  color: var(--color-primary);
+}
+.sp-footer {
+  font-size: 10px;
+  color: var(--text-disabled);
+  text-align: right;
+  padding-top: 2px;
+}
+
+/* ── Update set expandable rows ── */
+.sp-update-row {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: all var(--transition-fast);
+  overflow: hidden;
+}
+.sp-update-row:hover {
+  border-color: var(--border-default);
+  background: var(--surface-secondary);
+}
+.sp-update-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+.sp-update-state-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.sp-update-name {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 450;
+  color: var(--text-secondary);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sp-update-row:hover .sp-update-name {
+  color: var(--text-primary);
+}
+.sp-update-chevron {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: var(--text-disabled);
+  transition: transform 0.2s ease;
+}
+.sp-update-chevron-open {
+  transform: rotate(180deg);
+}
+.sp-update-detail {
+  padding: 0 8px 8px 22px;
+  animation: spFadeIn 0.2s ease-out;
+}
+.sp-update-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--text-disabled);
+  margin-bottom: 4px;
+}
+.sp-update-badge {
+  font-weight: 600;
+  font-size: 10px;
+}
+.sp-update-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin: 0 0 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sp-update-action {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-primary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: opacity var(--transition-fast);
+}
+.sp-update-action:hover {
+  opacity: 0.8;
+}
+
+/* ── Info Modal — tiered layout ── */
+.info-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-disabled);
+  margin-bottom: 8px;
+}
+.info-primary-card {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  transition: background var(--transition-fast);
+  animation: infoCardIn 0.3s ease-out both;
+}
+.info-primary-card:hover {
+  background: var(--surface-secondary);
+}
+@keyframes infoCardIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.info-example-text {
+  flex: 1;
+  font-size: 10px;
+  line-height: 1.4;
+  font-style: italic;
+  color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.info-try-btn {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  color: var(--color-primary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  margin-top: 1px;
+}
+.info-try-btn:hover {
+  background: color-mix(in srgb, var(--color-primary) 18%, transparent);
+  border-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
+}
+.info-compact-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+@media (max-width: 480px) {
+  .info-compact-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.info-compact-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+  transition: all var(--transition-fast);
+  animation: infoCardIn 0.3s ease-out both;
+}
+.info-compact-card:hover {
+  background: var(--surface-secondary);
+  border-color: var(--border-emphasis);
+}
 
 /* ── Plus button dropdown ── */
 .attach-dropdown {

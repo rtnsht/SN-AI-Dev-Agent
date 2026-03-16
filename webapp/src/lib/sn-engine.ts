@@ -855,10 +855,41 @@ export async function testConnection(credentials: Omit<UserCredentials, "claudeA
   const hasAdmin = roles.includes("admin");
   const hasSecurityAdmin = roles.includes("security_admin");
 
+  // 4. Fetch assignment groups for the user (non-blocking — fallback to empty)
+  let assignmentGroups: { sysId: string; name: string }[] = [];
+  if (userSysId) {
+    try {
+      const grpMembers = await snClient.getRecords("sys_user_grmember", {
+        sysparm_query: `user=${userSysId}`,
+        sysparm_fields: "group",
+        sysparm_display_value: "true",
+        sysparm_limit: 50,
+      });
+      assignmentGroups = grpMembers
+        .map((gm: Record<string, unknown>) => {
+          const grp = gm.group;
+          if (grp && typeof grp === "object" && "display_value" in (grp as Record<string, unknown>)) {
+            const obj = grp as Record<string, unknown>;
+            return { sysId: String(obj.value || ""), name: String(obj.display_value || "") };
+          }
+          return null;
+        })
+        .filter((g): g is { sysId: string; name: string } => g !== null && g.sysId !== "");
+    } catch (err) {
+      console.warn("[testConnection] Assignment group lookup failed:", err);
+    }
+  }
+
   return {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ...(connResult as any),
-    userInfo: { name: userName, username: credentials.username },
+    userInfo: {
+      name: userName,
+      username: credentials.username,
+      sysId: userSysId ? String(userSysId) : undefined,
+      email: user?.email ? String(user.email) : undefined,
+      assignmentGroups,
+    },
     roles,
     hasAdmin,
     hasSecurityAdmin,
@@ -867,100 +898,316 @@ export async function testConnection(credentials: Omit<UserCredentials, "claudeA
 
 /* ── Instance-based Example Prompts ───────────────────────────── */
 
-export interface ExamplePrompt {
-  icon: string;
-  text: string;
-  desc: string;
+import type { ExamplePrompt, CategorizedPrompts, UpdateSetSummary } from "./types";
+
+interface ScoredPrompt extends ExamplePrompt {
+  priority: number;
+}
+
+interface UserContext {
+  sysId: string;
+  roles: string[];
+  assignmentGroups: { sysId: string; name: string }[];
+}
+
+function topN(pool: ScoredPrompt[], n: number): ExamplePrompt[] {
+  return pool
+    .sort((a, b) => b.priority - a.priority)
+    .slice(0, n)
+    .map(({ priority: _, ...rest }) => rest);
 }
 
 /**
- * Fetch lightweight instance metadata and generate contextual example prompts.
- * Queries: custom tables, business rules, catalog items, update sets.
- * Returns 4 randomized prompts relevant to what exists on the instance.
+ * Fetch instance metadata and generate categorized, scored example prompts
+ * for all 4 suggestion tabs: foryou, build, explore, quick.
+ * Runs up to 13 parallel ServiceNow queries.
  */
-export async function fetchInstancePrompts(
-  credentials: Omit<UserCredentials, "claudeApiKey">
-): Promise<ExamplePrompt[]> {
+export async function fetchCategorizedPrompts(
+  credentials: Omit<UserCredentials, "claudeApiKey">,
+  userContext?: UserContext
+): Promise<CategorizedPrompts> {
   const registry = getToolRegistry();
   const snClient = createSnClient(credentials as UserCredentials, registry);
 
-  // Run all queries in parallel for speed
-  const [customTables, businessRules, catalogItems, updateSets] = await Promise.allSettled([
-    // Custom tables (u_ prefix or scoped)
+  const groupSysIds = userContext?.assignmentGroups?.map((g) => g.sysId).filter(Boolean) || [];
+
+  // Build query list — user-specific queries only when we have context
+  const queryPromises: Promise<Record<string, unknown>[]>[] = [
+    // 0: Custom tables
     snClient.getRecords("sys_db_object", {
       sysparm_query: "nameSTARTSWITHu_^ORnameSTARTSWITHx_^super_class!=NULL",
       sysparm_fields: "name,label",
       sysparm_limit: 20,
     }),
-    // Recent business rules on common tables
+    // 1: Business rules
     snClient.getRecords("sys_script", {
       sysparm_query: "active=true^collectionISNOTEMPTY^ORDERBYDESCsys_updated_on",
       sysparm_fields: "name,collection,when",
       sysparm_limit: 20,
     }),
-    // Service catalog items
+    // 2: Catalog items
     snClient.getRecords("sc_cat_item", {
       sysparm_query: "active=true^ORDERBYDESCsys_updated_on",
       sysparm_fields: "name,short_description,category",
       sysparm_limit: 15,
     }),
-    // In-progress update sets
+    // 3: Update sets (broader — recent across all states except ignored)
     snClient.getRecords("sys_update_set", {
-      sysparm_query: "state=in progress^nameNOT LIKEDefault",
-      sysparm_fields: "name,description",
+      sysparm_query: "nameNOT LIKEDefault^stateNOT IN ignore^ORDERBYDESCsys_updated_on",
+      sysparm_fields: "sys_id,name,description,state,application,sys_updated_on",
+      sysparm_limit: 15,
+    }),
+    // 4: Scheduled jobs
+    snClient.getRecords("sysauto_script", {
+      sysparm_query: "active=true^ORDERBYDESCsys_updated_on",
+      sysparm_fields: "name,run_type,run_dayofweek",
+      sysparm_limit: 15,
+    }),
+    // 5: Knowledge bases
+    snClient.getRecords("kb_knowledge_base", {
+      sysparm_query: "active=true",
+      sysparm_fields: "title,kb_version",
       sysparm_limit: 10,
     }),
-  ]);
+    // 6: Workflows
+    snClient.getRecords("wf_workflow", {
+      sysparm_query: "active=true^ORDERBYDESCsys_updated_on",
+      sysparm_fields: "name,table,description",
+      sysparm_limit: 10,
+    }),
+    // 7: Notifications
+    snClient.getRecords("sysevent_email_action", {
+      sysparm_query: "active=true^ORDERBYDESCsys_updated_on",
+      sysparm_fields: "name,collection,event_name",
+      sysparm_limit: 15,
+    }),
+    // 8: ACLs (grouped for explore)
+    snClient.getRecords("sys_security_acl", {
+      sysparm_query: "active=true^ORDERBYname",
+      sysparm_fields: "name,type,operation",
+      sysparm_limit: 20,
+    }),
+  ];
 
-  const tables = customTables.status === "fulfilled" ? customTables.value : [];
-  const rules = businessRules.status === "fulfilled" ? businessRules.value : [];
-  const catItems = catalogItems.status === "fulfilled" ? catalogItems.value : [];
-  const updSets = updateSets.status === "fulfilled" ? updateSets.value : [];
-
-  // Build a pool of contextual prompts
-  const pool: ExamplePrompt[] = [];
-
-  // Prompts based on custom tables
-  for (const t of tables.slice(0, 8)) {
-    const label = (t.label as string) || (t.name as string);
-    const name = t.name as string;
-    pool.push({ icon: "🔍", text: `Analyze the custom table "${label}" (${name}) — show its fields, business rules, and ACLs`, desc: "Instance analysis" });
-    pool.push({ icon: "📊", text: `List all records in ${name} and summarize the data patterns`, desc: "Quick query" });
+  // User-specific queries (indices 9-12)
+  if (userContext?.sysId) {
+    queryPromises.push(
+      // 9: My open incidents
+      snClient.getRecords("incident", {
+        sysparm_query: `assigned_to=${userContext.sysId}^state!=7^state!=8`,
+        sysparm_fields: "number,short_description,priority,state",
+        sysparm_limit: 20,
+      }),
+      // 10: My pending changes
+      snClient.getRecords("change_request", {
+        sysparm_query: `assigned_to=${userContext.sysId}^stateNOT IN3,4,7`,
+        sysparm_fields: "number,short_description,type,state",
+        sysparm_limit: 15,
+      }),
+      // 11: Pending approvals
+      snClient.getRecords("sysapproval_approver", {
+        sysparm_query: `approver=${userContext.sysId}^state=requested`,
+        sysparm_fields: "sysapproval,state,sys_created_on",
+        sysparm_limit: 15,
+      }),
+    );
+    // 12: Group unassigned incidents
+    if (groupSysIds.length > 0) {
+      queryPromises.push(
+        snClient.getRecords("incident", {
+          sysparm_query: `assignment_groupIN${groupSysIds.join(",")}^assigned_toISEMPTY^state!=7^state!=8`,
+          sysparm_fields: "number,short_description,priority,assignment_group",
+          sysparm_limit: 20,
+        }),
+      );
+    }
   }
 
-  // Prompts based on business rules — group by table
+  const results = await Promise.allSettled(queryPromises);
+  const settled = <T = Record<string, unknown>[]>(idx: number): T =>
+    (results[idx]?.status === "fulfilled" ? (results[idx] as PromiseFulfilledResult<T>).value : [] as unknown as T);
+
+  const tables = settled(0);
+  const rules = settled(1);
+  const catItems = settled(2);
+  const updSets = settled(3);
+  const schedJobs = settled(4);
+  const kbases = settled(5);
+  const workflows = settled(6);
+  const notifications = settled(7);
+  const acls = settled(8);
+  const myIncidents = userContext?.sysId ? settled(9) : [];
+  const myChanges = userContext?.sysId ? settled(10) : [];
+  const myApprovals = userContext?.sysId ? settled(11) : [];
+  const groupUnassigned = (userContext?.sysId && groupSysIds.length > 0) ? settled(12) : [];
+
+  // ── Build categorized pools ──
+  const foryou: ScoredPrompt[] = [];
+  const build: ScoredPrompt[] = [];
+  const explore: ScoredPrompt[] = [];
+  const quick: ScoredPrompt[] = [];
+
+  // --- User-specific prompts (foryou + quick) ---
+  if (myIncidents.length > 0) {
+    const p1Count = myIncidents.filter((i) => String(i.priority) === "1").length;
+    const label = p1Count > 0
+      ? `You have ${myIncidents.length} open incident(s) including ${p1Count} P1 — triage and review them`
+      : `You have ${myIncidents.length} open incident(s) assigned to you — review their status`;
+    foryou.push({ icon: "🚨", text: label, desc: "My incidents", priority: 10 });
+    quick.push({ icon: "📋", text: `List my ${myIncidents.length} open incidents with priority and state`, desc: "My work", priority: 10 });
+  }
+
+  if (myChanges.length > 0) {
+    foryou.push({ icon: "🔄", text: `You have ${myChanges.length} active change request(s) — check implementation status`, desc: "My changes", priority: 10 });
+    quick.push({ icon: "🔄", text: `Show my ${myChanges.length} active change requests and their states`, desc: "My work", priority: 10 });
+  }
+
+  if (myApprovals.length > 0) {
+    foryou.push({ icon: "✅", text: `You have ${myApprovals.length} pending approval(s) waiting for your review`, desc: "My approvals", priority: 10 });
+  }
+
+  if (groupUnassigned.length > 0) {
+    const groupName = userContext?.assignmentGroups?.[0]?.name || "your group";
+    foryou.push({ icon: "📥", text: `${groupUnassigned.length} unassigned incident(s) in ${groupName} — pick up or assign them`, desc: "Group work", priority: 9 });
+    quick.push({ icon: "📥", text: `List unassigned incidents in ${groupName}`, desc: "Group work", priority: 9 });
+  }
+
+  // Role-based suggestions for foryou
+  const userRoles = userContext?.roles || [];
+  if (userRoles.includes("admin")) {
+    foryou.push({ icon: "🛡️", text: "Audit ACL rules on my instance and identify security gaps", desc: "Security audit", priority: 7 });
+    foryou.push({ icon: "⚡", text: "Analyze instance health — find anti-patterns, unused scripts, and performance issues", desc: "Health check", priority: 7 });
+  }
+  if (userRoles.includes("itil")) {
+    foryou.push({ icon: "📊", text: "Show incident trends and SLA compliance for my assignment groups", desc: "ITIL insights", priority: 7 });
+  }
+
+  // --- Custom tables → explore + build + quick ---
+  for (const t of (tables as Record<string, unknown>[]).slice(0, 8)) {
+    const label = (t.label as string) || (t.name as string);
+    const name = t.name as string;
+    explore.push({ icon: "🔍", text: `Analyze the custom table "${label}" (${name}) — fields, rules, and ACLs`, desc: "Table analysis", priority: 5 });
+    build.push({ icon: "➕", text: `Add validation rules or UI policies to "${label}" (${name})`, desc: "Table enhancement", priority: 5 });
+    quick.push({ icon: "📊", text: `Show schema and record count for ${name}`, desc: "Table info", priority: 5 });
+  }
+
+  // --- Business rules → explore + build ---
   const rulesByTable = new Map<string, string[]>();
-  for (const r of rules) {
+  for (const r of rules as Record<string, unknown>[]) {
     const col = r.collection as string;
     if (!col) continue;
     if (!rulesByTable.has(col)) rulesByTable.set(col, []);
     rulesByTable.get(col)!.push(r.name as string);
   }
   for (const [table, names] of rulesByTable) {
-    pool.push({ icon: "⚙️", text: `Review the ${names.length} active business rule(s) on "${table}" and check for conflicts or performance issues`, desc: "Code review" });
+    explore.push({ icon: "⚙️", text: `Review ${names.length} active business rule(s) on "${table}" for conflicts or performance issues`, desc: "Code review", priority: 7 });
+    if (names.length > 3) {
+      build.push({ icon: "🔧", text: `Refactor and consolidate the ${names.length} business rules on "${table}"`, desc: "Code optimization", priority: 5 });
+    }
   }
 
-  // Prompts based on catalog items
-  for (const item of catItems.slice(0, 6)) {
+  // --- Catalog items → explore + build ---
+  for (const item of (catItems as Record<string, unknown>[]).slice(0, 6)) {
     const name = (item.name as string) || (item.short_description as string);
-    pool.push({ icon: "📦", text: `Analyze the catalog item "${name}" — review its variables, workflow, and suggest improvements`, desc: "Catalog review" });
+    explore.push({ icon: "📦", text: `Analyze catalog item "${name}" — review variables, workflow, and suggest improvements`, desc: "Catalog review", priority: 5 });
+    build.push({ icon: "🔗", text: `Add approval workflow or notifications to catalog item "${name}"`, desc: "Catalog enhancement", priority: 5 });
   }
 
-  // Prompts based on update sets
-  for (const us of updSets.slice(0, 4)) {
+  // --- Update sets → foryou + quick ---
+  for (const us of (updSets as Record<string, unknown>[]).slice(0, 4)) {
     const name = us.name as string;
-    pool.push({ icon: "🔄", text: `Show the contents of update set "${name}" and summarize what it changes`, desc: "Update set review" });
+    foryou.push({ icon: "📝", text: `Show contents of update set "${name}" and summarize changes`, desc: "Update set review", priority: 6 });
+    quick.push({ icon: "📝", text: `What's in update set "${name}"?`, desc: "Update set", priority: 7 });
   }
 
-  // Always include a few generic but useful prompts
-  pool.push({ icon: "🏗️", text: "Build a new feature on my instance following the full SDLC process", desc: "Full SDLC requirement" });
-  pool.push({ icon: "🔍", text: "Analyze my instance health — find anti-patterns, unused scripts, and performance issues", desc: "Instance analysis" });
-  pool.push({ icon: "📋", text: "List all custom applications and scoped apps on this instance", desc: "Quick query" });
-  pool.push({ icon: "🛡️", text: "Audit the ACL rules on my instance and identify security gaps", desc: "Security audit" });
+  // --- Scheduled jobs → explore + quick ---
+  for (const job of (schedJobs as Record<string, unknown>[]).slice(0, 5)) {
+    const name = job.name as string;
+    explore.push({ icon: "⏰", text: `Review scheduled job "${name}" — check run frequency and script performance`, desc: "Job review", priority: 5 });
+  }
+  if ((schedJobs as Record<string, unknown>[]).length > 0) {
+    quick.push({ icon: "⏰", text: `List all ${(schedJobs as Record<string, unknown>[]).length} active scheduled jobs and their run frequencies`, desc: "Scheduled jobs", priority: 7 });
+  }
 
-  // Shuffle and pick 4
-  const shuffled = pool.sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, 4);
+  // --- Knowledge bases → explore + build ---
+  for (const kb of (kbases as Record<string, unknown>[]).slice(0, 4)) {
+    const title = (kb.title as string) || "Untitled KB";
+    explore.push({ icon: "📚", text: `Analyze knowledge base "${title}" — article count, gaps, and quality`, desc: "KB analysis", priority: 5 });
+    build.push({ icon: "📚", text: `Build an article approval workflow for knowledge base "${title}"`, desc: "KB enhancement", priority: 5 });
+  }
+
+  // --- Workflows → explore + build ---
+  for (const wf of (workflows as Record<string, unknown>[]).slice(0, 5)) {
+    const name = wf.name as string;
+    explore.push({ icon: "🔀", text: `Review workflow "${name}" — check activities, conditions, and error handling`, desc: "Workflow review", priority: 5 });
+    build.push({ icon: "🔀", text: `Extend workflow "${name}" with notification or approval steps`, desc: "Workflow enhancement", priority: 5 });
+  }
+
+  // --- Notifications → explore + quick ---
+  const notifsByTable = new Map<string, number>();
+  for (const n of notifications as Record<string, unknown>[]) {
+    const col = n.collection as string;
+    if (!col) continue;
+    notifsByTable.set(col, (notifsByTable.get(col) || 0) + 1);
+  }
+  for (const [table, count] of notifsByTable) {
+    explore.push({ icon: "📧", text: `Review ${count} email notification(s) on "${table}" — check conditions and recipients`, desc: "Notification review", priority: 5 });
+  }
+  if ((notifications as Record<string, unknown>[]).length > 0) {
+    quick.push({ icon: "📧", text: `List all ${(notifications as Record<string, unknown>[]).length} active email notifications`, desc: "Notifications", priority: 6 });
+  }
+
+  // --- ACLs → explore ---
+  if ((acls as Record<string, unknown>[]).length > 0) {
+    explore.push({ icon: "🛡️", text: `Audit ${(acls as Record<string, unknown>[]).length}+ ACL rules — find overly permissive or conflicting access controls`, desc: "Security audit", priority: 7 });
+  }
+
+  // --- Generic fallbacks (low priority, always present) ---
+  foryou.push({ icon: "🏗️", text: "Build a new feature on my instance following the full SDLC process", desc: "Full SDLC", priority: 2 });
+  foryou.push({ icon: "🔍", text: "Analyze my instance health — find anti-patterns and performance issues", desc: "Health check", priority: 2 });
+
+  build.push({ icon: "🏗️", text: "Build an onboarding workflow that provisions accounts across IT systems", desc: "Workflow", priority: 2 });
+  build.push({ icon: "📝", text: "Create a change request template with risk assessment and CAB approval", desc: "Template", priority: 2 });
+  build.push({ icon: "💡", text: "Add a custom field to incident that tracks customer sentiment", desc: "Enhancement", priority: 2 });
+  build.push({ icon: "📖", text: "Build a knowledge article approval workflow with draft and publish states", desc: "Workflow", priority: 2 });
+
+  explore.push({ icon: "📋", text: "List all custom applications and scoped apps on this instance", desc: "Apps", priority: 2 });
+  explore.push({ icon: "🔍", text: "Find unused script includes in my instance", desc: "Cleanup", priority: 2 });
+
+  quick.push({ icon: "❓", text: "How many open incidents are there right now?", desc: "Incidents", priority: 2 });
+  quick.push({ icon: "📝", text: "What update sets are in progress right now?", desc: "Update sets", priority: 2 });
+  quick.push({ icon: "🗂️", text: "Show the schema for the cmdb_ci_server table", desc: "Schema", priority: 2 });
+  quick.push({ icon: "📧", text: "List all notification email templates for incidents", desc: "Notifications", priority: 2 });
+
+  // --- Build update set summaries for the "Latest Updates" tab ---
+  const updates: UpdateSetSummary[] = (updSets as Record<string, unknown>[]).slice(0, 10).map((us) => {
+    const stateVal = String(us.state || "");
+    const stateMap: Record<string, string> = { "in progress": "In Progress", "complete": "Complete", "build": "Build", "": "Unknown" };
+    return {
+      sysId: String(us.sys_id || ""),
+      name: String(us.name || "Untitled"),
+      state: stateMap[stateVal] || stateVal,
+      description: String(us.description || "No description provided"),
+      updatedOn: String(us.sys_updated_on || ""),
+      application: String(us.application || "Global"),
+    };
+  });
+
+  return {
+    foryou: topN(foryou, 6),
+    build: topN(build, 6),
+    explore: topN(explore, 6),
+    quick: topN(quick, 6),
+    updates,
+  };
+}
+
+/** Backward-compatible wrapper — returns flat "foryou" prompts */
+export async function fetchInstancePrompts(
+  credentials: Omit<UserCredentials, "claudeApiKey">
+): Promise<ExamplePrompt[]> {
+  const categorized = await fetchCategorizedPrompts(credentials);
+  return categorized.foryou;
 }
 
 /** Extract only display-relevant fields from tool input to keep SSE payloads small.
