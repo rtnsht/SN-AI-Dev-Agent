@@ -11,6 +11,7 @@ const BCRYPT_COST = 12;
 const SESSION_MAX_AGE_DAYS = parseInt(process.env.SESSION_MAX_AGE_DAYS || "1", 10) || 1;
 const MAGIC_LINK_EXPIRY_HOURS = parseInt(process.env.MAGIC_LINK_EXPIRY_HOURS || "72", 10) || 72;
 const EMAIL_VERIFY_EXPIRY_HOURS = parseInt(process.env.EMAIL_VERIFY_EXPIRY_HOURS || "24", 10) || 24;
+const OTP_EXPIRY_MINUTES = parseInt(process.env.OTP_EXPIRY_MINUTES || "10", 10) || 10;
 const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "sn-ai-session";
 const TEMP_SESSION_MINUTES = 15;
 
@@ -43,6 +44,11 @@ export function generateToken(): string {
 /** 24-char hex invite code (12 random bytes) */
 export function generateInviteCode(): string {
   return crypto.randomBytes(12).toString("hex");
+}
+
+/** 6-digit zero-padded numeric OTP */
+export function generateOTP(): string {
+  return String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
 }
 
 // ── Session management ──────────────────────────────────────────
@@ -190,6 +196,65 @@ export async function consumeAuthToken(
     .eq("id", data.id);
 
   return { email: data.email, userId: data.user_id, type: data.type as TokenType };
+}
+
+// ── OTP tokens ──────────────────────────────────────────────────
+
+export async function createOTPToken(
+  email: string
+): Promise<{ otp: string; expiresAt: Date }> {
+  const db = getSupabase();
+  const otp = generateOTP();
+  const token = generateToken();
+  const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+  const normalizedEmail = email.toLowerCase().trim();
+
+  // Invalidate any previous unused OTP tokens for this email
+  await db
+    .from("auth_tokens")
+    .update({ used_at: new Date().toISOString() })
+    .eq("email", normalizedEmail)
+    .eq("type", "email_verify")
+    .is("used_at", null)
+    .not("otp_code", "is", null);
+
+  const { error } = await db.from("auth_tokens").insert({
+    email: normalizedEmail,
+    token,
+    type: "email_verify",
+    otp_code: otp,
+    expires_at: expiresAt.toISOString(),
+  });
+
+  if (error) throw new Error(`Failed to create OTP token: ${error.message}`);
+  return { otp, expiresAt };
+}
+
+export async function consumeOTPToken(
+  email: string,
+  otp: string
+): Promise<{ email: string } | null> {
+  const db = getSupabase();
+  const normalizedEmail = email.toLowerCase().trim();
+
+  const { data, error } = await db
+    .from("auth_tokens")
+    .select("id, email")
+    .eq("email", normalizedEmail)
+    .eq("otp_code", otp)
+    .eq("type", "email_verify")
+    .is("used_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .single();
+
+  if (error || !data) return null;
+
+  await db
+    .from("auth_tokens")
+    .update({ used_at: new Date().toISOString() })
+    .eq("id", data.id);
+
+  return { email: data.email };
 }
 
 // ── Session cookie helpers ──────────────────────────────────────

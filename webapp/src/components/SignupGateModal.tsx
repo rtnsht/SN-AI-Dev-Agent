@@ -12,17 +12,13 @@ interface Props {
   authDailyLimit: number;
 }
 
-/**
- * Shown when an anonymous user exhausts their free daily requests.
- * Offers login or signup to unlock the authenticated tier.
- */
 export default function SignupGateModal({ open, onClose, dailyUsed, dailyLimit, authDailyLimit }: Props) {
   const [email, setEmail] = useState("");
-  const [step, setStep] = useState<"prompt" | "checking" | "password" | "request" | "loading">("prompt");
+  const [step, setStep] = useState<"prompt" | "checking" | "password" | "request" | "otp" | "loading">("prompt");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -62,7 +58,6 @@ export default function SignupGateModal({ open, onClose, dailyUsed, dailyLimit, 
         body: JSON.stringify({ email: email.trim(), password }),
       });
       if (res.ok) {
-        // Reload to pick up session cookie
         window.location.reload();
       } else {
         const data = await res.json();
@@ -85,10 +80,10 @@ export default function SignupGateModal({ open, onClose, dailyUsed, dailyLimit, 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), name: name.trim(), use_case: "Free tier access" }),
       });
-      if (res.ok) {
-        setSuccess("Check your email! We sent a verification link.");
-      } else {
-        const data = await res.json();
+      const data = await res.json();
+      if (res.ok && data.requiresOTP) {
+        setStep("otp");
+      } else if (!res.ok) {
         setError(data.error || "Request failed");
         setStep("request");
       }
@@ -97,6 +92,46 @@ export default function SignupGateModal({ open, onClose, dailyUsed, dailyLimit, 
       setStep("request");
     }
   }
+
+  async function handleVerifyOTP() {
+    if (otp.length !== 6) return;
+    setError("");
+    setStep("loading");
+    try {
+      const res = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), otp }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        window.location.href = data.redirect || "/auth/set-password";
+      } else {
+        setError(data.error || "Invalid code");
+        setStep("otp");
+      }
+    } catch {
+      setError("Network error. Please try again.");
+      setStep("otp");
+    }
+  }
+
+  async function handleResendOTP() {
+    setError("");
+    try {
+      await fetch("/api/auth/request-access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), name: name.trim(), use_case: "Free tier access" }),
+      });
+      setOtp("");
+    } catch {
+      setError("Failed to resend code.");
+    }
+  }
+
+  const inputStyle = { background: "var(--surface-secondary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" };
+  const btnStyle = { background: "var(--color-primary)" };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -114,24 +149,13 @@ export default function SignupGateModal({ open, onClose, dailyUsed, dailyLimit, 
             You&apos;ve used {dailyUsed}/{dailyLimit} free requests today
           </h2>
           <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
-            Sign up to unlock {authDailyLimit} daily requests — free.
+            Sign up to unlock {authDailyLimit} daily requests &mdash; free.
           </p>
         </div>
 
         {/* Body */}
         <div className="px-6 py-5 space-y-4">
-          {success ? (
-            <div className="text-center py-4">
-              <div className="text-sm font-medium" style={{ color: "var(--color-primary)" }}>{success}</div>
-              <button
-                onClick={onClose}
-                className="mt-4 px-4 py-2 rounded-lg text-sm font-medium"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                Close
-              </button>
-            </div>
-          ) : step === "prompt" || step === "checking" ? (
+          {(step === "prompt" || step === "checking") && (
             <>
               <div>
                 <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Email</label>
@@ -142,7 +166,7 @@ export default function SignupGateModal({ open, onClose, dailyUsed, dailyLimit, 
                   onKeyDown={(e) => e.key === "Enter" && handleCheckEmail()}
                   placeholder="you@company.com"
                   className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-                  style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
+                  style={inputStyle}
                   autoFocus
                 />
               </div>
@@ -151,12 +175,14 @@ export default function SignupGateModal({ open, onClose, dailyUsed, dailyLimit, 
                 onClick={handleCheckEmail}
                 disabled={step === "checking" || !email.trim()}
                 className="w-full py-2.5 rounded-xl text-sm font-medium text-white transition-colors disabled:opacity-50"
-                style={{ background: "var(--color-primary)" }}
+                style={btnStyle}
               >
                 {step === "checking" ? "Checking..." : "Continue"}
               </button>
             </>
-          ) : step === "password" || (step === "loading" && password) ? (
+          )}
+
+          {(step === "password" || (step === "loading" && password && !otp)) && (
             <>
               <div className="text-xs" style={{ color: "var(--text-secondary)" }}>Signing in as <strong>{email}</strong></div>
               <div>
@@ -167,7 +193,7 @@ export default function SignupGateModal({ open, onClose, dailyUsed, dailyLimit, 
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleLogin()}
                   className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-                  style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
+                  style={inputStyle}
                   autoFocus
                 />
               </div>
@@ -176,7 +202,7 @@ export default function SignupGateModal({ open, onClose, dailyUsed, dailyLimit, 
                 onClick={handleLogin}
                 disabled={step === "loading"}
                 className="w-full py-2.5 rounded-xl text-sm font-medium text-white transition-colors disabled:opacity-50"
-                style={{ background: "var(--color-primary)" }}
+                style={btnStyle}
               >
                 {step === "loading" ? "Signing in..." : "Sign In"}
               </button>
@@ -188,7 +214,9 @@ export default function SignupGateModal({ open, onClose, dailyUsed, dailyLimit, 
                 Use a different email
               </button>
             </>
-          ) : (
+          )}
+
+          {(step === "request" || (step === "loading" && !password && !otp)) && (
             <>
               <div className="text-xs" style={{ color: "var(--text-secondary)" }}>Creating account for <strong>{email}</strong></div>
               <div>
@@ -200,7 +228,7 @@ export default function SignupGateModal({ open, onClose, dailyUsed, dailyLimit, 
                   onKeyDown={(e) => e.key === "Enter" && handleRequestAccess()}
                   placeholder="John Doe"
                   className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-                  style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
+                  style={inputStyle}
                   autoFocus
                 />
               </div>
@@ -209,9 +237,9 @@ export default function SignupGateModal({ open, onClose, dailyUsed, dailyLimit, 
                 onClick={handleRequestAccess}
                 disabled={step === "loading"}
                 className="w-full py-2.5 rounded-xl text-sm font-medium text-white transition-colors disabled:opacity-50"
-                style={{ background: "var(--color-primary)" }}
+                style={btnStyle}
               >
-                {step === "loading" ? "Requesting..." : "Request Access"}
+                {step === "loading" ? "Sending code..." : "Continue"}
               </button>
               <button
                 onClick={() => { setStep("prompt"); setName(""); setError(""); }}
@@ -220,6 +248,55 @@ export default function SignupGateModal({ open, onClose, dailyUsed, dailyLimit, 
               >
                 Use a different email
               </button>
+            </>
+          )}
+
+          {(step === "otp" || (step === "loading" && otp)) && (
+            <>
+              <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                Enter the 6-digit code sent to <strong>{email}</strong>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Verification Code</label>
+                <input
+                  type="text"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  onKeyDown={(e) => e.key === "Enter" && handleVerifyOTP()}
+                  placeholder="000000"
+                  maxLength={6}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                  style={{ ...inputStyle, letterSpacing: "0.3em", textAlign: "center", fontSize: "1.25rem" }}
+                  autoFocus
+                />
+              </div>
+              {error && <p className="text-xs" style={{ color: "var(--color-error, #ef4444)" }}>{error}</p>}
+              <button
+                onClick={handleVerifyOTP}
+                disabled={step === "loading" || otp.length !== 6}
+                className="w-full py-2.5 rounded-xl text-sm font-medium text-white transition-colors disabled:opacity-50"
+                style={btnStyle}
+              >
+                {step === "loading" ? "Verifying..." : "Verify"}
+              </button>
+              <div className="flex justify-between">
+                <button
+                  onClick={handleResendOTP}
+                  className="text-xs py-1"
+                  style={{ color: "var(--text-secondary)", background: "none", border: "none", cursor: "pointer" }}
+                >
+                  Resend code
+                </button>
+                <button
+                  onClick={() => { setStep("request"); setOtp(""); setError(""); }}
+                  className="text-xs py-1"
+                  style={{ color: "var(--text-secondary)", background: "none", border: "none", cursor: "pointer" }}
+                >
+                  Change email
+                </button>
+              </div>
             </>
           )}
         </div>

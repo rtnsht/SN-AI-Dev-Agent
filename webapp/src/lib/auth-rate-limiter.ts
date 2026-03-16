@@ -70,6 +70,11 @@ export function checkEmailLookup(ip: string) {
   return check(`emaillookup:${ip}`, 20, 15 * 60 * 1000);
 }
 
+/** OTP verification: 5 attempts per email per 10 min */
+export function checkOTPVerify(email: string) {
+  return check(`otp:${email.toLowerCase()}`, 5, 10 * 60 * 1000);
+}
+
 /** Feedback submission: 5 per IP per hour */
 export function checkFeedbackSubmission(ip: string) {
   return check(`feedback:${ip}`, 5, 60 * 60 * 1000);

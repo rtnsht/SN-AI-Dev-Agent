@@ -10,7 +10,8 @@ type ModalStep =
   | "login_loading"
   | "request_access"
   | "request_loading"
-  | "request_success"
+  | "otp_verify"
+  | "otp_loading"
   | "forgot_password"
   | "forgot_loading"
   | "forgot_success";
@@ -28,6 +29,7 @@ export default function ConnectModal({ open, onClose }: ConnectModalProps) {
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
   const [useCase, setUseCase] = useState("");
+  const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
 
   const resetState = useCallback(() => {
@@ -37,6 +39,7 @@ export default function ConnectModal({ open, onClose }: ConnectModalProps) {
     setName("");
     setCompany("");
     setUseCase("");
+    setOtp("");
     setError("");
   }, []);
 
@@ -102,13 +105,11 @@ export default function ConnectModal({ open, onClose }: ConnectModalProps) {
         return;
       }
 
-      // Check if user needs to set password
       if (data.mustSetPassword) {
         router.push("/auth/set-password");
         return;
       }
 
-      // Success — redirect to app
       router.push("/app");
     } catch {
       setError("Something went wrong. Please try again.");
@@ -116,7 +117,7 @@ export default function ConnectModal({ open, onClose }: ConnectModalProps) {
     }
   }, [email, password, router]);
 
-  /** Step 2b: Request Access */
+  /** Step 2b: Request Access — sends OTP */
   const handleRequestAccess = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
@@ -142,10 +143,60 @@ export default function ConnectModal({ open, onClose }: ConnectModalProps) {
         return;
       }
 
-      setStep("request_success");
+      if (data.requiresOTP) {
+        setStep("otp_verify");
+      }
     } catch {
       setError("Something went wrong. Please try again.");
       setStep("request_access");
+    }
+  }, [email, name, company, useCase]);
+
+  /** Step 2c: Verify OTP */
+  const handleVerifyOTP = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (otp.length !== 6) return;
+    setError("");
+    setStep("otp_loading");
+
+    try {
+      const res = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), otp }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Invalid code");
+        setStep("otp_verify");
+        return;
+      }
+
+      router.push(data.redirect || "/auth/set-password");
+    } catch {
+      setError("Something went wrong. Please try again.");
+      setStep("otp_verify");
+    }
+  }, [email, otp, router]);
+
+  /** Resend OTP */
+  const handleResendOTP = useCallback(async () => {
+    setError("");
+    try {
+      await fetch("/api/auth/request-access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          name: name.trim(),
+          company: company.trim(),
+          use_case: useCase.trim(),
+        }),
+      });
+      setOtp("");
+    } catch {
+      setError("Failed to resend code.");
     }
   }, [email, name, company, useCase]);
 
@@ -178,7 +229,7 @@ export default function ConnectModal({ open, onClose }: ConnectModalProps) {
 
   if (!open) return null;
 
-  const isLoading = step === "checking" || step === "login_loading" || step === "request_loading" || step === "forgot_loading";
+  const isLoading = step === "checking" || step === "login_loading" || step === "request_loading" || step === "otp_loading" || step === "forgot_loading";
 
   return (
     <div className="connect-modal-backdrop" onClick={handleClose}>
@@ -237,7 +288,7 @@ export default function ConnectModal({ open, onClose }: ConnectModalProps) {
                 Forgot password?
               </button>
               <button type="button" onClick={() => { setError(""); setStep("email"); setPassword(""); }} className="auth-link">
-                ← Back
+                &larr; Back
               </button>
             </div>
           </form>
@@ -246,8 +297,8 @@ export default function ConnectModal({ open, onClose }: ConnectModalProps) {
         {/* ── Step: Request Access (new user) ── */}
         {(step === "request_access" || step === "request_loading") && (
           <form onSubmit={handleRequestAccess}>
-            <h2 className="connect-modal-title">Request Access</h2>
-            <p className="connect-modal-subtitle">Tell us about yourself to get started</p>
+            <h2 className="connect-modal-title">Create Account</h2>
+            <p className="connect-modal-subtitle">We&apos;ll send a verification code to your email</p>
             {error && <div className="auth-error">{error}</div>}
             <label className="auth-label">Email</label>
             <input type="email" className="auth-input" value={email} disabled />
@@ -282,25 +333,51 @@ export default function ConnectModal({ open, onClose }: ConnectModalProps) {
               style={{ resize: "none" }}
             />
             <button type="submit" className="auth-button" disabled={isLoading}>
-              {step === "request_loading" ? "Submitting..." : "Submit Request"}
+              {step === "request_loading" ? "Sending code..." : "Continue"}
             </button>
             <div className="connect-modal-links">
               <button type="button" onClick={() => { setError(""); setStep("email"); }} className="auth-link">
-                ← Back
+                &larr; Back
               </button>
             </div>
           </form>
         )}
 
-        {/* ── Step: Request Success ── */}
-        {step === "request_success" && (
-          <div>
-            <h2 className="connect-modal-title">Request Submitted</h2>
+        {/* ── Step: OTP Verification ── */}
+        {(step === "otp_verify" || step === "otp_loading") && (
+          <form onSubmit={handleVerifyOTP}>
+            <h2 className="connect-modal-title">Verify Your Email</h2>
             <p className="connect-modal-subtitle">
-              We&apos;ll review your request and send access details to <strong>{email}</strong>. Check your email for next steps.
+              Enter the 6-digit code sent to <strong>{email}</strong>
             </p>
-            <button onClick={handleClose} className="auth-button">Done</button>
-          </div>
+            {error && <div className="auth-error">{error}</div>}
+            <label className="auth-label">Verification Code</label>
+            <input
+              type="text"
+              className="auth-input"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              placeholder="000000"
+              required
+              autoFocus
+              maxLength={6}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              disabled={isLoading}
+              style={{ letterSpacing: "0.3em", textAlign: "center", fontSize: "1.25rem" }}
+            />
+            <button type="submit" className="auth-button" disabled={isLoading || otp.length !== 6}>
+              {step === "otp_loading" ? "Verifying..." : "Verify"}
+            </button>
+            <div className="connect-modal-links">
+              <button type="button" onClick={handleResendOTP} className="auth-link">
+                Resend code
+              </button>
+              <button type="button" onClick={() => { setError(""); setOtp(""); setStep("request_access"); }} className="auth-link">
+                &larr; Back
+              </button>
+            </div>
+          </form>
         )}
 
         {/* ── Step: Forgot Password ── */}
@@ -316,7 +393,7 @@ export default function ConnectModal({ open, onClose }: ConnectModalProps) {
             </button>
             <div className="connect-modal-links">
               <button type="button" onClick={() => { setError(""); setStep("password"); }} className="auth-link">
-                ← Back to sign in
+                &larr; Back to sign in
               </button>
             </div>
           </form>
@@ -336,4 +413,3 @@ export default function ConnectModal({ open, onClose }: ConnectModalProps) {
     </div>
   );
 }
-
