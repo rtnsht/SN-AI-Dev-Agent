@@ -63,10 +63,10 @@ async function createInScope(scopeId, table, fields) {
 
 async function main() {
     const xmlFile = process.argv[2];
-    const scopeId = process.argv[3] || '2ea695fec3d7321034b6b1f1b40131f0'; // x_snc_yantra
+    const scopeId = process.argv[3];
     
-    if (!xmlFile) {
-        console.log('Usage: node lib/import-scoped-flow.js <xml-file> [scope-sys-id]');
+    if (!xmlFile || !scopeId) {
+        console.log('Usage: node lib/import-scoped-flow.js <xml-file> <scope-sys-id>');
         process.exit(1);
     }
     
