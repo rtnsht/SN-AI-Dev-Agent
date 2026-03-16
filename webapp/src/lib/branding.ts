@@ -21,6 +21,10 @@ export const WELCOME_FOOTER  = process.env.NEXT_PUBLIC_WELCOME_FOOTER  || "This 
 export const CREATOR_NAME     = process.env.NEXT_PUBLIC_CREATOR_NAME     || "Ratnesh";
 export const CREATOR_LINKEDIN = process.env.NEXT_PUBLIC_CREATOR_LINKEDIN || "https://www.linkedin.com/in/ratnesh-tiwari";
 export const SHOW_INFO_BUTTON = process.env.NEXT_PUBLIC_SHOW_INFO_BUTTON !== "false"; // default: true
+/** Footer tagline — shown above creator attribution in the sidebar and landing page footer */
+export const FOOTER_TAGLINE   = process.env.NEXT_PUBLIC_FOOTER_TAGLINE   || "For the ServiceNow community";
+/** Full copyright text shown after the year (e.g. "SN AI Agent. All rights reserved.") */
+export const FOOTER_COPYRIGHT = process.env.NEXT_PUBLIC_FOOTER_COPYRIGHT || `${process.env.NEXT_PUBLIC_APP_NAME || "SN AI Agent"}. All rights reserved.`;
 
 // ── Landing Page Section Text (all configurable via env vars) ────────────────
 export const FEATURES_EYEBROW = process.env.NEXT_PUBLIC_FEATURES_EYEBROW || "Capabilities";

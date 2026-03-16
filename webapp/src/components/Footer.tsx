@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { APP_NAME, APP_LOGO, CREATOR_NAME, CREATOR_LINKEDIN } from "@/lib/branding";
+import { APP_NAME, APP_LOGO, CREATOR_NAME, CREATOR_LINKEDIN, FOOTER_TAGLINE, FOOTER_COPYRIGHT } from "@/lib/branding";
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
@@ -25,9 +25,12 @@ export default function Footer() {
         <div className="site-footer-name">{APP_NAME}</div>
       )}
 
-      {/* Creator attribution */}
+      {/* Tagline + creator attribution */}
       <div className="site-footer-love">
-        <span>An open-source project by</span>
+        <span>{FOOTER_TAGLINE}</span>
+      </div>
+      <div className="site-footer-love" style={{ marginTop: 4 }}>
+        <span>by</span>
         {CREATOR_LINKEDIN ? (
           <a href={CREATOR_LINKEDIN} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)", marginLeft: 4 }}>
             {CREATOR_NAME}
@@ -47,7 +50,7 @@ export default function Footer() {
 
       {/* Copyright */}
       <div className="site-footer-copyright">
-        &copy; {currentYear} {APP_NAME || "All rights reserved"}.
+        &copy; {currentYear} {FOOTER_COPYRIGHT}
       </div>
     </footer>
   );
