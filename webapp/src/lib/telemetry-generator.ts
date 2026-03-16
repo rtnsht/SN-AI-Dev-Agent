@@ -707,15 +707,23 @@ export function updateTelemetry(sessionId: string): void {
 }
 
 /** Start a background interval that updates telemetry every 15 seconds.
- *  Returns a cleanup function. */
+ *  Returns a cleanup function. Never throws (fs errors are caught inside updateTelemetry). */
 export function startTelemetryStream(sessionId: string): () => void {
-  // Do an immediate first generation
+  // Do an immediate first generation (non-throwing so session-start never 500s)
   lastGenTime.delete(sessionId); // force immediate
-  updateTelemetry(sessionId);
+  try {
+    updateTelemetry(sessionId);
+  } catch (err) {
+    console.error(`[telemetry] startTelemetryStream initial update failed for ${sessionId}:`, err);
+  }
 
   // Set up interval
   const interval = setInterval(() => {
-    updateTelemetry(sessionId);
+    try {
+      updateTelemetry(sessionId);
+    } catch (err) {
+      console.error(`[telemetry] interval update failed for ${sessionId}:`, err);
+    }
   }, THROTTLE_MS);
 
   activeIntervals.set(sessionId, interval);
@@ -723,9 +731,12 @@ export function startTelemetryStream(sessionId: string): () => void {
   return () => {
     clearInterval(interval);
     activeIntervals.delete(sessionId);
-    // Do one final generation
     lastGenTime.delete(sessionId);
-    updateTelemetry(sessionId);
+    try {
+      updateTelemetry(sessionId);
+    } catch (err) {
+      console.error(`[telemetry] cleanup update failed for ${sessionId}:`, err);
+    }
   };
 }
 
@@ -734,7 +745,11 @@ export function stopAllTelemetryStreams(): void {
   for (const [id, interval] of activeIntervals) {
     clearInterval(interval);
     lastGenTime.delete(id);
-    updateTelemetry(id); // final update
+    try {
+      updateTelemetry(id);
+    } catch (err) {
+      console.error(`[telemetry] stopAllTelemetryStreams update failed for ${id}:`, err);
+    }
   }
   activeIntervals.clear();
 }

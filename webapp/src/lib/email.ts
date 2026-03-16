@@ -74,6 +74,23 @@ If you didn't request this, ignore this email.
   });
 }
 
+export function sendOTPEmail(name: string, email: string, otp: string) {
+  return sendEmail({
+    to: email,
+    toName: name,
+    subject: `${otp} is your verification code — SN AI Agent`,
+    body: `Hi ${name},
+
+Your verification code is: ${otp}
+
+This code expires in 10 minutes.
+
+If you didn't request this, ignore this email.
+
+— SN AI Agent`,
+  });
+}
+
 export function sendAdminNotification(name: string, email: string, company: string | null, useCase: string, createdAt: string) {
   const adminEmail = process.env.ADMIN_EMAIL;
   if (!adminEmail) return Promise.resolve({ success: false, error: "ADMIN_EMAIL not set" });
