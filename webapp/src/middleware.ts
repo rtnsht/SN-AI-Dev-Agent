@@ -74,8 +74,18 @@ export async function middleware(request: NextRequest) {
     // Non-fatal — don't block requests if seed fails
   }
 
-  // Public routes — allow through
+  // Public routes — allow through (but redirect authenticated users on "/" to /app)
   if (isPublicPath(pathname)) {
+    // If user is on the landing page and has a valid session, redirect to /app
+    if (pathname === "/") {
+      const sessionToken = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+      if (sessionToken) {
+        const session = await validateSession(sessionToken);
+        if (session && !session.is_temporary) {
+          return NextResponse.redirect(new URL("/app", request.url));
+        }
+      }
+    }
     return NextResponse.next();
   }
 

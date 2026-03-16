@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 
-type Tab = "requests" | "users" | "invites" | "banners";
+type Tab = "requests" | "users" | "invites" | "banners" | "trials";
 
 interface AccessRequest {
   id: string;
@@ -52,6 +52,27 @@ interface Banner {
   created_at: string;
 }
 
+interface TrialConfig {
+  id: string;
+  scope: string;
+  scope_value: string | null;
+  daily_limit: number;
+  trial_days: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface TrialUsageStat {
+  userId: string;
+  email: string;
+  name: string;
+  trialStartDate: string | null;
+  daysRemaining: number;
+  todayUsed: number;
+  totalUsed: number;
+}
+
 const PAGE_OPTIONS = [
   { value: "all", label: "All Pages" },
   { value: "/", label: "Landing Page (/)" },
@@ -89,6 +110,19 @@ export default function AdminPage() {
   const [bannerEndAt, setBannerEndAt] = useState("");
   const editorRef = useRef<HTMLDivElement>(null);
 
+  // Trial management state
+  const [trialGlobal, setTrialGlobal] = useState<TrialConfig | null>(null);
+  const [trialOverrides, setTrialOverrides] = useState<TrialConfig[]>([]);
+  const [trialUsageStats, setTrialUsageStats] = useState<TrialUsageStat[]>([]);
+  const [trialDailyLimit, setTrialDailyLimit] = useState("10");
+  const [trialDays, setTrialDays] = useState("10");
+  const [trialActive, setTrialActive] = useState(true);
+  const [showOverrideForm, setShowOverrideForm] = useState(false);
+  const [overrideScope, setOverrideScope] = useState<"user" | "instance">("user");
+  const [overrideScopeValue, setOverrideScopeValue] = useState("");
+  const [overrideDailyLimit, setOverrideDailyLimit] = useState("10");
+  const [overrideTrialDays, setOverrideTrialDays] = useState("10");
+
   const pendingCount = requests.filter((r) => r.status === "pending").length;
 
   const fetchData = useCallback(async () => {
@@ -109,6 +143,18 @@ export default function AdminPage() {
         if (res.status === 401 || res.status === 403) { router.push("/login"); return; }
         const data = await res.json();
         setBanners(data.banners || []);
+      } else if (tab === "trials") {
+        const res = await fetch("/api/admin/trials");
+        if (res.status === 401 || res.status === 403) { router.push("/login"); return; }
+        const data = await res.json();
+        setTrialGlobal(data.globalConfig || null);
+        setTrialOverrides(data.overrides || []);
+        setTrialUsageStats(data.usageStats || []);
+        if (data.globalConfig) {
+          setTrialDailyLimit(String(data.globalConfig.daily_limit));
+          setTrialDays(String(data.globalConfig.trial_days));
+          setTrialActive(data.globalConfig.is_active);
+        }
       } else {
         const res = await fetch("/api/admin/invite-codes");
         if (res.status === 401 || res.status === 403) { router.push("/login"); return; }
@@ -335,6 +381,73 @@ export default function AdminPage() {
     setActionLoading(null);
   }
 
+  // ── Trial actions ──
+
+  async function handleSaveTrialGlobal(e: React.FormEvent) {
+    e.preventDefault();
+    setActionLoading("save-trial");
+    setMessage("");
+    try {
+      const res = await fetch("/api/admin/trials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scope: "global",
+          daily_limit: parseInt(trialDailyLimit) || 10,
+          trial_days: parseInt(trialDays) || 10,
+          is_active: trialActive,
+        }),
+      });
+      if (res.ok) {
+        setMessage("Trial settings saved");
+        fetchData();
+      } else {
+        const data = await res.json();
+        setMessage(data.error || "Failed to save");
+      }
+    } catch { setMessage("Failed to save trial settings"); }
+    setActionLoading(null);
+  }
+
+  async function handleAddOverride(e: React.FormEvent) {
+    e.preventDefault();
+    if (!overrideScopeValue.trim()) { setMessage("Scope value is required"); return; }
+    setActionLoading("add-override");
+    setMessage("");
+    try {
+      const res = await fetch("/api/admin/trials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scope: overrideScope,
+          scope_value: overrideScopeValue.trim(),
+          daily_limit: parseInt(overrideDailyLimit) || 10,
+          trial_days: parseInt(overrideTrialDays) || 10,
+          is_active: true,
+        }),
+      });
+      if (res.ok) {
+        setMessage("Override added");
+        setShowOverrideForm(false);
+        setOverrideScopeValue("");
+        fetchData();
+      } else {
+        const data = await res.json();
+        setMessage(data.error || "Failed to add override");
+      }
+    } catch { setMessage("Failed to add override"); }
+    setActionLoading(null);
+  }
+
+  async function handleDeleteOverride(id: string) {
+    setActionLoading(id);
+    try {
+      await fetch(`/api/admin/trials?id=${id}`, { method: "DELETE" });
+      fetchData();
+    } catch { /* ignore */ }
+    setActionLoading(null);
+  }
+
   const fmt = (d: string | null) => d ? new Date(d).toLocaleDateString() : "—";
 
   return (
@@ -353,6 +466,7 @@ export default function AdminPage() {
         <button className={`admin-tab ${tab === "users" ? "active" : ""}`} onClick={() => setTab("users")}>Users</button>
         <button className={`admin-tab ${tab === "invites" ? "active" : ""}`} onClick={() => setTab("invites")}>Invite Codes</button>
         <button className={`admin-tab ${tab === "banners" ? "active" : ""}`} onClick={() => setTab("banners")}>Banners</button>
+        <button className={`admin-tab ${tab === "trials" ? "active" : ""}`} onClick={() => setTab("trials")}>Trials</button>
       </div>
 
       {loading && <p className="admin-loading">Loading...</p>}
@@ -733,6 +847,221 @@ export default function AdminPage() {
                 {banners.length === 0 && <tr><td colSpan={6} className="admin-empty">No banners</td></tr>}
               </tbody>
             </table>
+          </div>
+        </>
+      )}
+      {/* ── Trials Tab ── */}
+      {tab === "trials" && !loading && (
+        <>
+          {/* Global Settings */}
+          <form onSubmit={handleSaveTrialGlobal} style={{
+            background: "var(--surface-secondary)",
+            border: "1px solid var(--border-default)",
+            borderRadius: "12px",
+            padding: "20px",
+            marginBottom: "1.5rem",
+          }}>
+            <h3 style={{ color: "var(--text-primary)", fontSize: "15px", fontWeight: 600, margin: "0 0 16px" }}>
+              Global Trial Settings
+            </h3>
+
+            <div style={{ display: "flex", gap: "16px", marginBottom: "12px", flexWrap: "wrap", alignItems: "end" }}>
+              <div>
+                <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}>
+                  Daily Request Limit
+                </label>
+                <input
+                  className="auth-input"
+                  type="number"
+                  min="1"
+                  value={trialDailyLimit}
+                  onChange={(e) => setTrialDailyLimit(e.target.value)}
+                  style={{ width: "120px", fontSize: "13px" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}>
+                  Trial Duration (days)
+                </label>
+                <input
+                  className="auth-input"
+                  type="number"
+                  min="1"
+                  value={trialDays}
+                  onChange={(e) => setTrialDays(e.target.value)}
+                  style={{ width: "120px", fontSize: "13px" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}>
+                  Status
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setTrialActive(!trialActive)}
+                  style={{
+                    padding: "6px 16px",
+                    borderRadius: "6px",
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    border: "1px solid",
+                    background: trialActive ? "var(--color-success, #38C976)" : "var(--surface-elevated)",
+                    color: trialActive ? "#fff" : "var(--text-secondary)",
+                    borderColor: trialActive ? "var(--color-success, #38C976)" : "var(--border-default)",
+                  }}
+                >
+                  {trialActive ? "Enabled" : "Disabled"}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="admin-btn admin-btn-approve"
+              disabled={actionLoading === "save-trial"}
+            >
+              {actionLoading === "save-trial" ? "Saving..." : "Save Global Settings"}
+            </button>
+          </form>
+
+          {/* User / Instance Overrides */}
+          <div style={{ marginBottom: "1.5rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <h3 style={{ color: "var(--text-primary)", fontSize: "15px", fontWeight: 600, margin: 0 }}>
+                Overrides
+              </h3>
+              <button className="admin-btn admin-btn-approve" onClick={() => setShowOverrideForm(!showOverrideForm)}>
+                {showOverrideForm ? "Cancel" : "+ Add Override"}
+              </button>
+            </div>
+
+            {showOverrideForm && (
+              <form onSubmit={handleAddOverride} style={{
+                background: "var(--surface-secondary)",
+                border: "1px solid var(--border-default)",
+                borderRadius: "12px",
+                padding: "16px",
+                marginBottom: "12px",
+                display: "flex",
+                gap: "12px",
+                flexWrap: "wrap",
+                alignItems: "end",
+              }}>
+                <div>
+                  <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}>
+                    Scope
+                  </label>
+                  <select
+                    className="auth-input"
+                    value={overrideScope}
+                    onChange={(e) => setOverrideScope(e.target.value as "user" | "instance")}
+                    style={{ fontSize: "13px", width: "120px" }}
+                  >
+                    <option value="user">User</option>
+                    <option value="instance">Instance</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}>
+                    {overrideScope === "user" ? "User ID" : "Instance URL"}
+                  </label>
+                  <input
+                    className="auth-input"
+                    value={overrideScopeValue}
+                    onChange={(e) => setOverrideScopeValue(e.target.value)}
+                    placeholder={overrideScope === "user" ? "User UUID" : "dev12345.service-now.com"}
+                    style={{ fontSize: "13px", width: "220px" }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}>
+                    Daily Limit
+                  </label>
+                  <input
+                    className="auth-input"
+                    type="number"
+                    min="1"
+                    value={overrideDailyLimit}
+                    onChange={(e) => setOverrideDailyLimit(e.target.value)}
+                    style={{ width: "80px", fontSize: "13px" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}>
+                    Trial Days
+                  </label>
+                  <input
+                    className="auth-input"
+                    type="number"
+                    min="1"
+                    value={overrideTrialDays}
+                    onChange={(e) => setOverrideTrialDays(e.target.value)}
+                    style={{ width: "80px", fontSize: "13px" }}
+                  />
+                </div>
+                <button type="submit" className="admin-btn admin-btn-approve" disabled={actionLoading === "add-override"}>
+                  {actionLoading === "add-override" ? "Adding..." : "Add"}
+                </button>
+              </form>
+            )}
+
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr><th>Scope</th><th>Value</th><th>Daily Limit</th><th>Trial Days</th><th>Active</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                  {trialOverrides.map((o) => (
+                    <tr key={o.id}>
+                      <td><span className={`admin-status admin-status-${o.scope === "user" ? "active" : "pending"}`}>{o.scope}</span></td>
+                      <td style={{ fontSize: "12px", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis" }}>{o.scope_value}</td>
+                      <td>{o.daily_limit}</td>
+                      <td>{o.trial_days}</td>
+                      <td>{o.is_active ? "Yes" : "No"}</td>
+                      <td>
+                        <button className="admin-btn admin-btn-reject" disabled={actionLoading === o.id} onClick={() => handleDeleteOverride(o.id)}>
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {trialOverrides.length === 0 && <tr><td colSpan={6} className="admin-empty">No overrides — global settings apply to all users</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Usage Stats */}
+          <div>
+            <h3 style={{ color: "var(--text-primary)", fontSize: "15px", fontWeight: 600, marginBottom: "12px" }}>
+              Usage Stats
+            </h3>
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr><th>User</th><th>Email</th><th>Trial Started</th><th>Days Left</th><th>Today</th><th>Total</th></tr>
+                </thead>
+                <tbody>
+                  {trialUsageStats.map((s) => (
+                    <tr key={s.userId}>
+                      <td>{s.name}</td>
+                      <td>{s.email}</td>
+                      <td>{s.trialStartDate ? fmt(s.trialStartDate) : "—"}</td>
+                      <td>
+                        <span style={{ color: s.daysRemaining <= 2 ? "var(--color-danger)" : "var(--text-primary)" }}>
+                          {s.daysRemaining}
+                        </span>
+                      </td>
+                      <td>{s.todayUsed}</td>
+                      <td>{s.totalUsed}</td>
+                    </tr>
+                  ))}
+                  {trialUsageStats.length === 0 && <tr><td colSpan={6} className="admin-empty">No usage data yet</td></tr>}
+                </tbody>
+              </table>
+            </div>
           </div>
         </>
       )}

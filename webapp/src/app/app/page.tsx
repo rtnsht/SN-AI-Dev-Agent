@@ -6,8 +6,9 @@ import SettingsPanel from "@/components/SettingsPanel";
 import ChatWindow from "@/components/ChatWindow";
 import PhaseTracker from "@/components/PhaseTracker";
 import InfoModal from "@/components/InfoModal";
+import WelcomeModal from "@/components/WelcomeModal";
 import ThemeToggle from "@/components/ThemeToggle";
-import type { ChatMessage, ConnectionResult, UsageInfo, SDLCPhase, LiveStatus, AIProvider, ModelOption, FileAttachment } from "@/lib/types";
+import type { ChatMessage, ConnectionResult, UsageInfo, TrialStatus, SDLCPhase, LiveStatus, AIProvider, ModelOption, FileAttachment } from "@/lib/types";
 import { parsePhaseGate, parseUserChoices, ANTHROPIC_MODELS, SDLC_PHASES, openRouterModelToOption } from "@/lib/types";
 import { APP_NAME, APP_LOGO, SHOW_INFO_BUTTON, CREATOR_NAME, CREATOR_LINKEDIN } from "@/lib/branding";
 
@@ -57,6 +58,7 @@ export default function Home() {
   const [serverSnCredsConfigured, setServerSnCredsConfigured] = useState(false);
   const [usage, setUsage] = useState<UsageInfo | null>(null);
   const [rateLimitHit, setRateLimitHit] = useState(false);
+  const [trialStatus, setTrialStatus] = useState<TrialStatus | null>(null);
   // Pending retry — stores the failed message so it can be auto-retried after user provides an API key
   const [pendingRetry, setPendingRetry] = useState<{ text: string; images?: string[]; files?: FileAttachment[] } | null>(null);
   // AI Provider selection
@@ -77,6 +79,8 @@ export default function Home() {
   const [allowUserApiKeys, setAllowUserApiKeys] = useState(true);
   // Info modal
   const [showInfo, setShowInfo] = useState(false);
+  // Welcome modal (first-time user experience)
+  const [showWelcome, setShowWelcome] = useState(false);
   // Live status streaming (controlled via NEXT_PUBLIC_SHOW_LIVE_STATUS env)
   const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
   const [streamingEnabled, setStreamingEnabled] = useState(true);
@@ -195,6 +199,26 @@ export default function Home() {
       // Corrupt storage — ignore and start fresh
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Welcome modal for first-time users ──
+  useEffect(() => {
+    if (!localStorage.getItem("sn-welcome-dismissed")) {
+      setShowWelcome(true);
+    }
+  }, []);
+
+  const dismissWelcome = useCallback(() => {
+    setShowWelcome(false);
+    localStorage.setItem("sn-welcome-dismissed", "true");
+  }, []);
+
+  // ── Fetch trial status ──
+  useEffect(() => {
+    fetch("/api/trial-status")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data) setTrialStatus(data); })
+      .catch(() => {});
   }, []);
 
   // ── Fetch logged-in webapp user info ──
@@ -518,6 +542,24 @@ export default function Home() {
                     content: allowUserApiKeys
                       ? `**API rate limit hit** -- The server's Claude API key hit its token limit. Enter your own API key in Settings to continue. Your conversation is preserved and will auto-retry.`
                       : `**API rate limit hit** -- The server's Claude API key hit its token limit. Please try again later.`,
+                    timestamp: new Date().toISOString(),
+                  },
+                ]);
+              } else if (errorData.error === "trial_limit_exceeded") {
+                // Trial daily limit or trial expired
+                if (errorData.trialStatus) setTrialStatus(errorData.trialStatus);
+                if (allowUserApiKeys) {
+                  setRateLimitHit(true);
+                  setShowSettings(true);
+                }
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    role: "system",
+                    type: "error",
+                    content: allowUserApiKeys
+                      ? `**Trial limit reached** -- ${errorData.message}\n\nTo continue chatting, **enter your own API key** in the Settings panel on the left.`
+                      : `**Trial limit reached** -- ${errorData.message}`,
                     timestamp: new Date().toISOString(),
                   },
                 ]);
@@ -858,6 +900,24 @@ export default function Home() {
                 timestamp: new Date().toISOString(),
               },
             ]);
+          } else if (data.error === "trial_limit_exceeded") {
+            // Trial daily limit or trial expired
+            if (data.trialStatus) setTrialStatus(data.trialStatus);
+            if (allowUserApiKeys) {
+              setRateLimitHit(true);
+              setShowSettings(true);
+            }
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "system",
+                type: "error",
+                content: allowUserApiKeys
+                  ? `**Trial limit reached** -- ${data.message}\n\nTo continue chatting, **enter your own API key** in the Settings panel on the left.`
+                  : `**Trial limit reached** -- ${data.message}`,
+                timestamp: new Date().toISOString(),
+              },
+            ]);
           } else {
             // App-level rate limit (request count)
             setUsage(data.usage);
@@ -1091,7 +1151,7 @@ export default function Home() {
     credentials, setCredentials, connected, connInfo, isConnecting,
     onConnect: handleConnect, onReconnect: handleReconnect,
     serverApiKeyConfigured, serverOpenRouterKeyConfigured, serverSnCredsConfigured,
-    usage, rateLimitHit,
+    usage, rateLimitHit, trialStatus,
     onApiKeyProvided: () => {
       setRateLimitHit(false);
       if (pendingRetry) {
@@ -1356,6 +1416,7 @@ export default function Home() {
 
       {/* Info modal */}
       <InfoModal open={showInfo} onClose={() => setShowInfo(false)} />
+      <WelcomeModal open={showWelcome} onClose={dismissWelcome} />
     </div>
   );
 }
