@@ -6,7 +6,7 @@
 const ZEPTOMAIL_API_URL = process.env.ZEPTOMAIL_API_URL || "https://api.zeptomail.com/v1.1/email";
 const ZEPTOMAIL_API_KEY = process.env.ZEPTOMAIL_API_KEY || "";
 const FROM_EMAIL = process.env.ZEPTOMAIL_FROM_EMAIL || "";
-const FROM_NAME = process.env.ZEPTOMAIL_FROM_NAME || "SN AI Dev Agent";
+const FROM_NAME = process.env.ZEPTOMAIL_FROM_NAME || "SN AI Agent";
 const BOUNCE_ADDRESS = process.env.ZEPTOMAIL_BOUNCE_ADDRESS || "";
 const APP_URL = process.env.APP_URL || "http://localhost:3000";
 
@@ -59,7 +59,7 @@ export function sendVerifyEmail(name: string, email: string, token: string) {
   return sendEmail({
     to: email,
     toName: name,
-    subject: "Verify your email — SN AI Dev Agent",
+    subject: "Verify your email — SN AI Agent",
     body: `Hi ${name},
 
 Please verify your email to complete your access request:
@@ -70,7 +70,7 @@ This link expires in 24 hours.
 
 If you didn't request this, ignore this email.
 
-— SN AI Dev Agent`,
+— SN AI Agent`,
   });
 }
 
@@ -91,7 +91,7 @@ Submitted: ${createdAt}
 
 Review at: ${APP_URL}/admin
 
-— SN AI Dev Agent`,
+— SN AI Agent`,
   });
 }
 
@@ -99,7 +99,7 @@ export function sendApprovalEmail(name: string, email: string, token: string) {
   return sendEmail({
     to: email,
     toName: name,
-    subject: "You're in — SN AI Dev Agent",
+    subject: "You're in — SN AI Agent",
     body: `Hi ${name},
 
 Your access request has been approved!
@@ -110,7 +110,7 @@ ${APP_URL}/auth/verify?token=${token}
 
 This link expires in 72 hours.
 
-— SN AI Dev Agent`,
+— SN AI Agent`,
   });
 }
 
@@ -118,7 +118,7 @@ export function sendPasswordResetEmail(name: string, email: string, token: strin
   return sendEmail({
     to: email,
     toName: name,
-    subject: "Reset your password — SN AI Dev Agent",
+    subject: "Reset your password — SN AI Agent",
     body: `Hi ${name},
 
 Click below to reset your password:
@@ -129,7 +129,7 @@ This link expires in 72 hours.
 
 If you didn't request this, ignore this email.
 
-— SN AI Dev Agent`,
+— SN AI Agent`,
   });
 }
 

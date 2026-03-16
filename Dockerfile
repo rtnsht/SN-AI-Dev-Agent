@@ -1,5 +1,5 @@
 # ============================================================================
-# Multi-stage Dockerfile for SN AI Dev Agent
+# Multi-stage Dockerfile for SN AI Agent
 # Works on: Railway, Render, DigitalOcean App Platform, any Docker host
 # ============================================================================
 
@@ -37,7 +37,7 @@ WORKDIR /app
 
 # NEXT_PUBLIC_* vars are inlined at build time by Next.js (not read at runtime).
 # Declare them as ARGs so they can be passed via --build-arg or Render/Railway env.
-ARG NEXT_PUBLIC_APP_NAME="SN AI Dev Agent"
+ARG NEXT_PUBLIC_APP_NAME="SN AI Agent"
 ARG NEXT_PUBLIC_APP_TAGLINE="Say it. Ship it."
 ARG NEXT_PUBLIC_APP_SUBTITLE="Spec-driven · Human-approved · AI-powered"
 ARG NEXT_PUBLIC_APP_DESCRIPTION="AI-powered ServiceNow development"

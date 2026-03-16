@@ -1,4 +1,4 @@
-# SN AI Dev Agent - Brownfield Enhancement Plan
+# SN AI Agent - Brownfield Enhancement Plan
 
 ## Document Control
 
@@ -14,7 +14,7 @@
 
 ## 1. Executive Vision
 
-Transform the SN AI Dev Agent into an **intelligent brownfield implementation partner** that embodies a **people-first philosophy** - empowering ServiceNow developers of all levels to deliver high-quality, upgrade-safe, and maintainable solutions while respecting existing customizations.
+Transform the SN AI Agent into an **intelligent brownfield implementation partner** that embodies a **people-first philosophy** - empowering ServiceNow developers of all levels to deliver high-quality, upgrade-safe, and maintainable solutions while respecting existing customizations.
 
 ### 1.1 Core Mission Statement
 

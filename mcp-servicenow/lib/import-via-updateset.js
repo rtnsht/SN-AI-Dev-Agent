@@ -26,8 +26,8 @@ async function importViaUpdateSet(xmlFile) {
     const updateSetXml = `<?xml version="1.0" encoding="UTF-8"?>
 <unload unload_date="2026-03-02 10:00:00">
 <sys_remote_update_set action="INSERT_OR_UPDATE">
-    <application display_value="Yantra AI Dev Agent">2ea695fec3d7321034b6b1f1b40131f0</application>
-    <application_name>Yantra AI Dev Agent</application_name>
+    <application display_value="SN AI Agent">2ea695fec3d7321034b6b1f1b40131f0</application>
+    <application_name>SN AI Agent</application_name>
     <application_scope>x_snc_yantra</application_scope>
     <application_version>1.0.0</application_version>
     <collisions/>
