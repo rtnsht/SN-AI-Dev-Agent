@@ -34,6 +34,8 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (existingUser) {
+      const { otp } = await createOTPToken(normalizedEmail);
+      await sendOTPEmail(name.trim(), normalizedEmail, otp);
       return NextResponse.json({ success: true, requiresOTP: true });
     }
 
@@ -46,6 +48,8 @@ export async function POST(request: NextRequest) {
 
     if (existing) {
       if (existing.status === "approved") {
+        const { otp } = await createOTPToken(normalizedEmail);
+        await sendOTPEmail(name.trim(), normalizedEmail, otp);
         return NextResponse.json({ success: true, requiresOTP: true });
       }
       // Update existing request with latest info

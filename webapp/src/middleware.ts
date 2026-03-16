@@ -36,6 +36,8 @@ const PUBLIC_PATHS = [
   "/api/chat",            // open for anonymous access (rate-limited server-side)
   "/api/chat-stream",     // open for anonymous access (rate-limited server-side)
   "/api/trial-status",    // trial status check (works for anon too)
+  "/api/test-connection",  // SN instance connect (used from public /app page)
+  "/api/session-start",    // session telemetry init (used from public /app page)
 ];
 
 /** Check if a path is public (no auth needed) */
