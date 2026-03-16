@@ -12,6 +12,12 @@ export const APP_DESCRIPTION = process.env.NEXT_PUBLIC_APP_DESCRIPTION || "";
 export const APP_LOGO        = process.env.NEXT_PUBLIC_APP_LOGO        || "";
 export const APP_HERO_TAGLINE = process.env.NEXT_PUBLIC_HERO_TAGLINE   || "";
 export const HERO_VIDEO_URL   = process.env.NEXT_PUBLIC_HERO_VIDEO_URL  || "";
+/** Welcome modal pill badge (e.g. "Spec-driven · Human-approved · AI-powered") */
+export const WELCOME_BADGE    = process.env.NEXT_PUBLIC_WELCOME_BADGE   || "Spec-driven · Human-approved · AI-powered";
+/** Welcome modal CTA button label */
+export const WELCOME_CTA      = process.env.NEXT_PUBLIC_WELCOME_CTA     || "I understand — let's go";
+/** Welcome modal footer hint */
+export const WELCOME_FOOTER  = process.env.NEXT_PUBLIC_WELCOME_FOOTER  || "This won't show again";
 export const CREATOR_NAME     = process.env.NEXT_PUBLIC_CREATOR_NAME     || "Ratnesh";
 export const CREATOR_LINKEDIN = process.env.NEXT_PUBLIC_CREATOR_LINKEDIN || "https://www.linkedin.com/in/ratnesh-tiwari";
 export const SHOW_INFO_BUTTON = process.env.NEXT_PUBLIC_SHOW_INFO_BUTTON !== "false"; // default: true

@@ -2,23 +2,8 @@
 
 import { useEffect } from "react";
 import Image from "next/image";
-import { APP_NAME, APP_LOGO, APP_SUBTITLE, HERO_VIDEO_URL } from "@/lib/branding";
+import { APP_NAME, APP_LOGO, APP_SUBTITLE, HERO_VIDEO_URL, WELCOME_BADGE, WELCOME_CTA, WELCOME_FOOTER } from "@/lib/branding";
 import { getVideoEmbedUrl } from "@/components/LandingPage";
-
-const HIGHLIGHTS = [
-  {
-    title: "Spec-Driven",
-    desc: "The AI drafts the spec and design — you approve before a single line of code is written.",
-  },
-  {
-    title: "Human-in-the-Loop",
-    desc: "Phase gates enforce your sign-off at every stage. Nothing skips review.",
-  },
-  {
-    title: "Instance-Safe",
-    desc: "Every artifact lands in an update set with full audit trail and rollback support.",
-  },
-];
 
 interface Props {
   open: boolean;
@@ -44,6 +29,11 @@ export default function WelcomeModal({ open, onClose }: Props) {
       >
         {/* Header */}
         <div className="flex flex-col items-center px-6 pt-6 pb-4 text-center" style={{ borderBottom: "1px solid var(--border-default)" }}>
+          {/* Badge (from env: NEXT_PUBLIC_WELCOME_BADGE) */}
+          <div className="landing-badge mb-4">
+            <span className="landing-badge-dot" />
+            {WELCOME_BADGE}
+          </div>
           {APP_LOGO && (
             <Image src={APP_LOGO} alt={APP_NAME} width={56} height={56} className="rounded-xl mb-3" unoptimized />
           )}
@@ -56,7 +46,7 @@ export default function WelcomeModal({ open, onClose }: Props) {
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+        <div className="flex-1 overflow-y-auto px-6 py-4">
           {/* Demo video */}
           {HERO_VIDEO_URL && (
             <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-default)" }}>
@@ -73,23 +63,6 @@ export default function WelcomeModal({ open, onClose }: Props) {
               </div>
             </div>
           )}
-
-          {/* Key highlights */}
-          <div className="space-y-3">
-            {HIGHLIGHTS.map((h, i) => (
-              <div
-                key={i}
-                className="flex gap-3 p-3 rounded-lg"
-                style={{ background: "var(--surface-secondary)" }}
-              >
-                <div className="flex-shrink-0 w-2 h-2 mt-2 rounded-full" style={{ background: i === 0 ? "var(--color-primary)" : i === 1 ? "var(--color-warning, #F5C451)" : "var(--text-disabled)" }} />
-                <div>
-                  <h3 className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{h.title}</h3>
-                  <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "var(--text-secondary)" }}>{h.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
 
         {/* Footer with CTA */}
@@ -101,10 +74,10 @@ export default function WelcomeModal({ open, onClose }: Props) {
             onMouseEnter={e => { e.currentTarget.style.background = "var(--color-primary-hover)"; }}
             onMouseLeave={e => { e.currentTarget.style.background = "var(--color-primary)"; }}
           >
-            I understand — let&apos;s go
+            {WELCOME_CTA}
           </button>
           <p className="text-center text-[10px] mt-2" style={{ color: "var(--text-disabled)" }}>
-            This won&apos;t show again
+            {WELCOME_FOOTER}
           </p>
         </div>
       </div>

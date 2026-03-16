@@ -6,6 +6,7 @@
 import fs from "fs";
 import path from "path";
 import { updateTelemetry } from "./telemetry-generator";
+import { getLogPersistence } from "./log-persistence";
 
 // Log levels
 export type LogLevel = "info" | "warn" | "error" | "debug";
@@ -130,6 +131,12 @@ export function endSession(sessionId: string, outcome: "success" | "error" | "ca
     const durationMs = Date.now() - session.startTime.getTime();
     log("info", sessionId, "session", "Session ended", { outcome, durationMs });
     sessions.delete(sessionId);
+
+    // Final flush to Supabase + mark complete (async, non-blocking)
+    const status = outcome === "success" ? "completed" : outcome;
+    getLogPersistence()
+      ?.finalizeSession(sessionId, { outcome: status, durationMs })
+      .catch(() => {});
   }
 }
 
@@ -161,6 +168,9 @@ export function log(
   const filename = getLogFilename(sessionId);
   const filepath = path.join(LOGS_DIR, filename);
   fs.appendFileSync(filepath, logLine);
+
+  // Async persist to Supabase (fire-and-forget, never throws)
+  try { getLogPersistence()?.enqueue(sessionId, entry); } catch { /* never block logging */ }
 
   // Trigger telemetry update (throttled to every 15s internally)
   if (sessionId.startsWith("sess_")) {
