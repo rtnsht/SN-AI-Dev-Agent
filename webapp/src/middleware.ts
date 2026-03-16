@@ -60,10 +60,32 @@ function isAdminPath(pathname: string): boolean {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // ── Landing page redirect ────────────────────────────────────────────────
+  // When SKIP_LANDING_PAGE=true, always redirect "/" → "/app" (skips the
+  // marketing page entirely). Works regardless of auth state.
+  if (pathname === "/" && process.env.SKIP_LANDING_PAGE === "true") {
+    return NextResponse.redirect(new URL("/app", request.url));
+  }
+
   // ── Dev bypass: skip all auth when BYPASS_AUTH=true ──────────────────────
   // Safe because: (a) webapp/.env is never deployed to Render,
   // (b) render.yaml explicitly sets BYPASS_AUTH=false.
+  // Still redirects authenticated users on "/" to "/app" when possible.
   if (process.env.BYPASS_AUTH === "true") {
+    // Even with auth bypass, redirect "/" → "/app" if user has a session
+    if (pathname === "/") {
+      const sessionToken = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+      if (sessionToken) {
+        try {
+          const session = await validateSession(sessionToken);
+          if (session && !session.is_temporary) {
+            return NextResponse.redirect(new URL("/app", request.url));
+          }
+        } catch {
+          // Non-fatal — proceed without redirect
+        }
+      }
+    }
     return NextResponse.next();
   }
 
