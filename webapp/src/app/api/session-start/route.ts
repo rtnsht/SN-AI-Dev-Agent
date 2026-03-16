@@ -10,6 +10,7 @@ import { log } from "@/lib/logger";
 import { startTelemetryStream } from "@/lib/telemetry-generator";
 import { validateSession, SESSION_COOKIE_NAME } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
+import { getLogPersistence } from "@/lib/log-persistence";
 
 // Track cleanup functions for active sessions
 const sessionCleanups = new Map<string, () => void>();
@@ -33,8 +34,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "sessionId required" }, { status: 400 });
     }
 
-    // Log the session connect event
-    log(sessionId, "info", "session_connect", "Session started — user connected to instance", {
+    // Log the session connect event (level first, then sessionId)
+    log("info", sessionId, "session_connect", "Session started — user connected to instance", {
       instanceUrl: instanceUrl || "",
       username: username || "",
       userFullName: userFullName || "",
@@ -56,9 +57,21 @@ export async function POST(request: NextRequest) {
     sessionCleanups.set(sessionId, cleanup);
 
     // Auto-capture instance in user_instances table (non-blocking)
+    const userId = await resolveUserId(request);
     if (instanceUrl) {
       captureInstance(request, instanceUrl, username).catch(() => { /* non-critical */ });
     }
+
+    // Persist session metadata to Supabase (non-blocking)
+    getLogPersistence()?.initSession({
+      sessionId,
+      userId: userId || undefined,
+      instanceUrl: instanceUrl || undefined,
+      username: username || undefined,
+      userFullName: userFullName || undefined,
+      aiProvider: aiProvider || undefined,
+      model: model || undefined,
+    }).catch(() => { /* non-critical */ });
 
     return NextResponse.json({ success: true, sessionId });
   } catch (err) {
@@ -67,6 +80,18 @@ export async function POST(request: NextRequest) {
       { error: err instanceof Error ? err.message : String(err) },
       { status: 500 }
     );
+  }
+}
+
+/** Resolve the authenticated user's ID from session cookie (returns null if unauthenticated) */
+async function resolveUserId(request: NextRequest): Promise<string | null> {
+  try {
+    const sessionToken = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+    if (!sessionToken) return null;
+    const session = await validateSession(sessionToken);
+    return session?.user?.id || null;
+  } catch {
+    return null;
   }
 }
 

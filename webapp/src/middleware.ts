@@ -21,6 +21,7 @@ export const config = {
 /** Routes that don't require authentication */
 const PUBLIC_PATHS = [
   "/app",                 // open to everyone (3-tier rate limiting handles access)
+  "/clearcache",          // clear browser storage + redirect (no auth)
   "/login",
   "/request-access",
   "/auth/verify",
