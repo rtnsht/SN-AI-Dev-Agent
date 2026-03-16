@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback, type RefObject } from "react"
 import type { ChatMessage, SDLCPhase, LiveStatus, FileAttachment } from "@/lib/types";
 import MessageBubble from "./MessageBubble";
 import Image from "next/image";
-import { APP_NAME, APP_LOGO, APP_HERO_TAGLINE, APP_SUBTITLE, APP_TAGLINE, HERO_FEATURES } from "@/lib/branding";
+import { APP_NAME, APP_LOGO, APP_HERO_TAGLINE, APP_SUBTITLE, APP_TAGLINE, HERO_FEATURES, WELCOME_BADGE } from "@/lib/branding";
 
 /* ── Web Speech API type shim ── */
 interface SpeechRecognitionEvent extends Event {
@@ -1007,6 +1007,13 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
             {/* ── DISCONNECTED: Minimal hero ── */}
             {!connected && (
               <>
+                {/* Badge: Spec-driven · Human-approved · AI-powered (green dot) */}
+                {WELCOME_BADGE && (
+                  <div className="landing-badge mb-4">
+                    <span className="landing-badge-dot" />
+                    {WELCOME_BADGE}
+                  </div>
+                )}
                 {/* Logo */}
                 {APP_LOGO && (
                   <div className="hero-logo-container mb-4">
@@ -1064,6 +1071,13 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
             {/* ── CONNECTED: Clean ready-to-chat state with glowing input ── */}
             {connected && (
               <>
+                {/* Badge: Spec-driven · Human-approved · AI-powered (green dot) */}
+                {WELCOME_BADGE && (
+                  <div className="landing-badge mb-4">
+                    <span className="landing-badge-dot" />
+                    {WELCOME_BADGE}
+                  </div>
+                )}
                 {/* Compact logo + greeting */}
                 {APP_LOGO && (
                   <div className="hero-logo-container mb-4">
