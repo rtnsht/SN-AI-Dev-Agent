@@ -14,6 +14,7 @@ import SuggestionPanel from "@/components/SuggestionPanel";
 import type { ChatMessage, ConnectionResult, UsageInfo, TrialStatus, SDLCPhase, LiveStatus, AIProvider, ModelOption, FileAttachment, CategorizedPrompts } from "@/lib/types";
 import { parsePhaseGate, parseUserChoices, ANTHROPIC_MODELS, SDLC_PHASES, openRouterModelToOption } from "@/lib/types";
 import { APP_NAME, APP_LOGO, SHOW_INFO_BUTTON, CREATOR_NAME, CREATOR_LINKEDIN, FOOTER_TAGLINE, FOOTER_COPYRIGHT } from "@/lib/branding";
+import { Menu, User } from "lucide-react";
 
 /* ── Session persistence keys (sessionStorage) ──────────────── */
 const SK = {
@@ -61,6 +62,7 @@ export default function Home() {
   const [rightWidth, setRightWidth] = useState(288);
   const isResizingLeft = useRef(false);
   const isResizingRight = useRef(false);
+  const rafRef = useRef<number | null>(null);
   const [serverApiKeyConfigured, setServerApiKeyConfigured] = useState(false);
   const [serverOpenRouterKeyConfigured, setServerOpenRouterKeyConfigured] = useState(false);
   const [serverSnCredsConfigured, setServerSnCredsConfigured] = useState(false);
@@ -523,6 +525,8 @@ export default function Home() {
       messagesRef.current = newMessages;
 
       setIsLoading(true);
+      setActivityLog([]);
+      setTaskPlan(null);
       // Lock model selection after first message
       if (!modelLocked) setModelLocked(true);
 
@@ -556,7 +560,7 @@ export default function Home() {
 
         // Use streaming API when enabled for live status updates
         if (streamingEnabled) {
-          setLiveStatus({ message: "Starting...", phase: "thinking" });
+          setLiveStatus({ message: "Analyzing your request...", phase: "thinking" });
 
           const res = await fetch("/api/chat-stream", {
             method: "POST",
@@ -1195,12 +1199,12 @@ export default function Home() {
   /** Sidebar resize handlers (mouse + touch) */
   useEffect(() => {
     const handleMove = (clientX: number) => {
-      if (isResizingLeft.current) {
-        setLeftWidth(Math.min(Math.max(clientX, 240), 480));
-      }
-      if (isResizingRight.current) {
-        setRightWidth(Math.min(Math.max(window.innerWidth - clientX, 240), 480));
-      }
+      if (!isResizingLeft.current && !isResizingRight.current) return;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (isResizingLeft.current) setLeftWidth(Math.min(Math.max(clientX, 240), 480));
+        if (isResizingRight.current) setRightWidth(Math.min(Math.max(window.innerWidth - clientX, 240), 480));
+      });
     };
     const handleMouseMove = (e: MouseEvent) => handleMove(e.clientX);
     const handleTouchMove = (e: TouchEvent) => { if (e.touches[0]) handleMove(e.touches[0].clientX); };
@@ -1308,9 +1312,7 @@ export default function Home() {
               onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
               title="Toggle settings (Cmd+1)"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-              </svg>
+              <Menu className="w-5 h-5" strokeWidth={1.5} />
             </button>
 
             {/* App identity */}
@@ -1400,7 +1402,7 @@ export default function Home() {
                 title={appUser?.name || "Profile"}
               >
                 {appUser?.name ? appUser.name.charAt(0).toUpperCase() : (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                  <User className="w-4 h-4" strokeWidth={2} />
                 )}
               </button>
               {profileOpen && (
