@@ -1,6 +1,6 @@
 /**
  * POST /api/session-start
- * 
+ *
  * Called when user clicks "Connect" — logs connection metadata and
  * starts the live telemetry stream for this session.
  */
@@ -8,6 +8,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { log } from "@/lib/logger";
 import { startTelemetryStream } from "@/lib/telemetry-generator";
+import { validateSession, SESSION_COOKIE_NAME } from "@/lib/auth";
+import { getSupabase } from "@/lib/supabase";
 
 // Track cleanup functions for active sessions
 const sessionCleanups = new Map<string, () => void>();
@@ -53,6 +55,11 @@ export async function POST(request: NextRequest) {
     const cleanup = startTelemetryStream(sessionId);
     sessionCleanups.set(sessionId, cleanup);
 
+    // Auto-capture instance in user_instances table (non-blocking)
+    if (instanceUrl) {
+      captureInstance(request, instanceUrl, username).catch(() => { /* non-critical */ });
+    }
+
     return NextResponse.json({ success: true, sessionId });
   } catch (err) {
     console.error("[session-start] Error:", err);
@@ -63,3 +70,42 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/** Upsert the connected instance into user_instances for admin visibility */
+async function captureInstance(request: NextRequest, instanceUrl: string, snUsername?: string) {
+  try {
+    const sessionToken = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+    if (!sessionToken) return;
+
+    const session = await validateSession(sessionToken);
+    if (!session) return;
+
+    const userId = session.user.id;
+    const normalizedUrl = instanceUrl.replace(/\/+$/, "").toLowerCase();
+
+    // Derive short instance name from URL (e.g. "https://dev181312.service-now.com" → "dev181312")
+    const instanceName = normalizedUrl
+      .replace(/^https?:\/\//, "")
+      .replace(/\.service-now\.com.*$/, "")
+      .replace(/\..+$/, "");
+
+    const db = getSupabase();
+
+    // Try insert first, on conflict update last_connected_at and sn_username
+    const { error: insertErr } = await db.from("user_instances").upsert(
+      {
+        user_id: userId,
+        instance_url: normalizedUrl,
+        instance_name: instanceName || normalizedUrl,
+        sn_username: snUsername || null,
+        last_connected_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,instance_url" }
+    );
+
+    if (insertErr) {
+      console.error("[session-start] Failed to capture instance:", insertErr.message);
+    }
+  } catch (err) {
+    console.error("[session-start] captureInstance error:", err);
+  }
+}

@@ -1004,18 +1004,18 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
         <div className="flex-1 flex flex-col items-center justify-start sm:justify-center px-4 py-4 sm:py-8 overflow-y-auto">
           <div className="w-full max-w-2xl lg:max-w-3xl xl:max-w-4xl mx-auto flex flex-col items-center">
 
-            {/* ── DISCONNECTED: Full branded hero landing page ── */}
+            {/* ── DISCONNECTED: Minimal hero ── */}
             {!connected && (
               <>
                 {/* Logo */}
                 {APP_LOGO && (
-                  <div className="hero-logo-container mb-3 sm:mb-5">
+                  <div className="hero-logo-container mb-4">
                     <Image
                       src={APP_LOGO}
                       alt={APP_NAME || "App Logo"}
-                      width={180}
-                      height={180}
-                      className="hero-logo w-20 h-20 sm:w-40 sm:h-40 md:w-[180px] md:h-[180px]"
+                      width={80}
+                      height={80}
+                      className="hero-logo w-16 h-16 sm:w-20 sm:h-20"
                       unoptimized
                       priority
                     />
@@ -1025,54 +1025,20 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
                 {/* App Name */}
                 {APP_NAME && (
                   <h1
-                    className="text-2xl sm:text-3xl md:text-4xl font-semibold text-center mb-1 tracking-tight"
+                    className="text-xl sm:text-2xl md:text-3xl font-semibold text-center mb-1 tracking-tight"
                     style={{ color: "var(--text-primary)" }}
                   >
                     {APP_NAME}
                   </h1>
                 )}
 
-                {/* Tagline */}
+                {/* Tagline — single clean line */}
                 {(APP_TAGLINE || APP_HERO_TAGLINE) && (
-                  <p className="hero-tagline text-center mb-1" style={{ fontSize: "clamp(18px, 3vw, 28px)" }}>
+                  <p className="text-center mb-6 text-sm sm:text-base" style={{ color: "var(--text-secondary)" }}>
                     {APP_HERO_TAGLINE || APP_TAGLINE}
                   </p>
                 )}
-
-                {/* Subtitle */}
-                {APP_SUBTITLE && (
-                  <p className="text-center mb-6 text-xs sm:text-sm" style={{ color: "var(--text-disabled)", letterSpacing: "0.04em" }}>
-                    {APP_SUBTITLE}
-                  </p>
-                )}
-                {!APP_SUBTITLE && <div className="mb-6" />}
-
-                {/* Feature Description Pills */}
-                {HERO_FEATURES.length > 0 && (
-                  <div className="hero-features-block w-full mb-8 rounded-xl px-4 sm:px-6 py-5 sm:py-6">
-                    <div className="relative z-[1] space-y-4 sm:space-y-5">
-                      {HERO_FEATURES.map((feature, i) => (
-                        <div key={i} className="flex gap-3.5 items-start">
-                          <span
-                            className="hero-feature-dot flex-shrink-0 mt-[8px] w-2.5 h-2.5 rounded-full"
-                            style={{
-                              background: i === 0 ? "var(--color-primary)" : i === 1 ? "var(--color-accent-from, var(--color-primary))" : "var(--text-disabled)",
-                              boxShadow: i < 2 ? `0 0 8px ${i === 0 ? "var(--color-primary)" : "var(--color-accent-from, var(--color-primary))"}` : "none",
-                            }}
-                          />
-                          <div className="min-w-0">
-                            <p className="text-[14px] sm:text-[15px] font-semibold tracking-tight" style={{ color: "var(--text-primary)" }}>
-                              {feature.title}
-                            </p>
-                            <p className="text-[12px] sm:text-[13px] mt-1 leading-relaxed" style={{ color: "var(--text-secondary)", opacity: 0.85 }}>
-                              {feature.desc}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {!(APP_TAGLINE || APP_HERO_TAGLINE) && <div className="mb-6" />}
 
                 {/* Input bar (disabled — hidden on mobile pre-connect) */}
                 <div className="hidden sm:block w-full">{renderInputBar(true)}</div>
@@ -1081,7 +1047,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
                 {onGetStarted && (
                   <button
                     onClick={onGetStarted}
-                    className="sm:hidden w-full mt-6 py-3.5 px-6 text-base font-semibold rounded-xl transition-all active:scale-[0.98]"
+                    className="sm:hidden w-full mt-4 py-3.5 px-6 text-base font-semibold rounded-xl transition-all active:scale-[0.98]"
                     style={{ background: "var(--color-primary)", color: "white", boxShadow: "0 4px 16px color-mix(in srgb, var(--color-primary) 35%, transparent)" }}
                   >
                     Get Started
@@ -1089,7 +1055,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
                 )}
 
                 {/* Desktop: Connect prompt */}
-                <p className="hidden sm:block text-center mt-6 text-sm" style={{ color: "var(--text-disabled)" }}>
+                <p className="hidden sm:block text-center mt-4 text-sm" style={{ color: "var(--text-disabled)" }}>
                   Open settings and connect your instance to get started.
                 </p>
               </>

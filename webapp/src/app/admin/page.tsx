@@ -123,6 +123,16 @@ export default function AdminPage() {
   const [overrideDailyLimit, setOverrideDailyLimit] = useState("10");
   const [overrideTrialDays, setOverrideTrialDays] = useState("10");
 
+  // User & Instance selection for overrides
+  const [allUsers, setAllUsers] = useState<{ id: string; email: string; name: string; status: string }[]>([]);
+  const [userSearch, setUserSearch] = useState("");
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [allInstances, setAllInstances] = useState<{ id: string; instance_url: string; instance_name: string; sn_username: string; user_name: string; user_email: string; last_connected_at: string }[]>([]);
+  const [instanceSearch, setInstanceSearch] = useState("");
+  const [showInstanceDropdown, setShowInstanceDropdown] = useState(false);
+  const userDropdownRef = useRef<HTMLDivElement>(null);
+  const instanceDropdownRef = useRef<HTMLDivElement>(null);
+
   // Access tier state
   const [tierAnonLimit, setTierAnonLimit] = useState("10");
   const [tierAuthLimit, setTierAuthLimit] = useState("20");
@@ -149,9 +159,13 @@ export default function AdminPage() {
         const data = await res.json();
         setBanners(data.banners || []);
       } else if (tab === "trials") {
-        const res = await fetch("/api/admin/trials");
-        if (res.status === 401 || res.status === 403) { router.push("/login"); return; }
-        const data = await res.json();
+        const [trialsRes, usersRes, instancesRes] = await Promise.all([
+          fetch("/api/admin/trials"),
+          fetch("/api/admin/users"),
+          fetch("/api/admin/instances"),
+        ]);
+        if (trialsRes.status === 401 || trialsRes.status === 403) { router.push("/login"); return; }
+        const data = await trialsRes.json();
         setTrialGlobal(data.globalConfig || null);
         setTrialOverrides(data.overrides || []);
         setTrialUsageStats(data.usageStats || []);
@@ -159,6 +173,16 @@ export default function AdminPage() {
           setTrialDailyLimit(String(data.globalConfig.daily_limit));
           setTrialDays(String(data.globalConfig.trial_days));
           setTrialActive(data.globalConfig.is_active);
+        }
+        // Load users for user-scope dropdown
+        if (usersRes.ok) {
+          const uData = await usersRes.json();
+          setAllUsers((uData.users || []).filter((u: { status: string }) => u.status === "active"));
+        }
+        // Load instances for instance-scope dropdown
+        if (instancesRes.ok) {
+          const iData = await instancesRes.json();
+          setAllInstances(iData.instances || []);
         }
       } else if (tab === "access-tiers") {
         const res = await fetch("/api/admin/access-tiers");
@@ -180,6 +204,33 @@ export default function AdminPage() {
   }, [tab, router]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Click-outside to close dropdowns
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (userDropdownRef.current && !userDropdownRef.current.contains(e.target as Node)) {
+        setShowUserDropdown(false);
+      }
+      if (instanceDropdownRef.current && !instanceDropdownRef.current.contains(e.target as Node)) {
+        setShowInstanceDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Filtered lists for dropdowns
+  const filteredUsers = allUsers.filter(
+    (u) =>
+      u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
+      u.email.toLowerCase().includes(userSearch.toLowerCase())
+  );
+  const filteredInstances = allInstances.filter(
+    (inst) =>
+      inst.instance_url.toLowerCase().includes(instanceSearch.toLowerCase()) ||
+      inst.instance_name.toLowerCase().includes(instanceSearch.toLowerCase()) ||
+      (inst.sn_username || "").toLowerCase().includes(instanceSearch.toLowerCase())
+  );
 
   async function handleRequestAction(id: string, action: "approve" | "reject") {
     setActionLoading(id);
@@ -444,6 +495,8 @@ export default function AdminPage() {
         setMessage("Override added");
         setShowOverrideForm(false);
         setOverrideScopeValue("");
+        setUserSearch("");
+        setInstanceSearch("");
         fetchData();
       } else {
         const data = await res.json();
@@ -994,26 +1047,118 @@ export default function AdminPage() {
                   <select
                     className="auth-input"
                     value={overrideScope}
-                    onChange={(e) => setOverrideScope(e.target.value as "user" | "instance")}
+                    onChange={(e) => { setOverrideScope(e.target.value as "user" | "instance"); setOverrideScopeValue(""); setUserSearch(""); setInstanceSearch(""); }}
                     style={{ fontSize: "13px", width: "120px" }}
                   >
                     <option value="user">User</option>
                     <option value="instance">Instance</option>
                   </select>
                 </div>
-                <div>
-                  <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}>
-                    {overrideScope === "user" ? "User ID" : "Instance URL"}
-                  </label>
-                  <input
-                    className="auth-input"
-                    value={overrideScopeValue}
-                    onChange={(e) => setOverrideScopeValue(e.target.value)}
-                    placeholder={overrideScope === "user" ? "User UUID" : "dev12345.service-now.com"}
-                    style={{ fontSize: "13px", width: "220px" }}
-                    required
-                  />
-                </div>
+                {/* Searchable User / Instance selector */}
+                {overrideScope === "user" ? (
+                  <div ref={userDropdownRef} style={{ position: "relative" }}>
+                    <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}>
+                      User
+                    </label>
+                    <input
+                      className="auth-input"
+                      value={userSearch}
+                      onChange={(e) => { setUserSearch(e.target.value); setShowUserDropdown(true); setOverrideScopeValue(""); }}
+                      onFocus={() => setShowUserDropdown(true)}
+                      placeholder="Search by name or email..."
+                      style={{ fontSize: "13px", width: "280px" }}
+                      autoComplete="off"
+                    />
+                    {showUserDropdown && filteredUsers.length > 0 && (
+                      <div style={{
+                        position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
+                        background: "var(--surface-secondary)", border: "1px solid var(--border-default)",
+                        borderRadius: "8px", marginTop: "4px", maxHeight: "200px", overflowY: "auto",
+                        boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+                      }}>
+                        {filteredUsers.map((u) => (
+                          <button
+                            key={u.id}
+                            type="button"
+                            onClick={() => { setOverrideScopeValue(u.id); setUserSearch(`${u.name} (${u.email})`); setShowUserDropdown(false); }}
+                            style={{
+                              display: "block", width: "100%", textAlign: "left", padding: "8px 12px",
+                              fontSize: "13px", color: "var(--text-primary)", background: "transparent",
+                              border: "none", cursor: "pointer", borderBottom: "1px solid var(--border-default)",
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-hover)")}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                          >
+                            <span style={{ fontWeight: 500 }}>{u.name}</span>
+                            <span style={{ color: "var(--text-secondary)", marginLeft: "6px" }}>{u.email}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {showUserDropdown && userSearch && filteredUsers.length === 0 && (
+                      <div style={{
+                        position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
+                        background: "var(--surface-secondary)", border: "1px solid var(--border-default)",
+                        borderRadius: "8px", marginTop: "4px", padding: "12px",
+                        fontSize: "12px", color: "var(--text-disabled)", textAlign: "center",
+                      }}>
+                        No users found
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div ref={instanceDropdownRef} style={{ position: "relative" }}>
+                    <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}>
+                      Instance
+                    </label>
+                    <input
+                      className="auth-input"
+                      value={instanceSearch}
+                      onChange={(e) => { setInstanceSearch(e.target.value); setShowInstanceDropdown(true); setOverrideScopeValue(""); }}
+                      onFocus={() => setShowInstanceDropdown(true)}
+                      placeholder="Search instances..."
+                      style={{ fontSize: "13px", width: "280px" }}
+                      autoComplete="off"
+                    />
+                    {showInstanceDropdown && filteredInstances.length > 0 && (
+                      <div style={{
+                        position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
+                        background: "var(--surface-secondary)", border: "1px solid var(--border-default)",
+                        borderRadius: "8px", marginTop: "4px", maxHeight: "200px", overflowY: "auto",
+                        boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+                      }}>
+                        {filteredInstances.map((inst) => (
+                          <button
+                            key={inst.id}
+                            type="button"
+                            onClick={() => { setOverrideScopeValue(inst.instance_url); setInstanceSearch(`${inst.instance_name} (${inst.instance_url})`); setShowInstanceDropdown(false); }}
+                            style={{
+                              display: "block", width: "100%", textAlign: "left", padding: "8px 12px",
+                              fontSize: "13px", color: "var(--text-primary)", background: "transparent",
+                              border: "none", cursor: "pointer", borderBottom: "1px solid var(--border-default)",
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-hover)")}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                          >
+                            <span style={{ fontWeight: 500 }}>{inst.instance_name}</span>
+                            <span style={{ color: "var(--text-secondary)", marginLeft: "6px" }}>{inst.instance_url}</span>
+                            {inst.sn_username && <span style={{ color: "var(--text-disabled)", marginLeft: "6px", fontSize: "11px" }}>({inst.sn_username})</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {showInstanceDropdown && instanceSearch && filteredInstances.length === 0 && (
+                      <div style={{
+                        position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
+                        background: "var(--surface-secondary)", border: "1px solid var(--border-default)",
+                        borderRadius: "8px", marginTop: "4px", padding: "12px",
+                        fontSize: "12px", color: "var(--text-disabled)", textAlign: "center",
+                      }}>
+                        No instances found
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div>
                   <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}>
                     Daily Limit
@@ -1055,7 +1200,12 @@ export default function AdminPage() {
                   {trialOverrides.map((o) => (
                     <tr key={o.id}>
                       <td><span className={`admin-status admin-status-${o.scope === "user" ? "active" : "pending"}`}>{o.scope}</span></td>
-                      <td style={{ fontSize: "12px", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis" }}>{o.scope_value}</td>
+                      <td style={{ fontSize: "12px", maxWidth: "250px", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {o.scope === "user"
+                          ? (() => { const u = allUsers.find(u => u.id === o.scope_value); return u ? <><span style={{ fontWeight: 500 }}>{u.name}</span> <span style={{ color: "var(--text-secondary)" }}>{u.email}</span></> : o.scope_value; })()
+                          : (() => { const inst = allInstances.find(i => i.instance_url === o.scope_value); return inst ? <><span style={{ fontWeight: 500 }}>{inst.instance_name}</span> <span style={{ color: "var(--text-secondary)" }}>{inst.instance_url}</span></> : o.scope_value; })()
+                        }
+                      </td>
                       <td>{o.daily_limit}</td>
                       <td>{o.trial_days}</td>
                       <td>{o.is_active ? "Yes" : "No"}</td>
