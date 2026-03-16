@@ -29,7 +29,7 @@ services:
     # NEXT_PUBLIC_* vars must be available at build time (Next.js inlines them).
     # These are passed as --build-arg to the Dockerfile.
     dockerBuildArgs:
-      NEXT_PUBLIC_APP_NAME: "SN AI Dev Agent"
+      NEXT_PUBLIC_APP_NAME: "SN AI Agent"
       NEXT_PUBLIC_APP_TAGLINE: "Say it. Ship it."
       NEXT_PUBLIC_APP_SUBTITLE: "Spec-driven · Human-approved · AI-powered"
       NEXT_PUBLIC_APP_DESCRIPTION: "AI-powered ServiceNow development"
@@ -86,7 +86,7 @@ services:
 
       # Branding
       - key: NEXT_PUBLIC_APP_NAME
-        value: "SN AI Dev Agent"
+        value: "SN AI Agent"
       - key: NEXT_PUBLIC_APP_TAGLINE
         value: "Say it. Ship it."
       - key: NEXT_PUBLIC_APP_SUBTITLE

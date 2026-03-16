@@ -1,4 +1,4 @@
-# Project Tracker — Yantra - AI Dev Agent - SN Web App
+# Project Tracker — SN AI Agent Web App
 
 > **Last Updated:** 2026-03-02
 > **Branch:** `sndevaiagentwebapp-v2`
@@ -58,7 +58,7 @@
 | 18f | **Tool Execution Visibility Control** | `NEXT_PUBLIC_SHOW_TOOL_DETAILS` env var (default: `true`); when `false`, tool executions show compact summary line ("🔧 14 tools executed") instead of expandable detail cards |
 | 18g | **User API Key Control** | `ALLOW_USER_API_KEYS` env var (default: `true`); when `false`, hides API key input, shows "Managed by server" locked badge, rejects user-supplied keys in API routes, adjusts all error messages |
 | 18h | **Info Modal** | ℹ️ icon in header opens feature overview modal with 11 validated user-facing capabilities; no technical/architectural details exposed |
-| 18i | **App Branding — Yantra** | Renamed to "Yantra - AI Dev Agent - SN"; custom logo (`yantra-logo.png`) and favicon (`icon.png`) with transparent backgrounds (white removed via `sharp`); logo in header (36px), sidebar (36px), info modal (36px), empty state (192px); `unoptimized` prop on all `<Image>` tags; Next.js dev indicators disabled |
+| 18i | **App Branding — SN AI Agent** | Renamed to "SN AI Agent"; custom logo and favicon with transparent backgrounds (white removed via `sharp`); logo in header (36px), sidebar (36px), info modal (36px), empty state (192px); `unoptimized` prop on all `<Image>` tags; Next.js dev indicators disabled |
 | 18j | **Tagline & Empty State Copy** | Hero tagline "Say it. Ship it." with subtitle "Spec-driven · Human-approved · AI-powered" in empty state; page meta description updated; contextual messaging for connected vs disconnected states |
 
 ### Security & Access Control
@@ -117,7 +117,7 @@
 - [x] **Tool execution visibility control** — `NEXT_PUBLIC_SHOW_TOOL_DETAILS` env var to toggle between detail cards and compact summary
 - [x] **User API key control** — `ALLOW_USER_API_KEYS` env var with locked badge UI, API route enforcement, adaptive error messages
 - [x] **Info modal** — ℹ️ icon with 11 user-facing feature descriptions; no technical internals exposed
-- [x] **App branding — Yantra** — Renamed to "Yantra - AI Dev Agent - SN"; custom logo/favicon with transparent backgrounds; consistent branding across header, sidebar, info modal, empty state, export, page title
+- [x] **App branding — SN AI Agent** — Renamed to "SN AI Agent"; custom logo/favicon with transparent backgrounds; consistent branding across header, sidebar, info modal, empty state, export, page title
 - [x] **Approve button stale-closure fix** — `handleSend` used stale `messages` from closure, overwriting `approved: true` set by `handleApprove`; switched to functional state updater `setMessages((prev) => ...)` so approval flag is preserved; removed `messages` from `handleSend` dependency array
 - [x] **handleSend stale closure comprehensive fix** — Added `allowUserApiKeys` to `handleSend` dependency array (was missing); introduced `handleSendRef` to hold latest function reference; all `setTimeout` callbacks (`handleApprove`, auto-approve, `onApiKeyProvided`) now use `handleSendRef.current` to avoid stale closures; increased `maxToolRounds` from 15 to 30 to handle complex requirements like catalog items with flows
 - [x] **messagesRef pattern for React batching race conditions** — Added `messagesRef` to always track latest messages; all message mutations (`handleConnect`, `handleSend`, `handleApprove`, `handleNewChat`) now update both ref and state synchronously; prevents "Messages array is required and must not be empty" error caused by React's state batching when `setTimeout` callbacks fire before state updates propagate

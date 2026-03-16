@@ -1,4 +1,4 @@
-# SN AI Dev Agent — Technical Architecture
+# SN AI Agent — Technical Architecture
 
 > **Version:** 2.5 | **Date:** 2026-03-12 | **Branch:** `teaser-march12`
 
@@ -93,7 +93,7 @@ graph TB
 
     subgraph HEADER["Header Bar"]
         TOGGLE["⚙️ Settings Toggle"]
-        TITLE["SN AI Dev Agent"]
+        TITLE["SN AI Agent"]
         CONN_BADGE["🟢 Connected Badge"]
         TRACKER["PhaseTracker.tsx<br/>Spec → Design → Impl → Test → Deploy"]
         THEME["ThemeToggle.tsx<br/>☀️/🌙 Dark/Light Mode"]
@@ -1267,10 +1267,10 @@ During AI processing, a collapsible inline block appears in the chat flow showin
 
 | Env Var | Default | Purpose |
 |---------|---------|---------|
-| `NEXT_PUBLIC_APP_NAME` | "Yantra - AI Dev Agent - SN" | App title |
+| `NEXT_PUBLIC_APP_NAME` | "SN AI Agent" | App title |
 | `NEXT_PUBLIC_APP_TAGLINE` | "Say it. Ship it." | Welcome tagline |
-| `NEXT_PUBLIC_HERO_TAGLINE` | "Yantra works for you." | Hero tagline on empty chat state |
-| `NEXT_PUBLIC_APP_LOGO` | "/yantra-logo.png" | Logo image |
+| `NEXT_PUBLIC_HERO_TAGLINE` | "Ship ServiceNow Features with AI." | Hero tagline on empty chat state |
+| `NEXT_PUBLIC_APP_LOGO` | "/logo-r-v10.svg" | Logo image |
 | `NEXT_PUBLIC_PRIMARY_COLOR` | "blue" | Primary color (preset or hex) |
 | `NEXT_PUBLIC_ACCENT_COLOR` | "purple" | Accent color (preset or hex) |
 

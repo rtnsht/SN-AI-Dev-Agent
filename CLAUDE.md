@@ -8,7 +8,7 @@ This file contains mandatory rules, processes, and context for AI agents working
 
 ## 1. Project Overview
 
-**Project**: Yantra - AI Dev Agent - SN
+**Project**: SN AI Agent
 **Purpose**: AI-powered ServiceNow development with spec-driven methodology  
 **Instance**: dev300943.service-now.com  
 
@@ -433,10 +433,10 @@ All values configurable via `NEXT_PUBLIC_*` env vars in `webapp/.env`:
 
 | Env Var | Default |
 |---------|---------|
-| `NEXT_PUBLIC_APP_NAME` | "Yantra - AI Dev Agent - SN" |
+| `NEXT_PUBLIC_APP_NAME` | "SN AI Agent" |
 | `NEXT_PUBLIC_APP_TAGLINE` | "Say it. Ship it." |
-| `NEXT_PUBLIC_HERO_TAGLINE` | "Yantra works for you." |
-| `NEXT_PUBLIC_APP_LOGO` | "/yantra-logo.png" |
+| `NEXT_PUBLIC_HERO_TAGLINE` | "Ship ServiceNow Features with AI." |
+| `NEXT_PUBLIC_APP_LOGO` | "/logo-r-v10.svg" |
 | `NEXT_PUBLIC_PRIMARY_COLOR` | "blue" (or any preset: purple, green, teal, red, orange, indigo, or hex) |
 | `NEXT_PUBLIC_ACCENT_COLOR` | "purple" |
 

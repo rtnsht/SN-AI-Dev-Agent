@@ -18,7 +18,7 @@
 
 ### 1.1 Summary
 
-Add an invite-only access gate to the SN AI Dev Agent webapp. Visitors must either request access (reviewed and approved by an admin) or use an admin-generated invite link. Authentication uses email + password with magic-link onboarding. All user, session, and request data is stored in Supabase (Postgres). Transactional emails are sent via Zoho ZeptoMail.
+Add an invite-only access gate to the SN AI Agent webapp. Visitors must either request access (reviewed and approved by an admin) or use an admin-generated invite link. Authentication uses email + password with magic-link onboarding. All user, session, and request data is stored in Supabase (Postgres). Transactional emails are sent via Zoho ZeptoMail.
 
 ### 1.2 Goals
 

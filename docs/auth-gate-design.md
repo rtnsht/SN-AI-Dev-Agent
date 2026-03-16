@@ -496,7 +496,7 @@ All emails are **plain text** (HTML can be added later).
 |-------|-------|
 | **Trigger** | User submits request-access form |
 | **To** | Requester email |
-| **Subject** | Verify your email — SN AI Dev Agent |
+| **Subject** | Verify your email — SN AI Agent |
 
 **Body:**
 ```
@@ -510,7 +510,7 @@ This link expires in 24 hours.
 
 If you didn't request this, ignore this email.
 
-— SN AI Dev Agent
+— SN AI Agent
 ```
 
 ### 7.2 Admin Notification (new verified request)
@@ -533,7 +533,7 @@ Submitted: {created_at}
 
 Review at: {APP_URL}/admin
 
-— SN AI Dev Agent
+— SN AI Agent
 ```
 
 ### 7.3 Access Approved (magic link)
@@ -542,7 +542,7 @@ Review at: {APP_URL}/admin
 |-------|-------|
 | **Trigger** | Admin approves request |
 | **To** | Approved user email |
-| **Subject** | You're in — SN AI Dev Agent |
+| **Subject** | You're in — SN AI Agent |
 
 **Body:**
 ```
@@ -556,7 +556,7 @@ Click below to set up your account:
 
 This link expires in 72 hours.
 
-— SN AI Dev Agent
+— SN AI Agent
 ```
 
 ### 7.4 Password Reset
@@ -565,7 +565,7 @@ This link expires in 72 hours.
 |-------|-------|
 | **Trigger** | User clicks "Forgot Password" |
 | **To** | User email |
-| **Subject** | Reset your password — SN AI Dev Agent |
+| **Subject** | Reset your password — SN AI Agent |
 
 **Body:**
 ```
@@ -579,7 +579,7 @@ This link expires in 72 hours.
 
 If you didn't request this, ignore this email.
 
-— SN AI Dev Agent
+— SN AI Agent
 ```
 
 ---
@@ -611,7 +611,7 @@ APP_URL=https://yourapp.com
 ZEPTOMAIL_API_URL=https://api.zeptomail.com/v1.1/email
 ZEPTOMAIL_API_KEY=Zoho-enczapikey_xxxxxxxxxxxxx
 ZEPTOMAIL_FROM_EMAIL=noreply@yourdomain.com
-ZEPTOMAIL_FROM_NAME=SN AI Dev Agent
+ZEPTOMAIL_FROM_NAME=SN AI Agent
 ZEPTOMAIL_BOUNCE_ADDRESS=bounce@bounce.yourdomain.com
 
 # Brute force limits

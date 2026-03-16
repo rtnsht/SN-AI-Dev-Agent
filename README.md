@@ -1,4 +1,4 @@
-# r — SN AI Dev Agent for ServiceNow
+# r — SN AI Agent for ServiceNow
 
 **Say it. Ship it.** Build, test, and deploy ServiceNow solutions through natural language — powered by AI with a spec-driven methodology.
 
@@ -143,7 +143,7 @@ SN-AI-Dev-Agent/
 
 ### Update Set Capture (Three-Layer Defense)
 
-Artifacts created via REST API normally land in the Default update set. Yantra uses three layers to ensure reliable capture:
+Artifacts created via REST API normally land in the Default update set. SN AI Agent uses three layers to ensure reliable capture:
 
 1. **Session-based** — `GlideUpdateSet().set()` via helper API
 2. **Post-creation move** — Multi-strategy `sys_update_xml` search and move

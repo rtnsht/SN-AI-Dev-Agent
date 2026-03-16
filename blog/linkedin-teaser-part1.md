@@ -47,7 +47,7 @@ Ready for testing.
 
 I've been building this quietly for months.
 
-**Yantra** — an AI Dev Agent for ServiceNow.
+**SN AI Agent** — an AI Dev Agent for ServiceNow.
 
 80+ tools. Full SDLC automation.
 Spec -> Design -> Implement -> Test -> Deploy.

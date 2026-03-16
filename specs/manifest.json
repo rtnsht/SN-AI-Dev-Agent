@@ -2,7 +2,7 @@
   "version": "1.0",
   "lastUpdated": "2026-02-22",
   "project": {
-    "name": "SN AI Dev Agent",
+    "name": "SN AI Agent",
     "description": "AI-powered ServiceNow development web app with spec-driven SDLC methodology",
     "repository": "SN AI Dev",
     "defaultInstance": "dev181312"

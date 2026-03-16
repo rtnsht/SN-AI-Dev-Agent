@@ -1,5 +1,5 @@
 # ============================================================================
-# Docker Compose — Local testing for SN AI Dev Agent
+# Docker Compose — Local testing for SN AI Agent
 # Usage:
 #   1. Copy webapp/.env.example to webapp/.env and fill in your keys
 #   2. docker compose up --build
@@ -12,7 +12,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_APP_NAME: "SN AI Dev Agent"
+        NEXT_PUBLIC_APP_NAME: "SN AI Agent"
         NEXT_PUBLIC_APP_TAGLINE: "Say it. Ship it."
         NEXT_PUBLIC_APP_SUBTITLE: "Spec-driven · Human-approved · AI-powered"
         NEXT_PUBLIC_APP_DESCRIPTION: "AI-powered ServiceNow development"
