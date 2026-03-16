@@ -874,7 +874,7 @@ export async function testConnection(credentials: Omit<UserCredentials, "claudeA
           }
           return null;
         })
-        .filter((g): g is { sysId: string; name: string } => g !== null && g.sysId !== "");
+        .filter((g: { sysId: string; name: string } | null): g is { sysId: string; name: string } => g !== null && g.sysId !== "");
     } catch (err) {
       console.warn("[testConnection] Assignment group lookup failed:", err);
     }
