@@ -4,9 +4,8 @@
  */
 
 import fs from "fs";
-import fsp from "fs/promises";
 import path from "path";
-import { updateTelemetry } from "./telemetry-generator";
+import { hasActiveTelemetryStream, updateTelemetry } from "./telemetry-generator";
 import { getLogPersistence } from "./log-persistence";
 
 // Log levels
@@ -48,21 +47,12 @@ setInterval(() => {
 
 // Logs directory (at project root)
 const LOGS_DIR = path.join(process.cwd(), "logs");
+let logsDirEnsured = false;
 
-// Ensure logs directory exists (sync for startup, async for ongoing use)
-let logsDirReady = false;
-function ensureLogsDirSync(): void {
-  if (logsDirReady) return;
-  if (!fs.existsSync(LOGS_DIR)) {
-    fs.mkdirSync(LOGS_DIR, { recursive: true });
-  }
-  logsDirReady = true;
-}
-
-async function ensureLogsDir(): Promise<void> {
-  if (logsDirReady) return;
-  await fsp.mkdir(LOGS_DIR, { recursive: true });
-  logsDirReady = true;
+function ensureLogsDir(): void {
+  if (logsDirEnsured) return;
+  fs.mkdirSync(LOGS_DIR, { recursive: true });
+  logsDirEnsured = true;
 }
 
 // Generate unique session ID
@@ -181,23 +171,28 @@ export function log(
     ...(durationMs !== undefined && { durationMs }),
   };
 
-  // Write to session-specific file asynchronously (non-blocking, non-throwing)
-  const logLine = JSON.stringify(entry) + "\n";
-  const filename = getLogFilename(sessionId);
-  const filepath = path.join(LOGS_DIR, filename);
-  ensureLogsDir()
-    .then(() => fsp.appendFile(filepath, logLine))
-    .catch((err) => {
-      if (process.env.NODE_ENV !== "test") {
-        console.warn("[logger] File write skipped (fs error):", err instanceof Error ? err.message : String(err));
+  // Write to session-specific file (non-throwing: fallback to console-only on EACCES/EROFS)
+  try {
+    ensureLogsDir();
+    const logLine = JSON.stringify(entry) + "\n";
+    const filename = getLogFilename(sessionId);
+    const filepath = path.join(LOGS_DIR, filename);
+    fs.appendFile(filepath, logLine, (err) => {
+      if (err && process.env.NODE_ENV !== "test") {
+        console.warn("[logger] File write skipped (fs error):", err.message);
       }
     });
+  } catch (err) {
+    if (process.env.NODE_ENV !== "test") {
+      console.warn("[logger] File write skipped (fs error):", err instanceof Error ? err.message : String(err));
+    }
+  }
 
   // Async persist to Supabase (fire-and-forget, never throws)
   try { getLogPersistence()?.enqueue(sessionId, entry); } catch { /* never block logging */ }
 
   // Trigger telemetry update (throttled to every 15s internally)
-  if (sessionId.startsWith("sess_")) {
+  if (sessionId.startsWith("sess_") && hasActiveTelemetryStream(sessionId)) {
     try { updateTelemetry(sessionId); } catch { /* ignore telemetry errors */ }
   }
 

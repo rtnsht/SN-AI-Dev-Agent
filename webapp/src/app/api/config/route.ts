@@ -19,6 +19,9 @@ export async function GET(request: NextRequest) {
   // Get caller IP and user ID for access status
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   const userId = request.headers.get("x-user-id") || null;
+  const userRole = request.headers.get("x-user-role");
+  const isAuthenticated = !!userId;
+  const isAdmin = userRole === "admin";
 
   // Get current access tier status and limits
   let accessStatus = null;
@@ -34,13 +37,14 @@ export async function GET(request: NextRequest) {
     serverApiKeyConfigured,
     serverOpenRouterKeyConfigured,
     serverSnCredsConfigured,
-    ...(serverSnCredsConfigured
+    // Only authenticated admins can see server-side ServiceNow connection hints.
+    ...(serverSnCredsConfigured && isAdmin
       ? { serverSnCredentials: { instanceUrl: snUrl, username: snUser } }
       : {}),
     // 3-tier access info
     accessStatus,
     tierLimits,
-    isAuthenticated: !!userId,
+    isAuthenticated,
     // Tool execution detail visibility (default: true)
     showToolDetails: process.env.NEXT_PUBLIC_SHOW_TOOL_DETAILS !== "false",
     // Live status visibility - shows what agent is doing (default: true)

@@ -10,7 +10,7 @@ import { endSession, log } from "@/lib/logger";
 import { getLogPersistence } from "@/lib/log-persistence";
 import { sessionCleanups } from "@/app/api/session-start/route";
 import { clearSessionCache } from "@/lib/session-cache";
-import { cleanupDeltaState } from "@/lib/telemetry-generator";
+import { cleanupDeltaState, stopTelemetryStream } from "@/lib/telemetry-generator";
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
     }
 
     log("info", sessionId, "session_end", "Session ended — client signaled end");
+    stopTelemetryStream(sessionId);
 
     // Clean up telemetry stream (stops interval, clears lastGenTime)
     const cleanup = sessionCleanups.get(sessionId);

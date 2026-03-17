@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
 
     if (credentials.aiProvider === "openrouter") {
       // OpenRouter: use user-supplied key or server env var
+      const userProvidedOpenRouterKey = allowUserKeys && !!credentials.openRouterApiKey;
       const openRouterKey = (allowUserKeys ? credentials.openRouterApiKey : "") || process.env.OPENROUTER_API_KEY || "";
       if (!openRouterKey) {
         logger.error(sessionId, "validation", "No OpenRouter API key available");
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
         );
       }
       credentials.openRouterApiKey = openRouterKey;
-      userSuppliedKey = allowUserKeys && !!credentials.openRouterApiKey;
+      userSuppliedKey = userProvidedOpenRouterKey;
     } else {
       // Anthropic: use user-supplied key or server env var
       userSuppliedKey = allowUserKeys && !!credentials.claudeApiKey;
@@ -112,7 +113,14 @@ export async function POST(request: NextRequest) {
         );
       }
     } catch (accessErr) {
-      logger.warn(sessionId, "access_tier", "Access check failed, allowing request", { error: String(accessErr) });
+      logger.error(sessionId, "access_tier", "Access check failed, denying request", { error: String(accessErr) });
+      return NextResponse.json(
+        {
+          error: "access_check_unavailable",
+          message: "Access verification is temporarily unavailable. Please retry shortly.",
+        },
+        { status: 503 }
+      );
     }
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {

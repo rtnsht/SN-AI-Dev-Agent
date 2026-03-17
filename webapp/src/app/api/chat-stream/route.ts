@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
     let userSuppliedKey = false;
 
     if (credentials.aiProvider === "openrouter") {
+      const userProvidedOpenRouterKey = allowUserKeys && !!credentials.openRouterApiKey;
       const openRouterKey = (allowUserKeys ? credentials.openRouterApiKey : "") || process.env.OPENROUTER_API_KEY || "";
       if (!openRouterKey) {
         logger.error(sessionId, "validation", "No OpenRouter API key available");
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
         );
       }
       credentials.openRouterApiKey = openRouterKey;
-      userSuppliedKey = allowUserKeys && !!credentials.openRouterApiKey;
+      userSuppliedKey = userProvidedOpenRouterKey;
     } else {
       userSuppliedKey = allowUserKeys && !!credentials.claudeApiKey;
       const claudeApiKey = (allowUserKeys ? credentials.claudeApiKey : "") || process.env.CLAUDE_API_KEY || "";
@@ -111,8 +112,14 @@ export async function POST(request: NextRequest) {
         );
       }
     } catch (accessErr) {
-      // Access tier check failure should not block requests — log and continue
-      logger.warn(sessionId, "access_tier", "Access check failed, allowing request", { error: String(accessErr) });
+      logger.error(sessionId, "access_tier", "Access check failed, denying request", { error: String(accessErr) });
+      return new Response(
+        JSON.stringify({
+          error: "access_check_unavailable",
+          message: "Access verification is temporarily unavailable. Please retry shortly.",
+        }),
+        { status: 503, headers: { "Content-Type": "application/json" } }
+      );
     }
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {

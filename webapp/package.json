@@ -13,6 +13,7 @@
     "@supabase/supabase-js": "^2.99.1",
     "axios": "^1.13.5",
     "bcryptjs": "^3.0.3",
+    "exceljs": "^4.4.0",
     "isomorphic-dompurify": "^3.3.0",
     "lucide-react": "^0.577.0",
     "mammoth": "^1.11.0",
@@ -22,8 +23,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1",
-    "xlsx": "^0.18.5"
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

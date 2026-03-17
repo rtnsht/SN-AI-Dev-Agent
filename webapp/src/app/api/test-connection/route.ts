@@ -4,15 +4,21 @@ import { testConnection, validateInstanceUrl } from "@/lib/sn-engine";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    const userRole = request.headers.get("x-user-role");
+    const canUseServerCreds = userRole === "admin";
 
-    // Fall back to server-side env vars if not provided in request
-    const instanceUrl = body.instanceUrl || process.env.SN_INSTANCE_URL || "";
-    const username = body.username || process.env.SN_USERNAME || "";
-    const password = body.password || process.env.SN_PASSWORD || "";
+    // Only admins may use server-side fallback creds; everyone else must supply explicit values.
+    const instanceUrl = body.instanceUrl || (canUseServerCreds ? process.env.SN_INSTANCE_URL || "" : "");
+    const username = body.username || (canUseServerCreds ? process.env.SN_USERNAME || "" : "");
+    const password = body.password || (canUseServerCreds ? process.env.SN_PASSWORD || "" : "");
 
     if (!instanceUrl || !username || !password) {
       return NextResponse.json(
-        { error: "Missing required fields: instanceUrl, username, password" },
+        {
+          error: canUseServerCreds
+            ? "Missing required fields: instanceUrl, username, password"
+            : "Anonymous/non-admin requests must provide instanceUrl, username, and password.",
+        },
         { status: 400 }
       );
     }

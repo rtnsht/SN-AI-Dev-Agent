@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
-
-const EFFECTIVE_HINT_SECRET = process.env.AUTH_HINT_SECRET || "default-hint-secret-change-me";
+import { getAuthHintClearCookie, isAuthHintConfigured, verifyAuthHintValue } from "@/lib/auth-hint";
 
 /**
  * GET /api/auth/check-email/step?email=...
@@ -14,49 +12,29 @@ const EFFECTIVE_HINT_SECRET = process.env.AUTH_HINT_SECRET || "default-hint-secr
  */
 export async function GET(request: NextRequest) {
   try {
+    if (!isAuthHintConfigured()) {
+      console.error("[auth/check-email/step] AUTH_HINT_SECRET is not configured");
+      return NextResponse.json({ error: "Authentication service unavailable" }, { status: 503 });
+    }
+
     const hintCookie = request.cookies.get("auth_hint")?.value;
 
     if (!hintCookie) {
       return NextResponse.json({ error: "No hint available" }, { status: 400 });
     }
 
-    // Parse: hmac.result
-    const dotIndex = hintCookie.lastIndexOf(".");
-    if (dotIndex === -1) {
+    const verified = verifyAuthHintValue(hintCookie);
+    if (!verified) {
       return NextResponse.json({ error: "Invalid hint" }, { status: 400 });
-    }
-
-    const providedHmac = hintCookie.slice(0, dotIndex);
-    const result = hintCookie.slice(dotIndex + 1);
-
-    if (result !== "known" && result !== "unknown") {
-      return NextResponse.json({ error: "Invalid hint" }, { status: 400 });
-    }
-
-    if (!providedHmac || providedHmac.length !== 64) {
-      return NextResponse.json({ error: "Invalid hint" }, { status: 400 });
-    }
-
-    // Verify HMAC if email is provided as query param
-    const email = request.nextUrl.searchParams.get("email")?.toLowerCase().trim();
-    if (email) {
-      const expectedHmac = crypto
-        .createHmac("sha256", EFFECTIVE_HINT_SECRET)
-        .update(`${email}|${result}`)
-        .digest("hex");
-
-      if (!crypto.timingSafeEqual(Buffer.from(providedHmac, "hex"), Buffer.from(expectedHmac, "hex"))) {
-        return NextResponse.json({ error: "Invalid hint" }, { status: 400 });
-      }
     }
 
     // Clear the cookie after reading
     const response = NextResponse.json({
-      step: result === "known" ? "password" : "request",
+      step: verified.result === "known" ? "password" : "request",
     });
     response.headers.set(
       "Set-Cookie",
-      "auth_hint=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/"
+      getAuthHintClearCookie()
     );
 
     return response;
