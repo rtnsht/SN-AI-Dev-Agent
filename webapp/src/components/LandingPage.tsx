@@ -6,8 +6,8 @@ import ThemeToggle from "@/components/ThemeToggle";
 import ConnectModal from "@/components/ConnectModal";
 import Footer from "@/components/Footer";
 import {
-  APP_NAME, APP_LOGO, APP_HERO_TAGLINE, APP_SUBTITLE,
-  HERO_FEATURES, HERO_VIDEO_URL, TRUST_ITEMS,
+  APP_NAME, APP_LOGO, APP_HERO_TAGLINE, APP_SUBTITLE, APP_TAGLINE,
+  HERO_FEATURES, HERO_VIDEO_URL, TRUST_ITEMS, WELCOME_BADGE,
   FEATURES_EYEBROW, FEATURES_TITLE, STEPS_EYEBROW, STEPS_TITLE,
   HIGHLIGHT_TITLE, HIGHLIGHT_DESC, CTA_HEADLINE, CTA_SUBTEXT,
 } from "@/lib/branding";
@@ -29,13 +29,45 @@ export function getVideoEmbedUrl(url: string): string {
   return trimmed;
 }
 
-/** Render text that may contain literal \n as line breaks */
-function renderMultilineText(text: string): React.ReactNode {
-  if (!text.includes("\\n")) return text;
-  const parts = text.split("\\n");
-  return parts.map((part, i) => (
-    <span key={i}>{part.trim()}{i < parts.length - 1 && <br />}</span>
-  ));
+/* ── Hero rotating text — auto-toggles between multiple strings ── */
+function LandingRotatingText({ texts, interval = 4000 }: { texts: string[]; interval?: number }) {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [phase, setPhase] = useState<"active" | "exiting">("active");
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (texts.length < 2) return;
+    const id = setInterval(() => {
+      setPhase("exiting");
+      timeoutRef.current = setTimeout(() => {
+        setActiveIdx((prev) => (prev + 1) % texts.length);
+        setPhase("active");
+      }, 600);
+    }, interval);
+    return () => {
+      clearInterval(id);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [texts.length, interval]);
+
+  if (texts.length === 0) return null;
+  if (texts.length === 1) {
+    return <p className="landing-subtitle">{texts[0]}</p>;
+  }
+
+  const isHeroTagline = activeIdx === 0;
+  return (
+    <div className="hero-rotating-text landing-rotating-text">
+      <div className={`hero-rotating-text-item ${phase === "active" ? "active" : "exiting"}`}>
+        <p
+          className={isHeroTagline ? "landing-rotating-headline" : "landing-subtitle"}
+          style={{ marginBottom: 0 }}
+        >
+          {texts[activeIdx]}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 /* ── Scroll-reveal hook ── */
@@ -117,28 +149,32 @@ export default function LandingPage() {
         <div className="landing-hero-grid" />
         <div className="landing-hero-glow" />
 
-        {/* Badge */}
-        <div className="landing-badge">
-          <span className="landing-badge-dot" />
-          Spec-driven &middot; Human-approved &middot; AI-powered
-        </div>
-
-        {/* Logo — smaller, accent role */}
+        {/* 1. Logo — focal point, bigger */}
         {APP_LOGO && (
-          <div className="hero-logo-container landing-logo-container">
-            <Image src={APP_LOGO} alt={APP_NAME} width={72} height={72} className="hero-logo" unoptimized priority />
+          <div className="hero-logo-container landing-logo-container" style={{ width: 120, height: 120, marginBottom: 24 }}>
+            <Image src={APP_LOGO} alt={APP_NAME} width={120} height={120} className="hero-logo" style={{ width: 120, height: 120 }} unoptimized priority />
           </div>
         )}
 
-        {/* Headline — gradient text */}
-        <h1 className="landing-title">
-          {APP_HERO_TAGLINE ? renderMultilineText(APP_HERO_TAGLINE) : <>Ship ServiceNow Features<br/>with AI.</>}
+        {/* 2. App name */}
+        <h1 className="landing-title" style={{ fontSize: "clamp(28px, 4vw, 42px)", marginBottom: 16 }}>
+          {APP_NAME || "SN AI Agent"}
         </h1>
 
-        {/* Subtitle */}
-        <p className="landing-subtitle">
-          {APP_SUBTITLE || "Describe what you need in plain English. The AI generates specs, code, and deployments — you review and approve every step."}
-        </p>
+        {/* 3. Badge pill */}
+        <div className="landing-badge" style={{ marginBottom: 28 }}>
+          <span className="landing-badge-dot" />
+          {WELCOME_BADGE || <>Spec-driven &middot; Human-approved &middot; AI-powered</>}
+        </div>
+
+        {/* 4. Auto-toggling animated text */}
+        <LandingRotatingText
+          texts={[
+            APP_HERO_TAGLINE || "Ship ServiceNow Features with AI.",
+            APP_SUBTITLE || "Describe what you need in plain English. The AI generates specs, code, and deployments — you review and approve every step.",
+          ].filter(Boolean)}
+          interval={4000}
+        />
 
         {/* CTA group */}
         <div className="landing-cta-group">

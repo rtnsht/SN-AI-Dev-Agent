@@ -82,6 +82,51 @@ const SUGGESTION_FALLBACK: Record<TabKey, ExamplePrompt[]> = {
 
 
 
+/* ── Hero rotating text — auto-toggles between multiple strings ── */
+function HeroRotatingText({ texts, interval = 4000, className = "" }: { texts: string[]; interval?: number; className?: string }) {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [phase, setPhase] = useState<"active" | "exiting">("active");
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (texts.length < 2) return;
+    const id = setInterval(() => {
+      setPhase("exiting");
+      timeoutRef.current = setTimeout(() => {
+        setActiveIdx((prev) => (prev + 1) % texts.length);
+        setPhase("active");
+      }, 600);
+    }, interval);
+    return () => {
+      clearInterval(id);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [texts.length, interval]);
+
+  if (texts.length === 0) return null;
+  if (texts.length === 1) {
+    return (
+      <p className={`text-center text-sm sm:text-base ${className}`} style={{ color: "var(--text-secondary)" }}>
+        {texts[0]}
+      </p>
+    );
+  }
+
+  const isHeroTagline = activeIdx === 0;
+  return (
+    <div className={`hero-rotating-text ${className}`}>
+      <div className={`hero-rotating-text-item ${phase === "active" ? "active" : "exiting"}`}>
+        <p
+          className={`text-center max-w-xl mx-auto px-2 ${isHeroTagline ? "text-base sm:text-lg font-semibold tracking-tight" : "text-xs sm:text-sm"}`}
+          style={{ color: isHeroTagline ? "var(--text-primary)" : "var(--text-secondary)" }}
+        >
+          {texts[activeIdx]}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB per image
 const MAX_IMAGES = 5;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB per document
@@ -1143,45 +1188,48 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
             {/* ── DISCONNECTED: Minimal hero ── */}
             {!connected && (
               <>
-                {/* Badge: Spec-driven · Human-approved · AI-powered (green dot) */}
-                {WELCOME_BADGE && (
-                  <div className="landing-badge mb-4">
-                    <span className="landing-badge-dot" />
-                    {WELCOME_BADGE}
-                  </div>
-                )}
-                {/* Logo */}
+                {/* 1. Logo — focal point */}
                 {APP_LOGO && (
                   <div className="hero-logo-container mb-4">
                     <Image
                       src={APP_LOGO}
                       alt={APP_NAME || "App Logo"}
-                      width={80}
-                      height={80}
-                      className="hero-logo w-16 h-16 sm:w-20 sm:h-20"
+                      width={120}
+                      height={120}
+                      className="hero-logo w-24 h-24 sm:w-[120px] sm:h-[120px]"
                       unoptimized
                       priority
                     />
                   </div>
                 )}
 
-                {/* App Name */}
+                {/* 2. App Name */}
                 {APP_NAME && (
                   <h1
-                    className="text-xl sm:text-2xl md:text-3xl font-semibold text-center mb-1 tracking-tight"
+                    className="text-2xl sm:text-3xl font-bold text-center mb-3 tracking-tight"
                     style={{ color: "var(--text-primary)" }}
                   >
                     {APP_NAME}
                   </h1>
                 )}
 
-                {/* Tagline — single clean line */}
-                {(APP_TAGLINE || APP_HERO_TAGLINE) && (
-                  <p className="text-center mb-6 text-sm sm:text-base" style={{ color: "var(--text-secondary)" }}>
-                    {APP_HERO_TAGLINE || APP_TAGLINE}
-                  </p>
+                {/* 3. Badge pill */}
+                {WELCOME_BADGE && (
+                  <div className="landing-badge mb-5">
+                    <span className="landing-badge-dot" />
+                    {WELCOME_BADGE}
+                  </div>
                 )}
-                {!(APP_TAGLINE || APP_HERO_TAGLINE) && <div className="mb-6" />}
+
+                {/* 4. Auto-toggling animated text */}
+                <HeroRotatingText
+                  texts={[
+                    APP_HERO_TAGLINE || APP_TAGLINE || "",
+                    APP_SUBTITLE || "",
+                  ].filter(Boolean)}
+                  interval={4000}
+                  className="mb-6"
+                />
 
                 {/* Input bar (disabled — hidden on mobile pre-connect) */}
                 <div className="hidden sm:block w-full">{renderInputBar(true)}</div>
@@ -1207,35 +1255,47 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
             {/* ── CONNECTED: Clean ready-to-chat state with glowing input ── */}
             {connected && (
               <>
-                {/* Badge: Spec-driven · Human-approved · AI-powered (green dot) */}
-                {WELCOME_BADGE && (
-                  <div className="landing-badge mb-4">
-                    <span className="landing-badge-dot" />
-                    {WELCOME_BADGE}
-                  </div>
-                )}
-                {/* Compact logo + greeting */}
+                {/* 1. Logo — focal point */}
                 {APP_LOGO && (
                   <div className="hero-logo-container mb-4">
                     <Image
                       src={APP_LOGO}
                       alt={APP_NAME || "App Logo"}
-                      width={80}
-                      height={80}
-                      className="hero-logo w-16 h-16 sm:w-20 sm:h-20"
+                      width={120}
+                      height={120}
+                      className="hero-logo w-24 h-24 sm:w-[120px] sm:h-[120px]"
                       unoptimized
                     />
                   </div>
                 )}
-                <h2
-                  className="text-xl sm:text-2xl font-semibold text-center mb-1 tracking-tight"
-                  style={{ color: "var(--text-primary)" }}
-                >
-                  {APP_HERO_TAGLINE || APP_TAGLINE || "What should we build?"}
-                </h2>
-                <p className="text-center mb-6 text-xs sm:text-sm" style={{ color: "var(--text-disabled)" }}>
-                  {APP_SUBTITLE || "Describe what you need and let's get started."}
-                </p>
+
+                {/* 2. App name */}
+                {APP_NAME && (
+                  <h2
+                    className="text-2xl sm:text-3xl font-bold text-center mb-3 tracking-tight"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    {APP_NAME}
+                  </h2>
+                )}
+
+                {/* 3. Badge pill */}
+                {WELCOME_BADGE && (
+                  <div className="landing-badge mb-5">
+                    <span className="landing-badge-dot" />
+                    {WELCOME_BADGE}
+                  </div>
+                )}
+
+                {/* 4. Auto-toggling animated text */}
+                <HeroRotatingText
+                  texts={[
+                    APP_HERO_TAGLINE || "What should we build?",
+                    APP_SUBTITLE || "Describe what you need and let's get started.",
+                  ].filter(Boolean)}
+                  interval={4000}
+                  className="mb-6"
+                />
 
                 {/* Glowing input bar */}
                 <div className="hero-input-glow w-full">
