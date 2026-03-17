@@ -38,6 +38,7 @@ const PUBLIC_PATHS = [
   "/api/trial-status",    // trial status check (works for anon too)
   "/api/test-connection",  // SN instance connect (used from public /app page)
   "/api/session-start",    // session telemetry init (used from public /app page)
+  "/api/session-end",      // session finalization (used from public /app page + sendBeacon)
 ];
 
 /** Check if a path is public (no auth needed) */

@@ -11,6 +11,9 @@
  *  - JSONB cap: 500 entries/row, then metadata-only updates
  *  - SIGTERM: best-effort flush with 7s timeout
  *  - Upsert-based self-healing if initSession failed
+ *  - Per-session flush lock to prevent concurrent flushes
+ *  - Cumulative counters across flushes (not per-batch)
+ *  - Fetch+merge fallback to prevent log_entries overwrite
  */
 
 import { getSupabase } from "./supabase";
@@ -60,6 +63,8 @@ interface SessionCounters {
 class LogPersistence {
   private buffer = new Map<string, LogEntry[]>();
   private entriesFlushed = new Map<string, number>();
+  private cumulativeCounters = new Map<string, SessionCounters>();
+  private flushing = new Set<string>();
   private globalBufferBytes = 0;
   private flushInterval: NodeJS.Timeout | null = null;
   private shuttingDown = false;
@@ -96,6 +101,9 @@ class LogPersistence {
   async initSession(metadata: SessionMetadata): Promise<void> {
     try {
       const db = getSupabase();
+      // BUG-7 fix: Don't include started_at in the upsert payload.
+      // The DB column has DEFAULT now() for INSERT; on conflict (reconnect)
+      // the original started_at is preserved.
       await db.from("session_logs").upsert(
         {
           session_id: metadata.sessionId,
@@ -108,7 +116,6 @@ class LogPersistence {
           ip_address: metadata.ipAddress || null,
           user_agent: metadata.userAgent || null,
           status: "active",
-          started_at: new Date().toISOString(),
         },
         { onConflict: "session_id" }
       );
@@ -118,23 +125,45 @@ class LogPersistence {
   }
 
   async flush(sessionId: string): Promise<void> {
+    // BUG-6 fix: Per-session flush lock to prevent concurrent flushes
+    if (this.flushing.has(sessionId)) return;
+    this.flushing.add(sessionId);
+
+    try {
+      await this._doFlush(sessionId);
+    } finally {
+      this.flushing.delete(sessionId);
+    }
+  }
+
+  private async _doFlush(sessionId: string): Promise<void> {
     const entries = this.buffer.get(sessionId);
     if (!entries || entries.length === 0) return;
 
-    const batch = [...entries];
+    // BUG-2 fix: Atomically drain the buffer using splice instead of
+    // snapshot + clear. This prevents losing entries added during async DB writes.
+    const batch = entries.splice(0, entries.length);
+    const batchBytes = batch.reduce((s, e) => s + JSON.stringify(e).length, 0);
+    this.globalBufferBytes -= batchBytes;
+
     const flushedSoFar = this.entriesFlushed.get(sessionId) || 0;
-    const counters = this.extractCounters(batch, flushedSoFar);
+
+    // BUG-3+4 fix: Accumulate counters across flushes, not per-batch
+    const batchCounters = this.extractCounters(batch);
+    const cumulative = this.accumulateCounters(sessionId, batchCounters);
 
     const telemetrySummary = {
-      totalRounds: counters.totalRounds,
-      totalToolCalls: counters.totalToolCalls,
-      totalErrors: counters.totalErrors,
-      totalInputTokens: counters.totalInputTokens,
-      totalOutputTokens: counters.totalOutputTokens,
-      currentPhase: counters.currentPhase,
-      phases: counters.phases,
+      totalRounds: cumulative.totalRounds,
+      totalToolCalls: cumulative.totalToolCalls,
+      totalErrors: cumulative.totalErrors,
+      totalInputTokens: cumulative.totalInputTokens,
+      totalOutputTokens: cumulative.totalOutputTokens,
+      currentPhase: cumulative.currentPhase,
+      phases: cumulative.phases,
       lastFlushAt: new Date().toISOString(),
     };
+
+    let writeSucceeded = false;
 
     try {
       const db = getSupabase();
@@ -146,52 +175,75 @@ class LogPersistence {
         const { error } = await db.rpc("append_session_log_entries", {
           p_session_id: sessionId,
           p_entries: entriesToAppend,
-          p_total_rounds: counters.totalRounds,
-          p_total_tool_calls: counters.totalToolCalls,
-          p_total_errors: counters.totalErrors,
-          p_total_input_tokens: counters.totalInputTokens,
-          p_total_output_tokens: counters.totalOutputTokens,
-          p_current_phase: counters.currentPhase,
-          p_phases: counters.phases,
+          p_total_rounds: cumulative.totalRounds,
+          p_total_tool_calls: cumulative.totalToolCalls,
+          p_total_errors: cumulative.totalErrors,
+          p_total_input_tokens: cumulative.totalInputTokens,
+          p_total_output_tokens: cumulative.totalOutputTokens,
+          p_current_phase: cumulative.currentPhase,
+          p_phases: cumulative.phases,
           p_overflow: overflow,
         });
 
         if (error) {
-          await this.upsertFallback(sessionId, entriesToAppend, counters, overflow);
+          writeSucceeded = await this.upsertFallback(sessionId, entriesToAppend, cumulative, overflow);
+        } else {
+          writeSucceeded = true;
         }
 
-        this.entriesFlushed.set(sessionId, flushedSoFar + entriesToAppend.length);
+        if (writeSucceeded) {
+          this.entriesFlushed.set(sessionId, flushedSoFar + entriesToAppend.length);
+        }
       } else {
-        await db
+        const { error } = await db
           .from("session_logs")
           .update({
-            total_rounds: counters.totalRounds,
-            total_tool_calls: counters.totalToolCalls,
-            total_errors: counters.totalErrors,
-            total_input_tokens: counters.totalInputTokens,
-            total_output_tokens: counters.totalOutputTokens,
-            current_phase: counters.currentPhase,
-            phases: counters.phases,
+            total_rounds: cumulative.totalRounds,
+            total_tool_calls: cumulative.totalToolCalls,
+            total_errors: cumulative.totalErrors,
+            total_input_tokens: cumulative.totalInputTokens,
+            total_output_tokens: cumulative.totalOutputTokens,
+            current_phase: cumulative.currentPhase,
+            phases: cumulative.phases,
             entries_overflow: true,
             updated_at: new Date().toISOString(),
           })
           .eq("session_id", sessionId);
+
+        writeSucceeded = !error;
+        if (error) {
+          console.error(`[log-persistence] overflow update failed for ${sessionId}:`, error);
+        }
       }
 
-      // Persist telemetry_summary on every flush so it survives server restarts
-      try {
-        const db2 = getSupabase();
-        await db2
-          .from("session_logs")
-          .update({ telemetry_summary: telemetrySummary })
-          .eq("session_id", sessionId);
-      } catch { /* telemetry write is best-effort */ }
-
-      const batchBytes = batch.reduce((s, e) => s + JSON.stringify(e).length, 0);
-      this.globalBufferBytes -= batchBytes;
-      this.buffer.set(sessionId, []);
+      // Persist telemetry_summary on every successful flush
+      if (writeSucceeded) {
+        try {
+          const db2 = getSupabase();
+          await db2
+            .from("session_logs")
+            .update({ telemetry_summary: telemetrySummary })
+            .eq("session_id", sessionId);
+        } catch { /* telemetry write is best-effort */ }
+      }
     } catch (err) {
       console.error(`[log-persistence] flush failed for ${sessionId}:`, err);
+    }
+
+    // BUG-5 fix: If write failed, push batch back into the buffer for retry
+    if (!writeSucceeded) {
+      const currentEntries = this.buffer.get(sessionId) || [];
+      const restored = [...batch, ...currentEntries];
+      // Re-cap to PER_SESSION_CAP (keep newest)
+      if (restored.length > PER_SESSION_CAP) {
+        const dropped = restored.splice(0, restored.length - PER_SESSION_CAP);
+        const droppedBytes = dropped.reduce((s, e) => s + JSON.stringify(e).length, 0);
+        // Don't adjust globalBufferBytes for dropped — they were already subtracted
+        // but we need to add back what we're restoring
+        void droppedBytes;
+      }
+      this.buffer.set(sessionId, restored);
+      this.globalBufferBytes += restored.reduce((s, e) => s + JSON.stringify(e).length, 0);
     }
   }
 
@@ -218,6 +270,7 @@ class LogPersistence {
 
     this.buffer.delete(sessionId);
     this.entriesFlushed.delete(sessionId);
+    this.cumulativeCounters.delete(sessionId);
   }
 
   async flushAll(timeoutMs: number = SIGTERM_TIMEOUT_MS): Promise<void> {
@@ -257,18 +310,37 @@ class LogPersistence {
     }
   }
 
+  // BUG-1 fix: Fetch existing log_entries and merge instead of replacing
   private async upsertFallback(
     sessionId: string,
     entries: LogEntry[],
     counters: SessionCounters,
     overflow: boolean
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       const db = getSupabase();
+
+      // Fetch existing log_entries to merge instead of overwrite
+      let mergedEntries = entries;
+      try {
+        const { data: existing } = await db
+          .from("session_logs")
+          .select("log_entries")
+          .eq("session_id", sessionId)
+          .single();
+
+        if (existing?.log_entries && Array.isArray(existing.log_entries)) {
+          const combined = [...existing.log_entries, ...entries];
+          mergedEntries = combined.slice(-JSONB_ENTRIES_CAP);
+        }
+      } catch {
+        // Row doesn't exist yet — use entries as-is (INSERT path)
+      }
+
       await db.from("session_logs").upsert(
         {
           session_id: sessionId,
-          log_entries: entries,
+          log_entries: mergedEntries,
           total_rounds: counters.totalRounds,
           total_tool_calls: counters.totalToolCalls,
           total_errors: counters.totalErrors,
@@ -281,12 +353,40 @@ class LogPersistence {
         },
         { onConflict: "session_id" }
       );
+      return true;
     } catch (err) {
       console.error(`[log-persistence] upsertFallback failed for ${sessionId}:`, err);
+      return false;
     }
   }
 
-  private extractCounters(batch: LogEntry[], _previousFlushed: number): SessionCounters {
+  // BUG-3 fix: Accumulate counters across flushes
+  private accumulateCounters(sessionId: string, batchCounters: SessionCounters): SessionCounters {
+    const prev = this.cumulativeCounters.get(sessionId) || {
+      totalRounds: 0,
+      totalToolCalls: 0,
+      totalErrors: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      currentPhase: "",
+      phases: [],
+    };
+
+    const accumulated: SessionCounters = {
+      totalRounds: Math.max(prev.totalRounds, batchCounters.totalRounds),
+      totalToolCalls: prev.totalToolCalls + batchCounters.totalToolCalls,
+      totalErrors: prev.totalErrors + batchCounters.totalErrors,
+      totalInputTokens: prev.totalInputTokens + batchCounters.totalInputTokens,
+      totalOutputTokens: prev.totalOutputTokens + batchCounters.totalOutputTokens,
+      currentPhase: batchCounters.currentPhase || prev.currentPhase,
+      phases: [...new Set([...prev.phases, ...batchCounters.phases])],
+    };
+
+    this.cumulativeCounters.set(sessionId, accumulated);
+    return accumulated;
+  }
+
+  private extractCounters(batch: LogEntry[]): SessionCounters {
     let totalRounds = 0;
     let totalToolCalls = 0;
     let totalErrors = 0;

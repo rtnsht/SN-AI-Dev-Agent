@@ -116,7 +116,7 @@ export default function Home() {
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   // Persistent session ID for logging — survives refresh via sessionStorage
-  const [clientSessionId] = useState(() => {
+  const [clientSessionId, setClientSessionId] = useState(() => {
     if (typeof window !== "undefined") {
       const saved = sessionStorage.getItem(SK.SESSION_ID);
       if (saved) return saved;
@@ -159,6 +159,20 @@ export default function Home() {
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [messages.length]);
+
+  // ── Finalize session on page unload (best-effort via sendBeacon) ──
+  useEffect(() => {
+    const endSession = () => {
+      if (clientSessionId) {
+        navigator.sendBeacon(
+          "/api/session-end",
+          new Blob([JSON.stringify({ sessionId: clientSessionId })], { type: "application/json" })
+        );
+      }
+    };
+    window.addEventListener("beforeunload", endSession);
+    return () => window.removeEventListener("beforeunload", endSession);
+  }, [clientSessionId]);
 
   // ── Restore session from sessionStorage on mount ──
   const [sessionRestored, setSessionRestored] = useState(false);
@@ -252,24 +266,22 @@ export default function Home() {
     try { sessionStorage.setItem(SK.MESSAGES, JSON.stringify(stripHeavyData(messages))); } catch { /* quota */ }
   }, [messages]);
   useEffect(() => {
-    if (connInfo) sessionStorage.setItem(SK.CONN_INFO, JSON.stringify(connInfo));
+    try { if (connInfo) sessionStorage.setItem(SK.CONN_INFO, JSON.stringify(connInfo)); } catch { /* quota */ }
   }, [connInfo]);
   useEffect(() => {
-    sessionStorage.setItem(SK.CREDS, JSON.stringify({ instanceUrl: credentials.instanceUrl, username: credentials.username }));
+    try { sessionStorage.setItem(SK.CREDS, JSON.stringify({ instanceUrl: credentials.instanceUrl, username: credentials.username })); } catch { /* quota */ }
   }, [credentials.instanceUrl, credentials.username]);
-  useEffect(() => { sessionStorage.setItem(SK.PROVIDER, aiProvider); }, [aiProvider]);
-  useEffect(() => { sessionStorage.setItem(SK.MODEL, selectedModel); }, [selectedModel]);
-  useEffect(() => { sessionStorage.setItem(SK.MODEL_LOCKED, String(modelLocked)); }, [modelLocked]);
+  useEffect(() => { try { sessionStorage.setItem(SK.PROVIDER, aiProvider); } catch { /* quota */ } }, [aiProvider]);
+  useEffect(() => { try { sessionStorage.setItem(SK.MODEL, selectedModel); } catch { /* quota */ } }, [selectedModel]);
+  useEffect(() => { try { sessionStorage.setItem(SK.MODEL_LOCKED, String(modelLocked)); } catch { /* quota */ } }, [modelLocked]);
   useEffect(() => {
-    if (activeReqId) sessionStorage.setItem(SK.REQ_ID, activeReqId);
-    else sessionStorage.removeItem(SK.REQ_ID);
+    try { if (activeReqId) sessionStorage.setItem(SK.REQ_ID, activeReqId); else sessionStorage.removeItem(SK.REQ_ID); } catch { /* quota */ }
   }, [activeReqId]);
   useEffect(() => {
-    if (currentPhase) sessionStorage.setItem(SK.PHASE, currentPhase);
-    else sessionStorage.removeItem(SK.PHASE);
+    try { if (currentPhase) sessionStorage.setItem(SK.PHASE, currentPhase); else sessionStorage.removeItem(SK.PHASE); } catch { /* quota */ }
   }, [currentPhase]);
   useEffect(() => {
-    sessionStorage.setItem(SK.COMPLETED_PHASES, JSON.stringify(completedPhases));
+    try { sessionStorage.setItem(SK.COMPLETED_PHASES, JSON.stringify(completedPhases)); } catch { /* quota */ }
   }, [completedPhases]);
 
   // Close profile dropdown on outside click or Escape
@@ -475,7 +487,7 @@ export default function Home() {
             hasAdmin: data.hasAdmin,
             hasSecurityAdmin: data.hasSecurityAdmin,
           }),
-        }).catch(() => { /* non-critical */ });
+        }).catch((err) => { console.warn("[session-start] failed:", err); });
 
         // Fetch categorized instance prompts in background (non-blocking)
         const userContext = data.userInfo?.sysId
@@ -498,7 +510,7 @@ export default function Home() {
     } finally {
       setIsConnecting(false);
     }
-  }, [credentials]);
+  }, [credentials, clientSessionId]);
 
   const handleSend = useCallback(
     async (text: string, images?: string[], files?: FileAttachment[], hidden?: boolean) => {
@@ -954,7 +966,7 @@ export default function Home() {
         setIsLoading(false);
       }
     },
-    [credentials, isLoading, serverApiKeyConfigured, activeReqId, selectedModel, modelLocked, pendingRetry, allowUserApiKeys, streamingEnabled]
+    [credentials, isLoading, serverApiKeyConfigured, activeReqId, selectedModel, modelLocked, pendingRetry, allowUserApiKeys, streamingEnabled, currentPhase, clientSessionId]
   );
 
   // Keep ref updated with latest handleSend to avoid stale closures in setTimeout callbacks
@@ -1037,6 +1049,15 @@ export default function Home() {
   );
 
   const handleNewChat = useCallback(() => {
+    // Finalize the old session (best-effort, non-blocking)
+    if (clientSessionId) {
+      fetch("/api/session-end", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: clientSessionId }),
+      }).catch(() => {});
+    }
+
     messagesRef.current = [];
     setMessages([]);
     setActiveReqId(null);
@@ -1048,7 +1069,12 @@ export default function Home() {
     setTaskPlan(null);
     // Clear persisted session state
     ALL_SESSION_KEYS.forEach((k) => sessionStorage.removeItem(k));
-  }, []);
+
+    // Generate a fresh session ID for the new chat
+    const newId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    setClientSessionId(newId);
+    try { sessionStorage.setItem(SK.SESSION_ID, newId); } catch { /* quota */ }
+  }, [clientSessionId]);
 
   /** Fetch categorized prompts from the API (used on connect + auto-refresh) */
   const fetchCategorizedPromptsFromApi = useCallback(
