@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import Image from "next/image";
 import type { Credentials, ConnectionResult, UsageInfo, TrialStatus, AIProvider, ModelOption } from "@/lib/types";
 import { ANTHROPIC_MODELS } from "@/lib/types";
@@ -34,18 +35,82 @@ interface Props {
   allowUserApiKeys?: boolean;
   /** Trial status for per-user daily limits */
   trialStatus?: TrialStatus | null;
+  /** Refresh usage counts from the server */
+  onRefreshUsage?: () => Promise<void>;
   /** Mobile full-screen mode: back button callback */
   onBack?: () => void;
 }
 
 const INPUT_CLS = "w-full px-3 py-2.5 rounded-md text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-info)] focus:border-transparent";
 
+function UsageDisplay({ usage, onRefresh }: { usage: UsageInfo; onRefresh?: () => Promise<void> }) {
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    if (!onRefresh || refreshing) return;
+    setRefreshing(true);
+    try { await onRefresh(); } finally { setRefreshing(false); }
+  }, [onRefresh, refreshing]);
+
+  const showBreakdown = usage.isAuthenticated && (usage.anonUsed !== undefined || usage.authUsed !== undefined);
+  const barPct = usage.max > 0 ? (usage.used / usage.max) * 100 : 0;
+  const barColor = usage.remaining === 0 ? "var(--color-danger)" : usage.remaining <= 2 ? "var(--color-warning)" : "var(--color-info)";
+
+  return (
+    <div className="mt-2 space-y-1.5">
+      <div className="flex items-center justify-between text-[10px]">
+        <span style={{ color: "var(--text-secondary)" }}>{usage.used}/{usage.max} requests used</span>
+        <span className="flex items-center gap-1.5">
+          <span className="font-medium" style={{ color: usage.remaining <= 2 ? "var(--color-warning)" : "var(--text-disabled)" }}>
+            {usage.remaining} left
+          </span>
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="p-0.5 rounded transition-colors"
+              style={{ color: "var(--text-disabled)" }}
+              onMouseEnter={e => (e.currentTarget.style.color = "var(--text-secondary)")}
+              onMouseLeave={e => (e.currentTarget.style.color = "var(--text-disabled)")}
+              title="Refresh usage"
+              aria-label="Refresh usage count"
+            >
+              <svg
+                className={`w-3 h-3 ${refreshing ? "animate-spin" : ""}`}
+                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+          )}
+        </span>
+      </div>
+      <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "var(--surface-secondary)" }}>
+        <div
+          className="h-full rounded-full transition-all duration-500"
+          style={{ width: `${barPct}%`, background: barColor }}
+        />
+      </div>
+      {showBreakdown && (
+        <div className="flex items-center gap-3 text-[9px] pt-0.5" style={{ color: "var(--text-disabled)" }}>
+          <span>{usage.anonUsed ?? 0} anon</span>
+          <span style={{ opacity: 0.4 }}>+</span>
+          <span>{usage.authUsed ?? 0} auth</span>
+          <span style={{ opacity: 0.4 }}>=</span>
+          <span>{usage.used} total</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SettingsPanel({
   credentials, setCredentials, connected, connInfo, isConnecting, onConnect, onReconnect,
   serverApiKeyConfigured, serverOpenRouterKeyConfigured, serverSnCredsConfigured,
   usage, rateLimitHit, onApiKeyProvided,
   aiProvider, setAiProvider, selectedModel, setSelectedModel, modelOptions, modelsLoading = false,
-  modelLocked, allowUserApiKeys = true, trialStatus, onBack
+  modelLocked, allowUserApiKeys = true, trialStatus, onRefreshUsage, onBack
 }: Props) {
   const update = (field: keyof Credentials, value: string) =>
     setCredentials({ ...credentials, [field]: value });
@@ -232,23 +297,7 @@ export default function SettingsPanel({
 
           {/* Usage info */}
           {usage && ((aiProvider === "anthropic" && serverApiKeyConfigured && !credentials.claudeApiKey) || (aiProvider === "openrouter" && serverOpenRouterKeyConfigured && !credentials.openRouterApiKey)) && (
-            <div className="mt-2 space-y-1.5">
-              <div className="flex items-center justify-between text-[10px]">
-                <span style={{ color: "var(--text-secondary)" }}>{usage.used}/{usage.max} requests used</span>
-                <span className="font-medium" style={{ color: usage.remaining <= 2 ? "var(--color-warning)" : "var(--text-disabled)" }}>
-                  {usage.remaining} left
-                </span>
-              </div>
-              <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "var(--surface-secondary)" }}>
-                <div
-                  className="h-full rounded-full transition-all duration-500"
-                  style={{
-                    width: `${(usage.used / usage.max) * 100}%`,
-                    background: usage.remaining === 0 ? "var(--color-danger)" : usage.remaining <= 2 ? "var(--color-warning)" : "var(--color-info)",
-                  }}
-                />
-              </div>
-            </div>
+            <UsageDisplay usage={usage} onRefresh={onRefreshUsage} />
           )}
 
           {/* Trial status */}
