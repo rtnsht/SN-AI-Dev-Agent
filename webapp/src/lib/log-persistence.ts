@@ -125,6 +125,17 @@ class LogPersistence {
     const flushedSoFar = this.entriesFlushed.get(sessionId) || 0;
     const counters = this.extractCounters(batch, flushedSoFar);
 
+    const telemetrySummary = {
+      totalRounds: counters.totalRounds,
+      totalToolCalls: counters.totalToolCalls,
+      totalErrors: counters.totalErrors,
+      totalInputTokens: counters.totalInputTokens,
+      totalOutputTokens: counters.totalOutputTokens,
+      currentPhase: counters.currentPhase,
+      phases: counters.phases,
+      lastFlushAt: new Date().toISOString(),
+    };
+
     try {
       const db = getSupabase();
 
@@ -166,6 +177,15 @@ class LogPersistence {
           })
           .eq("session_id", sessionId);
       }
+
+      // Persist telemetry_summary on every flush so it survives server restarts
+      try {
+        const db2 = getSupabase();
+        await db2
+          .from("session_logs")
+          .update({ telemetry_summary: telemetrySummary })
+          .eq("session_id", sessionId);
+      } catch { /* telemetry write is best-effort */ }
 
       const batchBytes = batch.reduce((s, e) => s + JSON.stringify(e).length, 0);
       this.globalBufferBytes -= batchBytes;

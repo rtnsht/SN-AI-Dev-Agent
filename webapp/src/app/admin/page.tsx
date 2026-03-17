@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 
-type Tab = "requests" | "users" | "invites" | "banners" | "trials" | "access-tiers";
+type Tab = "requests" | "users" | "invites" | "banners" | "trials" | "access-tiers" | "session-logs";
 
 interface AccessRequest {
   id: string;
@@ -137,6 +137,17 @@ export default function AdminPage() {
   const [tierAnonLimit, setTierAnonLimit] = useState("10");
   const [tierAuthLimit, setTierAuthLimit] = useState("20");
   const [tierUsage, setTierUsage] = useState<{ userId: string; email: string; name: string; requestCount: number }[]>([]);
+  const [tierAnonUsage, setTierAnonUsage] = useState<{ ipAddress: string; instanceUrl: string; requestCount: number }[]>([]);
+
+  // Session logs state
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [sessionLogs, setSessionLogs] = useState<any[]>([]);
+  const [sessionLogsTotal, setSessionLogsTotal] = useState(0);
+  const [sessionLogsPage, setSessionLogsPage] = useState(0);
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [expandedSessionDetail, setExpandedSessionDetail] = useState<any | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const pendingCount = requests.filter((r) => r.status === "pending").length;
 
@@ -193,6 +204,13 @@ export default function AdminPage() {
           setTierAuthLimit(String(data.config.auth_daily_limit ?? 20));
         }
         setTierUsage(data.todayUsage || []);
+        setTierAnonUsage(data.todayAnonUsage || []);
+      } else if (tab === "session-logs") {
+        const res = await fetch(`/api/admin/session-logs?limit=50&offset=${sessionLogsPage * 50}`);
+        if (res.status === 401 || res.status === 403) { router.push("/login"); return; }
+        const data = await res.json();
+        setSessionLogs(data.sessions || []);
+        setSessionLogsTotal(data.total || 0);
       } else {
         const res = await fetch("/api/admin/invite-codes");
         if (res.status === 401 || res.status === 403) { router.push("/login"); return; }
@@ -201,7 +219,7 @@ export default function AdminPage() {
       }
     } catch { /* ignore */ }
     setLoading(false);
-  }, [tab, router]);
+  }, [tab, router, sessionLogsPage]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -559,6 +577,7 @@ export default function AdminPage() {
         <button className={`admin-tab ${tab === "banners" ? "active" : ""}`} onClick={() => setTab("banners")}>Banners</button>
         <button className={`admin-tab ${tab === "trials" ? "active" : ""}`} onClick={() => setTab("trials")}>Trials</button>
         <button className={`admin-tab ${tab === "access-tiers" ? "active" : ""}`} onClick={() => setTab("access-tiers")}>Access Tiers</button>
+        <button className={`admin-tab ${tab === "session-logs" ? "active" : ""}`} onClick={() => setTab("session-logs")}>Session Logs</button>
       </div>
 
       {loading && <p className="admin-loading">Loading...</p>}
@@ -1317,7 +1336,7 @@ export default function AdminPage() {
           </form>
 
           {/* Today's authenticated usage */}
-          <div>
+          <div style={{ marginBottom: "1.5rem" }}>
             <h3 style={{ color: "var(--text-primary)", fontSize: "15px", fontWeight: 600, marginBottom: "12px" }}>
               Today&apos;s Authenticated Usage
             </h3>
@@ -1338,9 +1357,235 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* Today's anonymous usage */}
+          <div>
+            <h3 style={{ color: "var(--text-primary)", fontSize: "15px", fontWeight: 600, marginBottom: "12px" }}>
+              Today&apos;s Anonymous Usage
+            </h3>
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr><th>IP Address</th><th>Instance</th><th>Requests Today</th></tr>
+                </thead>
+                <tbody>
+                  {tierAnonUsage.map((a, i) => (
+                    <tr key={`${a.ipAddress}-${a.instanceUrl}-${i}`}>
+                      <td style={{ fontFamily: "monospace", fontSize: "12px" }}>{a.ipAddress}</td>
+                      <td style={{ fontSize: "12px", maxWidth: "250px", overflow: "hidden", textOverflow: "ellipsis" }}>{a.instanceUrl || "—"}</td>
+                      <td>{a.requestCount}</td>
+                    </tr>
+                  ))}
+                  {tierAnonUsage.length === 0 && <tr><td colSpan={3} className="admin-empty">No anonymous usage today</td></tr>}
+                </tbody>
+              </table>
+            </div>
             <p style={{ color: "var(--text-disabled)", fontSize: "11px", marginTop: "8px" }}>
-              Anonymous (IP-based) usage is tracked in server memory and resets on restart. Authenticated usage is persisted in the database.
+              Both anonymous and authenticated usage are persisted in the database. See the Session Logs tab for full session details.
             </p>
+          </div>
+        </>
+      )}
+      {/* ─── Session Logs Tab ─── */}
+      {tab === "session-logs" && !loading && (
+        <>
+          <div style={{ marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h3 style={{ color: "var(--text-primary)", fontSize: "15px", fontWeight: 600, margin: 0 }}>
+              All Sessions ({sessionLogsTotal})
+            </h3>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                className="admin-btn"
+                disabled={sessionLogsPage === 0}
+                onClick={() => setSessionLogsPage((p) => Math.max(0, p - 1))}
+              >
+                Prev
+              </button>
+              <span style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: "32px" }}>
+                Page {sessionLogsPage + 1} of {Math.max(1, Math.ceil(sessionLogsTotal / 50))}
+              </span>
+              <button
+                className="admin-btn"
+                disabled={(sessionLogsPage + 1) * 50 >= sessionLogsTotal}
+                onClick={() => setSessionLogsPage((p) => p + 1)}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th style={{ width: "28px" }}></th>
+                  <th>User</th>
+                  <th>Instance</th>
+                  <th>SN User</th>
+                  <th>Model</th>
+                  <th>Phase</th>
+                  <th>Status</th>
+                  <th>Rounds</th>
+                  <th>Tools</th>
+                  <th>Tokens</th>
+                  <th>Started</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sessionLogs.map((s) => {
+                  const isAnon = !s.user_id;
+                  const isExpanded = expandedSessionId === s.session_id;
+                  return (
+                    <React.Fragment key={s.session_id}>
+                      <tr
+                        style={{ cursor: "pointer" }}
+                        onClick={async () => {
+                          if (isExpanded) {
+                            setExpandedSessionId(null);
+                            setExpandedSessionDetail(null);
+                            return;
+                          }
+                          setExpandedSessionId(s.session_id);
+                          setExpandedSessionDetail(null);
+                          setDetailLoading(true);
+                          try {
+                            const res = await fetch(`/api/admin/session-logs/${s.session_id}`);
+                            if (res.ok) {
+                              const data = await res.json();
+                              setExpandedSessionDetail(data.session);
+                            }
+                          } catch { /* ignore */ }
+                          setDetailLoading(false);
+                        }}
+                      >
+                        <td style={{ fontSize: "11px", color: "var(--text-disabled)" }}>{isExpanded ? "▼" : "▶"}</td>
+                        <td>
+                          {isAnon ? (
+                            <span style={{
+                              background: "var(--color-warning, #f59e0b)",
+                              color: "#000",
+                              padding: "2px 8px",
+                              borderRadius: "4px",
+                              fontSize: "11px",
+                              fontWeight: 600,
+                            }}>Anonymous</span>
+                          ) : (
+                            <span style={{ fontSize: "12px" }}>{s.user_full_name || s.username || "—"}</span>
+                          )}
+                        </td>
+                        <td style={{ fontSize: "12px", maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {s.instance_url ? s.instance_url.replace("https://", "") : "—"}
+                        </td>
+                        <td style={{ fontSize: "12px" }}>{s.username || "—"}</td>
+                        <td style={{ fontSize: "12px" }}>{s.model || "—"}</td>
+                        <td style={{ fontSize: "12px" }}>{s.current_phase || "—"}</td>
+                        <td>
+                          <span className={`admin-status admin-status-${s.status === "active" ? "active" : s.status === "completed" ? "approved" : "pending"}`}>
+                            {s.status}
+                          </span>
+                        </td>
+                        <td style={{ fontSize: "12px" }}>{s.total_rounds || 0}</td>
+                        <td style={{ fontSize: "12px" }}>
+                          {s.total_tool_calls || 0}
+                          {(s.total_errors || 0) > 0 && (
+                            <span style={{ color: "var(--color-danger)", marginLeft: "4px", fontSize: "11px" }}>
+                              ({s.total_errors} err)
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ fontSize: "11px", fontFamily: "monospace" }}>
+                          {((s.total_input_tokens || 0) / 1000).toFixed(1)}k / {((s.total_output_tokens || 0) / 1000).toFixed(1)}k
+                        </td>
+                        <td style={{ fontSize: "12px" }}>{s.started_at ? new Date(s.started_at).toLocaleString() : "—"}</td>
+                      </tr>
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan={11} style={{ padding: 0 }}>
+                            <div style={{
+                              background: "var(--surface-secondary)",
+                              border: "1px solid var(--border-default)",
+                              borderRadius: "8px",
+                              margin: "4px 8px 8px",
+                              padding: "16px",
+                            }}>
+                              {detailLoading && <p style={{ color: "var(--text-secondary)", fontSize: "13px" }}>Loading session detail...</p>}
+                              {!detailLoading && expandedSessionDetail && (
+                                <>
+                                  {/* Telemetry Summary Card */}
+                                  {expandedSessionDetail.telemetry_summary && (
+                                    <div style={{ marginBottom: "16px" }}>
+                                      <h4 style={{ color: "var(--text-primary)", fontSize: "13px", fontWeight: 600, marginBottom: "8px" }}>
+                                        Telemetry Summary
+                                      </h4>
+                                      <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", fontSize: "12px" }}>
+                                        {Object.entries(expandedSessionDetail.telemetry_summary as Record<string, unknown>).map(([key, val]) => (
+                                          <div key={key} style={{ background: "var(--surface-elevated)", padding: "6px 12px", borderRadius: "6px" }}>
+                                            <span style={{ color: "var(--text-secondary)" }}>{key}: </span>
+                                            <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>
+                                              {Array.isArray(val) ? (val as string[]).join(", ") : String(val)}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Log Entries Timeline */}
+                                  <div>
+                                    <h4 style={{ color: "var(--text-primary)", fontSize: "13px", fontWeight: 600, marginBottom: "8px" }}>
+                                      Log Entries ({(expandedSessionDetail.log_entries || []).length}
+                                      {expandedSessionDetail.entries_overflow && " — truncated at 500"})
+                                    </h4>
+                                    <div style={{
+                                      maxHeight: "400px",
+                                      overflowY: "auto",
+                                      fontSize: "11px",
+                                      fontFamily: "monospace",
+                                      lineHeight: 1.6,
+                                    }}>
+                                      {(expandedSessionDetail.log_entries || []).map((entry: { timestamp?: string; level?: string; category?: string; message?: string; data?: Record<string, unknown> }, idx: number) => (
+                                        <div key={idx} style={{
+                                          padding: "4px 8px",
+                                          borderBottom: "1px solid var(--border-default)",
+                                          color: entry.level === "error" ? "var(--color-danger)" : entry.level === "warn" ? "var(--color-warning, #f59e0b)" : "var(--text-primary)",
+                                        }}>
+                                          <span style={{ color: "var(--text-disabled)" }}>
+                                            {entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : ""}
+                                          </span>
+                                          {" "}
+                                          <span style={{ fontWeight: 600 }}>[{(entry.level || "").toUpperCase()}]</span>
+                                          {" "}
+                                          <span style={{ color: "var(--text-secondary)" }}>[{entry.category}]</span>
+                                          {" "}
+                                          {entry.message}
+                                          {entry.data && Object.keys(entry.data).length > 0 && (
+                                            <span style={{ color: "var(--text-disabled)", marginLeft: "8px" }}>
+                                              {JSON.stringify(entry.data).slice(0, 200)}
+                                            </span>
+                                          )}
+                                        </div>
+                                      ))}
+                                      {(expandedSessionDetail.log_entries || []).length === 0 && (
+                                        <p style={{ color: "var(--text-disabled)", padding: "8px" }}>No log entries recorded</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </>
+                              )}
+                              {!detailLoading && !expandedSessionDetail && (
+                                <p style={{ color: "var(--text-disabled)", fontSize: "13px" }}>Failed to load session detail</p>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+                {sessionLogs.length === 0 && <tr><td colSpan={11} className="admin-empty">No sessions found</td></tr>}
+              </tbody>
+            </table>
           </div>
         </>
       )}

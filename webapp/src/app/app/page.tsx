@@ -1286,19 +1286,17 @@ export default function Home() {
                   <span className="hidden sm:inline">New Chat</span>
                 </button>
             )}
-            {/* Right panel toggle (lg+ only, when connected) */}
+            {/* Right panel toggle */}
             {connected && (
               <button
                 onClick={() => setShowRightPanel(!showRightPanel)}
-                className="hidden lg:flex items-center justify-center w-8 h-8 rounded-md transition-colors"
+                className="p-2 rounded-md transition-colors flex-shrink-0"
                 style={{ color: "var(--text-secondary)" }}
-                onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-secondary)"; e.currentTarget.style.color = "var(--text-primary)"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+                onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-elevated)")}
+                onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                 title={showRightPanel ? "Hide suggestions panel" : "Show suggestions panel"}
               >
-                <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 3h12v18H9M9 3v18M3 6h6M3 12h6M3 18h6" />
-                </svg>
+                <Menu className="w-5 h-5" strokeWidth={1.5} />
               </button>
             )}
             {/* Profile avatar + dropdown */}
@@ -1388,11 +1386,21 @@ export default function Home() {
         />
       </main>
 
-      {/* ═══ Right Panel — Metadata / Status / Suggestions (visible when connected) ═══ */}
+      {/* Right panel backdrop (sm–lg overlay) */}
       {connected && showRightPanel && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 hidden sm:block lg:hidden"
+          onClick={() => setShowRightPanel(false)}
+        />
+      )}
+
+      {/* ═══ Right Panel — Metadata / Status / Suggestions (visible when connected) ═══ */}
+      {connected && (
         <aside
-          className="hidden lg:flex flex-shrink-0 overflow-hidden"
-          style={{ background: "var(--surface-primary)", borderLeft: "1px solid var(--border-default)", width: rightWidth }}
+          className={`hidden sm:flex ${
+            showRightPanel ? "translate-x-0" : "!w-0 translate-x-full lg:translate-x-0"
+          } fixed lg:static inset-y-0 right-0 z-40 lg:z-auto transition-all duration-300 overflow-hidden flex-shrink-0`}
+          style={{ background: "var(--surface-primary)", borderLeft: "1px solid var(--border-default)", width: showRightPanel ? rightWidth : 0 }}
         >
           {/* Resize handle */}
           <div
