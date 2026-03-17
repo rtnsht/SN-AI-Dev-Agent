@@ -38,6 +38,7 @@ services:
         NEXT_PUBLIC_HIGHLIGHT_DESC: ""
         NEXT_PUBLIC_CTA_HEADLINE: ""
         NEXT_PUBLIC_CTA_SUBTEXT: ""
+        NEXT_PUBLIC_HERO_VIDEO_URL: ""
     ports:
       - "3000:3000"
     env_file:
