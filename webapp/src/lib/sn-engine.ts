@@ -912,56 +912,51 @@ export async function testConnection(credentials: Omit<UserCredentials, "claudeA
   if (!(connResult as any)?.success) return connResult;
 
   // 2. Get current user sys_id
-  const userRecords = await snClient.getRecords("sys_user", {
+  const userRecordsRaw = await snClient.getRecords("sys_user", {
     sysparm_query: `user_name=${credentials.username}`,
     sysparm_fields: "sys_id,user_name,name,email",
     sysparm_limit: 1,
   });
-  const user = userRecords?.[0];
+  const userRecords = Array.isArray(userRecordsRaw) ? userRecordsRaw : [];
+  const user = userRecords[0];
   const userSysId = user?.sys_id;
   const userName = user?.name || credentials.username;
 
-  // 3. Check roles via sys_user_has_role with display values
-  //    ServiceNow returns reference fields as objects { link, value } by default.
-  //    Using sysparm_display_value=true gives us the role name directly.
+  // 3+4. Fetch roles and assignment groups in parallel (both depend on userSysId)
   let roles: string[] = [];
+  let assignmentGroups: { sysId: string; name: string }[] = [];
+
   if (userSysId) {
-    try {
-      const roleRecords = await snClient.getRecords("sys_user_has_role", {
+    const [rolesResult, groupsResult] = await Promise.allSettled([
+      snClient.getRecords("sys_user_has_role", {
         sysparm_query: `user=${userSysId}`,
         sysparm_fields: "role",
         sysparm_display_value: "true",
         sysparm_limit: 300,
-      });
-      roles = roleRecords
-        .map((r: Record<string, unknown>) => {
-          const role = r.role;
-          // With display_value=true, reference fields come as { display_value, link }
-          if (role && typeof role === "object" && "display_value" in (role as Record<string, unknown>)) {
-            return String((role as Record<string, unknown>).display_value || "");
-          }
-          // Fallback: plain string
-          return String(role || "");
-        })
-        .filter(Boolean);
-    } catch (err) {
-      console.warn("[testConnection] Role lookup failed:", err);
-    }
-  }
-
-  const hasAdmin = roles.includes("admin");
-  const hasSecurityAdmin = roles.includes("security_admin");
-
-  // 4. Fetch assignment groups for the user (non-blocking — fallback to empty)
-  let assignmentGroups: { sysId: string; name: string }[] = [];
-  if (userSysId) {
-    try {
-      const grpMembers = await snClient.getRecords("sys_user_grmember", {
+      }),
+      snClient.getRecords("sys_user_grmember", {
         sysparm_query: `user=${userSysId}`,
         sysparm_fields: "group",
         sysparm_display_value: "true",
         sysparm_limit: 50,
-      });
+      }),
+    ]);
+
+    if (rolesResult.status === "fulfilled") {
+      const roleRecords = Array.isArray(rolesResult.value) ? rolesResult.value : [];
+      roles = roleRecords
+        .map((r: Record<string, unknown>) => {
+          const role = r.role;
+          if (role && typeof role === "object" && "display_value" in (role as Record<string, unknown>)) {
+            return String((role as Record<string, unknown>).display_value || "");
+          }
+          return String(role || "");
+        })
+        .filter(Boolean);
+    }
+
+    if (groupsResult.status === "fulfilled") {
+      const grpMembers = Array.isArray(groupsResult.value) ? groupsResult.value : [];
       assignmentGroups = grpMembers
         .map((gm: Record<string, unknown>) => {
           const grp = gm.group;
@@ -972,10 +967,11 @@ export async function testConnection(credentials: Omit<UserCredentials, "claudeA
           return null;
         })
         .filter((g: { sysId: string; name: string } | null): g is { sysId: string; name: string } => g !== null && g.sysId !== "");
-    } catch (err) {
-      console.warn("[testConnection] Assignment group lookup failed:", err);
     }
   }
+
+  const hasAdmin = roles.includes("admin");
+  const hasSecurityAdmin = roles.includes("security_admin");
 
   return {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

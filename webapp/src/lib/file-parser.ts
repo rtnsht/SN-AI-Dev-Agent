@@ -103,13 +103,14 @@ async function extractExcelText(buffer: Buffer, name: string): Promise<string> {
 export async function processFileAttachments(files: FileAttachment[]): Promise<string> {
   if (!files || files.length === 0) return "";
 
-  const sections: string[] = [];
-  for (const file of files) {
-    const text = await extractText(file);
-    sections.push(`📎 **${file.name}** (${formatSize(file.size)}):\n\n${text}`);
-  }
+  const results = await Promise.all(
+    files.map(async (file) => {
+      const text = await extractText(file);
+      return `📎 **${file.name}** (${formatSize(file.size)}):\n\n${text}`;
+    })
+  );
 
-  return sections.join("\n\n---\n\n");
+  return results.join("\n\n---\n\n");
 }
 
 function formatSize(bytes: number): string {

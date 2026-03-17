@@ -755,6 +755,7 @@ export function stopAllTelemetryStreams(): void {
   for (const [id, interval] of activeIntervals) {
     clearInterval(interval);
     lastGenTime.delete(id);
+    deltaStates.delete(id);
     try {
       updateTelemetry(id);
     } catch (err) {

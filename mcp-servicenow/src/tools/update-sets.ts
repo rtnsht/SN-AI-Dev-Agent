@@ -373,19 +373,29 @@ export async function moveToUpdateSet(client: ServiceNowClient, input: z.infer<t
     let alreadyCorrect = 0;
     const errors: string[] = [];
 
+    const toMove: typeof targetRecords = [];
     for (const record of targetRecords) {
       const currentUpdateSet = resolveRef(record.update_set);
       if (currentUpdateSet === input.update_set_id) {
         alreadyCorrect++;
-        continue;
+      } else {
+        toMove.push(record);
       }
-      try {
-        await client.updateRecord('sys_update_xml', String(record.sys_id), {
+    }
+
+    const moveResults = await Promise.allSettled(
+      toMove.map((record) =>
+        client.updateRecord('sys_update_xml', String(record.sys_id), {
           update_set: input.update_set_id
-        });
+        })
+      )
+    );
+    for (let i = 0; i < moveResults.length; i++) {
+      if (moveResults[i].status === 'fulfilled') {
         moved++;
-      } catch (e) {
-        errors.push(`Failed to move ${record.name}: ${e}`);
+      } else {
+        const err = (moveResults[i] as PromiseRejectedResult).reason;
+        errors.push(`Failed to move ${toMove[i].name}: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 

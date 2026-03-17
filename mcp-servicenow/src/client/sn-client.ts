@@ -281,21 +281,26 @@ export class ServiceNowClient {
         }
 
         if (foundRecords.length > 0) {
-          for (const record of foundRecords) {
+          const toMove = foundRecords.filter((record) => {
             const currentUpdateSet = this.resolveRefValue(record.update_set);
-            if (currentUpdateSet !== this._activeUpdateSetId) {
-              try {
-                await this.updateRecord('sys_update_xml', record.sys_id, {
-                  update_set: this._activeUpdateSetId
-                });
-                moved++;
-              } catch (e) {
-                const err = e as Error;
-                errors.push(`Failed to move ${record.name}: ${err.message}`);
-              }
-            } else {
-              // Already in correct update set (session-based capture worked)
+            if (currentUpdateSet === this._activeUpdateSetId) {
               moved++;
+              return false;
+            }
+            return true;
+          });
+
+          const moveResults = await Promise.allSettled(
+            toMove.map((record) =>
+              this.updateRecord('sys_update_xml', record.sys_id, {
+                update_set: this._activeUpdateSetId
+              }).then(() => { moved++; })
+            )
+          );
+          for (let i = 0; i < moveResults.length; i++) {
+            if (moveResults[i].status === 'rejected') {
+              const err = (moveResults[i] as PromiseRejectedResult).reason;
+              errors.push(`Failed to move ${toMove[i].name}: ${err instanceof Error ? err.message : String(err)}`);
             }
           }
           break; // Success — stop retrying

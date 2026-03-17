@@ -35,6 +35,17 @@ interface LogEntry {
 // Active sessions map (for tracking within single request lifecycle)
 const sessions = new Map<string, SessionContext>();
 
+// Periodic cleanup of stale sessions (older than 2 hours)
+const SESSION_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, ctx] of sessions) {
+    if (now - ctx.startTime.getTime() > SESSION_MAX_AGE_MS) {
+      sessions.delete(id);
+    }
+  }
+}, 5 * 60 * 1000); // Run every 5 minutes
+
 // Logs directory (at project root)
 const LOGS_DIR = path.join(process.cwd(), "logs");
 

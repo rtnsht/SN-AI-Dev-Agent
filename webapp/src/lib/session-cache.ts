@@ -107,10 +107,7 @@ export class SessionCache {
     let invalidated = 0;
 
     for (const [key, entry] of this.cache.entries()) {
-      // Invalidate if the cached tool was reading from the same table
-      const shouldInvalidate =
-        table && key.includes(`"table":"${table}"`) ||
-        key.includes(`"table":"${table}"`);
+      const shouldInvalidate = table && key.includes(`"table":"${table}"`);
 
       if (shouldInvalidate) {
         this.cache.delete(key);
@@ -146,32 +143,52 @@ export class SessionCache {
   }
 }
 
-/** Global session cache store — maps sessionId to SessionCache instance */
-const SESSION_CACHES = new Map<string, SessionCache>();
+/** Global session cache store — maps sessionId to {cache, lastAccessedAt} */
+const SESSION_CACHES = new Map<string, { cache: SessionCache; lastAccessed: number }>();
+
+const MAX_SESSIONS = 100;
+const SESSION_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 /** Get or create a session cache for a given session ID */
 export function getSessionCache(sessionId: string): SessionCache {
-  let cache = SESSION_CACHES.get(sessionId);
-  if (!cache) {
-    cache = new SessionCache();
-    SESSION_CACHES.set(sessionId, cache);
+  let entry = SESSION_CACHES.get(sessionId);
+  if (!entry) {
+    entry = { cache: new SessionCache(), lastAccessed: Date.now() };
+    SESSION_CACHES.set(sessionId, entry);
+    // Prune on each new session to keep memory bounded
+    if (SESSION_CACHES.size > MAX_SESSIONS) {
+      pruneSessionCaches();
+    }
+  } else {
+    entry.lastAccessed = Date.now();
   }
-  return cache;
+  return entry.cache;
 }
 
-/** Clear a session's cache (called on new chat) */
+/** Clear a session's cache (called on new chat / session end) */
 export function clearSessionCache(sessionId: string): void {
   SESSION_CACHES.delete(sessionId);
 }
 
-/** Clean up old session caches (call periodically) */
-export function pruneSessionCaches(maxAge = 30 * 60 * 1000): number {
-  // Not time-based on entries — just limit total sessions
-  const MAX_SESSIONS = 100;
+/** Clean up old session caches — removes sessions older than TTL and caps at MAX_SESSIONS */
+export function pruneSessionCaches(maxAge = SESSION_CACHE_TTL_MS): number {
+  const now = Date.now();
   let pruned = 0;
+
+  // Remove TTL-expired entries first
+  for (const [key, entry] of SESSION_CACHES) {
+    if (now - entry.lastAccessed > maxAge) {
+      SESSION_CACHES.delete(key);
+      pruned++;
+    }
+  }
+
+  // If still over limit, remove oldest
   if (SESSION_CACHES.size > MAX_SESSIONS) {
-    const oldest = Array.from(SESSION_CACHES.keys()).slice(0, SESSION_CACHES.size - MAX_SESSIONS);
-    for (const key of oldest) {
+    const sorted = Array.from(SESSION_CACHES.entries())
+      .sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
+    const toRemove = sorted.slice(0, SESSION_CACHES.size - MAX_SESSIONS);
+    for (const [key] of toRemove) {
       SESSION_CACHES.delete(key);
       pruned++;
     }

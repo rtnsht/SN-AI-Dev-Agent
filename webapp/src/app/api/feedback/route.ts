@@ -127,8 +127,9 @@ export async function POST(request: NextRequest) {
         data_base64: base64Data,
       });
 
-      // Upload to Supabase Storage
-      const filePath = `feedback/${crypto.randomUUID()}/${file.name}`;
+      // Sanitize filename to prevent path traversal
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 255);
+      const filePath = `feedback/${crypto.randomUUID()}/${safeName}`;
       const { error: uploadError } = await supabase.storage
         .from("feedback-attachments")
         .upload(filePath, buffer, { contentType: file.type });
