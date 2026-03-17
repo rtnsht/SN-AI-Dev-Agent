@@ -137,14 +137,14 @@ function escapeCsv(raw: string): string {
 export async function processFileAttachments(files: FileAttachment[]): Promise<string> {
   if (!files || files.length === 0) return "";
 
-  const results = await Promise.all(
+  const sections = await Promise.all(
     files.map(async (file) => {
       const text = await extractText(file);
       return `📎 **${file.name}** (${formatSize(file.size)}):\n\n${text}`;
     })
   );
 
-  return results.join("\n\n---\n\n");
+  return sections.join("\n\n---\n\n");
 }
 
 function formatSize(bytes: number): string {

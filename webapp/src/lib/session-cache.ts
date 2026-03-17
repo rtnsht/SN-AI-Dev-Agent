@@ -54,7 +54,11 @@ export class SessionCache {
 
   /** Generate a stable cache key from tool name + args */
   static cacheKey(toolName: string, args: unknown): string {
-    return `${toolName}::${JSON.stringify(args, Object.keys(args as Record<string, unknown>).sort())}`;
+    if (args === null || typeof args !== "object") {
+      return `${toolName}::${JSON.stringify(args)}`;
+    }
+    const keys = Object.keys(args as Record<string, unknown>).sort();
+    return `${toolName}::${JSON.stringify(args, keys)}`;
   }
 
   /** Check if a tool's results are cacheable */
@@ -106,9 +110,9 @@ export class SessionCache {
     const table = (args as Record<string, unknown>)?.table as string | undefined;
     let invalidated = 0;
 
-    for (const [key, entry] of this.cache.entries()) {
-      const shouldInvalidate = table && key.includes(`"table":"${table}"`);
-
+    for (const [key] of this.cache.entries()) {
+      // Invalidate if the cached tool was reading from the same table (only when table is defined)
+      const shouldInvalidate = table != null && key.includes(`"table":"${table}"`);
       if (shouldInvalidate) {
         this.cache.delete(key);
         this.accessOrder = this.accessOrder.filter((k) => k !== key);
@@ -149,18 +153,22 @@ const SESSION_CACHES = new Map<string, { cache: SessionCache; lastAccessed: numb
 const MAX_SESSIONS = 100;
 const SESSION_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
+let pruneIntervalStarted = false;
+
+function startPruneInterval(): void {
+  if (pruneIntervalStarted) return;
+  pruneIntervalStarted = true;
+  const interval = setInterval(pruneSessionCaches, 5 * 60 * 1000); // every 5 min
+  if (interval.unref) interval.unref();
+}
+
 /** Get or create a session cache for a given session ID */
 export function getSessionCache(sessionId: string): SessionCache {
-  let entry = SESSION_CACHES.get(sessionId);
-  if (!entry) {
-    entry = { cache: new SessionCache(), lastAccessed: Date.now() };
-    SESSION_CACHES.set(sessionId, entry);
-    // Prune on each new session to keep memory bounded
-    if (SESSION_CACHES.size > MAX_SESSIONS) {
-      pruneSessionCaches();
-    }
-  } else {
-    entry.lastAccessed = Date.now();
+  startPruneInterval();
+  let cache = SESSION_CACHES.get(sessionId);
+  if (!cache) {
+    cache = new SessionCache();
+    SESSION_CACHES.set(sessionId, cache);
   }
   return entry.cache;
 }

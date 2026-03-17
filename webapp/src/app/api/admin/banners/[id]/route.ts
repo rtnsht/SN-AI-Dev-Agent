@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
+import { sanitizeBannerHtml } from "@/lib/sanitize-html";
 
 /** PATCH /api/admin/banners/:id — update banner (toggle active, edit, etc.) */
 export async function PATCH(
@@ -21,7 +22,7 @@ export async function PATCH(
     } else {
       // Full update
       if (body.title !== undefined) updates.title = body.title;
-      if (body.content_html !== undefined) updates.content_html = body.content_html;
+      if (body.content_html !== undefined) updates.content_html = sanitizeBannerHtml(body.content_html);
       if (body.pages !== undefined) updates.pages = body.pages;
       if (body.bg_color !== undefined) updates.bg_color = body.bg_color;
       if (body.text_color !== undefined) updates.text_color = body.text_color;

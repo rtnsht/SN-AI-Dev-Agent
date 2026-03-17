@@ -60,7 +60,7 @@ export default function BannerDisplay() {
             position: "relative",
           }}
         >
-          <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(banner.content_html, { ALLOWED_TAGS: ["b", "i", "em", "strong", "a", "br", "span", "u", "code"], ALLOWED_ATTR: ["href", "target", "rel", "class", "style"] }) }} />
+          <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(banner.content_html || "", { ALLOWED_TAGS: ["b", "i", "u", "em", "strong", "a", "br", "p", "span"] }) }} />
           <button
             onClick={() => setDismissed((prev) => new Set(prev).add(banner.id))}
             aria-label="Dismiss banner"

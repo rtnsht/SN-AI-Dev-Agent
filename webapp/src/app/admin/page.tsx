@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import DOMPurify from "isomorphic-dompurify";
 
 type Tab = "requests" | "users" | "invites" | "banners" | "trials" | "access-tiers" | "session-logs";
 
@@ -926,7 +927,7 @@ export default function AdminPage() {
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
                         }}
-                        dangerouslySetInnerHTML={{ __html: b.content_html }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(b.content_html || "", { ALLOWED_TAGS: ["b", "i", "u", "em", "strong", "a", "br", "p", "span"] }) }}
                       />
                     </td>
                     <td style={{ fontSize: "11px" }}>{b.pages.join(", ")}</td>

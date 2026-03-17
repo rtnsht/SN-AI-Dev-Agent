@@ -78,6 +78,14 @@ function sanitizeUserHeaders(headers: Headers): Headers {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // ── Production safety: reject BYPASS_AUTH ─────────────────────────────────
+  if (process.env.NODE_ENV === "production" && process.env.BYPASS_AUTH === "true") {
+    console.error("[middleware] BYPASS_AUTH=true is not allowed in production");
+    return new NextResponse("Server misconfiguration: BYPASS_AUTH must be false in production", {
+      status: 503,
+    });
+  }
+
   // ── Landing page redirect ────────────────────────────────────────────────
   // When SKIP_LANDING_PAGE=true, always redirect "/" → "/app" (skips the
   // marketing page entirely). Works regardless of auth state.
@@ -119,9 +127,13 @@ export async function middleware(request: NextRequest) {
     if (pathname === "/") {
       const sessionToken = request.cookies.get(SESSION_COOKIE_NAME)?.value;
       if (sessionToken) {
-        const session = await validateSession(sessionToken);
-        if (session && !session.is_temporary) {
-          return NextResponse.redirect(new URL("/app", request.url));
+        try {
+          const session = await validateSession(sessionToken);
+          if (session && !session.is_temporary) {
+            return NextResponse.redirect(new URL("/app", request.url));
+          }
+        } catch {
+          // Non-fatal — proceed without redirect (e.g. Supabase error)
         }
       }
     }
