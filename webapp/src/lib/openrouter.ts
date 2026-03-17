@@ -92,8 +92,11 @@ export async function fetchOpenRouterModels(apiKey?: string): Promise<OpenRouter
     headers["Authorization"] = `Bearer ${apiKey}`;
   }
 
-  const response = await fetch(`${OPENROUTER_API_BASE}/models`, { headers });
-  
+  const modelController = new AbortController();
+  const modelTimeout = setTimeout(() => modelController.abort(), 30_000);
+  const response = await fetch(`${OPENROUTER_API_BASE}/models`, { headers, signal: modelController.signal });
+  clearTimeout(modelTimeout);
+
   if (!response.ok) {
     throw new Error(`Failed to fetch OpenRouter models: ${response.status}`);
   }
@@ -162,11 +165,15 @@ export async function chatCompletion(
     headers["X-OpenRouter-Title"] = config.siteName;
   }
 
+  const chatController = new AbortController();
+  const chatTimeout = setTimeout(() => chatController.abort(), 120_000);
   const response = await fetch(`${OPENROUTER_API_BASE}/chat/completions`, {
     method: "POST",
     headers,
     body: JSON.stringify(request),
+    signal: chatController.signal,
   });
+  clearTimeout(chatTimeout);
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));

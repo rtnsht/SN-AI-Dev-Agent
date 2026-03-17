@@ -4,6 +4,7 @@
  */
 
 import fs from "fs";
+import fsp from "fs/promises";
 import path from "path";
 import { updateTelemetry } from "./telemetry-generator";
 import { getLogPersistence } from "./log-persistence";
@@ -37,11 +38,20 @@ const sessions = new Map<string, SessionContext>();
 // Logs directory (at project root)
 const LOGS_DIR = path.join(process.cwd(), "logs");
 
-// Ensure logs directory exists
-function ensureLogsDir(): void {
+// Ensure logs directory exists (sync for startup, async for ongoing use)
+let logsDirReady = false;
+function ensureLogsDirSync(): void {
+  if (logsDirReady) return;
   if (!fs.existsSync(LOGS_DIR)) {
     fs.mkdirSync(LOGS_DIR, { recursive: true });
   }
+  logsDirReady = true;
+}
+
+async function ensureLogsDir(): Promise<void> {
+  if (logsDirReady) return;
+  await fsp.mkdir(LOGS_DIR, { recursive: true });
+  logsDirReady = true;
 }
 
 // Generate unique session ID
@@ -160,19 +170,17 @@ export function log(
     ...(durationMs !== undefined && { durationMs }),
   };
 
-  // Write to session-specific file (non-throwing: fallback to console-only on EACCES/EROFS)
-  try {
-    ensureLogsDir();
-    const logLine = JSON.stringify(entry) + "\n";
-    const filename = getLogFilename(sessionId);
-    const filepath = path.join(LOGS_DIR, filename);
-    fs.appendFileSync(filepath, logLine);
-  } catch (err) {
-    // Read-only or restricted fs (e.g. Render) — do not rethrow; console output below
-    if (process.env.NODE_ENV !== "test") {
-      console.warn("[logger] File write skipped (fs error):", err instanceof Error ? err.message : String(err));
-    }
-  }
+  // Write to session-specific file asynchronously (non-blocking, non-throwing)
+  const logLine = JSON.stringify(entry) + "\n";
+  const filename = getLogFilename(sessionId);
+  const filepath = path.join(LOGS_DIR, filename);
+  ensureLogsDir()
+    .then(() => fsp.appendFile(filepath, logLine))
+    .catch((err) => {
+      if (process.env.NODE_ENV !== "test") {
+        console.warn("[logger] File write skipped (fs error):", err instanceof Error ? err.message : String(err));
+      }
+    });
 
   // Async persist to Supabase (fire-and-forget, never throws)
   try { getLogPersistence()?.enqueue(sessionId, entry); } catch { /* never block logging */ }

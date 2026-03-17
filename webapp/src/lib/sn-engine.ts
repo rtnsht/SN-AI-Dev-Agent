@@ -610,7 +610,8 @@ function summarizeToolInput(input: unknown): Record<string, unknown> {
   return summary;
 }
 
-/** Execute a single tool call, log it, and return the ToolExecution record. */
+/** Execute a single tool call, log it, and return the ToolExecution record.
+ *  When a sessionCache is provided, cacheable tools check/store results automatically. */
 async function executeAndLogTool(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   registry: any,
@@ -619,13 +620,26 @@ async function executeAndLogTool(
   toolName: string,
   input: unknown,
   sessionId: string,
+  sessionCache?: SessionCache,
 ): Promise<{ execution: ToolExecution; resultJson: string; success: boolean }> {
+  // Check session cache for read-only tools
+  if (sessionCache && SessionCache.isCacheable(toolName)) {
+    const cached = sessionCache.get(toolName, input);
+    if (cached !== undefined) {
+      logger.info(sessionId, "cache", `Cache hit: ${toolName}`, { toolName });
+      return {
+        execution: { toolName, input, output: cached, durationMs: 0 },
+        resultJson: truncateToolResult(cached),
+        success: true,
+      };
+    }
+  }
+
   const start = Date.now();
   let output: unknown;
   let success = true;
   try {
     output = await registry.executeToolCall(toolName, input, snClient);
-    // Many tools return { success: false, error: "..." } instead of throwing
     if (typeof output === "object" && output !== null && (output as Record<string, unknown>).success === false) {
       success = false;
     }
@@ -634,6 +648,18 @@ async function executeAndLogTool(
     success = false;
   }
   const durationMs = Date.now() - start;
+
+  // Store in session cache on success
+  if (sessionCache && success) {
+    if (SessionCache.isCacheable(toolName)) {
+      sessionCache.set(toolName, input, output);
+    } else if (SessionCache.isWriteTool(toolName)) {
+      const invalidated = sessionCache.invalidateForWrite(toolName, input);
+      if (invalidated > 0) {
+        logger.info(sessionId, "cache", `Cache invalidated ${invalidated} entries after ${toolName}`, { toolName, invalidated });
+      }
+    }
+  }
 
   const inputSummary = summarizeToolInput(input);
 
@@ -1564,7 +1590,7 @@ export async function* chatStream(
           yield { type: "tool_start", toolName: block.name, input: pickDisplayFields(block.input) };
           yield { type: "status", message: `Executing: ${block.name}`, phase: "tool" };
 
-          const { execution, resultJson, success } = await executeAndLogTool(registry, snClient, block.name, block.input, sessionId);
+          const { execution, resultJson, success } = await executeAndLogTool(registry, snClient, block.name, block.input, sessionId, sessionCache);
           yield { type: "tool_end", toolName: block.name, durationMs: execution.durationMs, success };
           toolExecutions.push(execution);
           toolResults.push({ type: "tool_result", tool_use_id: block.id, content: resultJson });

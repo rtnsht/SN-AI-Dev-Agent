@@ -6,6 +6,7 @@
  */
 
 import fs from "fs";
+import fsp from "fs/promises";
 import path from "path";
 
 const LOGS_DIR = path.join(process.cwd(), "logs");
@@ -85,9 +86,9 @@ interface SessionTelemetry {
 
 // ── Parser ─────────────────────────────────────────────────────────────────
 
-function parseSessionLog(logFile: string): SessionTelemetry {
+async function parseSessionLog(logFile: string): Promise<SessionTelemetry> {
   const fullPath = path.join(LOGS_DIR, logFile);
-  const content = fs.readFileSync(fullPath, "utf-8");
+  const content = await fsp.readFile(fullPath, "utf-8");
   const lines = content.trim().split("\n").filter(Boolean);
 
   // Extract session suffix from filename: session-YYYY-MM-DD-timestamp-SUFFIX.txt
@@ -687,23 +688,27 @@ export function updateTelemetry(sessionId: string): void {
   if (now - lastTime < THROTTLE_MS) return;
   lastGenTime.set(sessionId, now);
 
-  try {
-    // Find the log file for this session
-    const logFilename = getLogFilenameForSession(sessionId);
-    const logPath = path.join(LOGS_DIR, logFilename);
-    if (!fs.existsSync(logPath)) return;
-
-    // Parse and generate
-    const telemetry = parseSessionLog(logFilename);
-    const summaryMd = generateMarkdown(telemetry);
-    const updatesMd = generateSessionUpdates(telemetry, sessionId);
-
-    // Write telemetry file (summary + session updates)
-    const telemetryFile = `telemetry-session-${telemetry.sessionSuffix}.md`;
-    fs.writeFileSync(path.join(LOGS_DIR, telemetryFile), summaryMd + updatesMd);
-  } catch (err) {
+  updateTelemetryAsync(sessionId).catch((err) => {
     console.error(`[telemetry] Error generating telemetry for ${sessionId}:`, err);
+  });
+}
+
+async function updateTelemetryAsync(sessionId: string): Promise<void> {
+  const logFilename = getLogFilenameForSession(sessionId);
+  const logPath = path.join(LOGS_DIR, logFilename);
+
+  try {
+    await fsp.access(logPath);
+  } catch {
+    return; // log file doesn't exist yet
   }
+
+  const telemetry = await parseSessionLog(logFilename);
+  const summaryMd = generateMarkdown(telemetry);
+  const updatesMd = generateSessionUpdates(telemetry, sessionId);
+
+  const telemetryFile = `telemetry-session-${telemetry.sessionSuffix}.md`;
+  await fsp.writeFile(path.join(LOGS_DIR, telemetryFile), summaryMd + updatesMd);
 }
 
 /** Start a background interval that updates telemetry every 15 seconds.
@@ -738,6 +743,11 @@ export function startTelemetryStream(sessionId: string): () => void {
       console.error(`[telemetry] cleanup update failed for ${sessionId}:`, err);
     }
   };
+}
+
+/** Clean up delta state for a specific session */
+export function cleanupDeltaState(sessionId: string): void {
+  deltaStates.delete(sessionId);
 }
 
 /** Stop all active telemetry streams */

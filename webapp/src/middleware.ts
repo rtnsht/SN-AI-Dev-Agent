@@ -75,11 +75,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/app", request.url));
   }
 
-  // ── Dev bypass: skip all auth when BYPASS_AUTH=true ──────────────────────
-  // Safe because: (a) webapp/.env is never deployed to Render,
-  // (b) render.yaml explicitly sets BYPASS_AUTH=false.
-  // Still redirects authenticated users on "/" to "/app" when possible.
-  if (process.env.BYPASS_AUTH === "true") {
+  // ── Dev bypass: skip all auth when BYPASS_AUTH=true (disabled in production) ──
+  if (process.env.BYPASS_AUTH === "true" && process.env.NODE_ENV !== "production") {
     // Even with auth bypass, redirect "/" → "/app" if user has a session
     if (pathname === "/") {
       const sessionToken = request.cookies.get(SESSION_COOKIE_NAME)?.value;

@@ -12,8 +12,8 @@ import { validateSession, SESSION_COOKIE_NAME } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
 import { getLogPersistence } from "@/lib/log-persistence";
 
-// Track cleanup functions for active sessions
-const sessionCleanups = new Map<string, () => void>();
+// Track cleanup functions for active sessions (exported for session-end)
+export const sessionCleanups = new Map<string, () => void>();
 
 export async function POST(request: NextRequest) {
   try {
