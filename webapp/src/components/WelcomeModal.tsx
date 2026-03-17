@@ -23,24 +23,44 @@ export default function WelcomeModal({ open, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="relative w-full max-w-lg max-h-[90vh] sm:max-h-[85vh] mx-0 sm:mx-4 rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+        className="relative w-full max-w-2xl max-h-[90vh] sm:max-h-[85vh] mx-0 sm:mx-4 rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col"
         style={{ background: "var(--surface-primary)", border: "1px solid var(--border-emphasis)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
+        {/* Header — matches main page hero layout */}
         <div className="flex flex-col items-center px-6 pt-6 pb-4 text-center" style={{ borderBottom: "1px solid var(--border-default)" }}>
-          {/* Badge (from env: NEXT_PUBLIC_WELCOME_BADGE) */}
-          <div className="landing-badge mb-4">
-            <span className="landing-badge-dot" />
-            {WELCOME_BADGE}
-          </div>
+          {/* 1. Logo with glow */}
           {APP_LOGO && (
-            <Image src={APP_LOGO} alt={APP_NAME} width={56} height={56} className="rounded-xl mb-3" unoptimized />
+            <div className="hero-logo-container mb-4">
+              <Image
+                src={APP_LOGO}
+                alt={APP_NAME || "App Logo"}
+                width={96}
+                height={96}
+                className="hero-logo w-20 h-20 sm:w-24 sm:h-24"
+                unoptimized
+              />
+            </div>
           )}
-          <h2 className="text-xl font-semibold" style={{ color: "var(--text-primary)" }}>
-            Welcome to {APP_NAME || "SN AI Agent"}
+
+          {/* 2. App name */}
+          <h2
+            className="text-2xl sm:text-3xl font-bold text-center mb-3 tracking-tight"
+            style={{ color: "var(--text-primary)" }}
+          >
+            {APP_NAME || "SN AI Agent"}
           </h2>
-          <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
+
+          {/* 3. Badge pill */}
+          {WELCOME_BADGE && (
+            <div className="landing-badge mb-3">
+              <span className="landing-badge-dot" />
+              {WELCOME_BADGE}
+            </div>
+          )}
+
+          {/* 4. Subtitle */}
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
             {APP_SUBTITLE || "Describe what you need. The AI builds it on your ServiceNow instance."}
           </p>
         </div>
