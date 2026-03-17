@@ -13,7 +13,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 import SuggestionPanel from "@/components/SuggestionPanel";
 import type { ChatMessage, ConnectionResult, UsageInfo, TrialStatus, SDLCPhase, LiveStatus, AIProvider, ModelOption, FileAttachment, CategorizedPrompts } from "@/lib/types";
 import { parsePhaseGate, parseUserChoices, ANTHROPIC_MODELS, SDLC_PHASES, openRouterModelToOption } from "@/lib/types";
-import { APP_NAME, APP_LOGO, SHOW_INFO_BUTTON, CREATOR_NAME, CREATOR_LINKEDIN, FOOTER_TAGLINE, FOOTER_COPYRIGHT } from "@/lib/branding";
+import { APP_NAME, APP_LOGO, SHOW_INFO_BUTTON, CREATOR_NAME, CREATOR_LINKEDIN, FOOTER_TAGLINE, FOOTER_COPYRIGHT, HERO_VIDEO_URL } from "@/lib/branding";
 import { Menu, User } from "lucide-react";
 
 /* ── Session persistence keys (sessionStorage) ──────────────── */
@@ -112,6 +112,8 @@ export default function Home() {
   const [mobileStep, setMobileStep] = useState<"hero" | "connect">("hero");
   // Logged-in webapp user info (name, role) from /api/auth/me
   const [appUser, setAppUser] = useState<{ name: string; email: string; role: string } | null>(null);
+  // Hero video URL — runtime value fetched from /api/config (overrides build-time constant)
+  const [heroVideoUrl, setHeroVideoUrl] = useState(HERO_VIDEO_URL);
   // Profile dropdown
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -326,6 +328,9 @@ export default function Home() {
         if (typeof data.showLiveStatus === "boolean") setStreamingEnabled(data.showLiveStatus);
         // User API key control
         if (typeof data.allowUserApiKeys === "boolean") setAllowUserApiKeys(data.allowUserApiKeys);
+
+        // Hero video URL (runtime override for standalone builds where NEXT_PUBLIC_ vars may not be inlined)
+        if (data.heroVideoUrl) setHeroVideoUrl(data.heroVideoUrl);
 
         // Seed usage display from access status when server API keys are in use
         if (data.accessStatus && (data.serverApiKeyConfigured || data.serverOpenRouterKeyConfigured)) {
@@ -1558,7 +1563,7 @@ export default function Home() {
 
       {/* Info modal */}
       <InfoModal open={showInfo} onClose={() => setShowInfo(false)} onTryPrompt={(text) => { setShowInfo(false); setTimeout(() => handleSendRef.current(text), 100); }} />
-      <WelcomeModal open={showWelcome} onClose={dismissWelcome} />
+      <WelcomeModal open={showWelcome} onClose={dismissWelcome} heroVideoUrl={heroVideoUrl} />
 
       {/* Gate modals (3-tier access) */}
       <SignupGateModal

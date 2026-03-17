@@ -8,9 +8,11 @@ import { getVideoEmbedUrl } from "@/components/LandingPage";
 interface Props {
   open: boolean;
   onClose: () => void;
+  heroVideoUrl?: string;
 }
 
-export default function WelcomeModal({ open, onClose }: Props) {
+export default function WelcomeModal({ open, onClose, heroVideoUrl }: Props) {
+  const videoUrl = heroVideoUrl || HERO_VIDEO_URL;
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -48,11 +50,11 @@ export default function WelcomeModal({ open, onClose }: Props) {
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {/* Demo video */}
-          {HERO_VIDEO_URL && (
+          {videoUrl && (
             <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-default)" }}>
               <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, background: "var(--surface-secondary)" }}>
                 <iframe
-                  src={getVideoEmbedUrl(HERO_VIDEO_URL)}
+                  src={getVideoEmbedUrl(videoUrl)}
                   title="App demo"
                   allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
                   allowFullScreen

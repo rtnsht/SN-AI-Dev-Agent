@@ -90,7 +90,8 @@ const StepIcons = [
   <svg key="s3" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
 ];
 
-export default function LandingPage() {
+export default function LandingPage({ heroVideoUrl: heroVideoUrlProp }: { heroVideoUrl?: string } = {}) {
+  const videoUrl = heroVideoUrlProp || HERO_VIDEO_URL;
   const [showModal, setShowModal] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -172,12 +173,12 @@ export default function LandingPage() {
       </section>
 
       {/* ═══ Video (optional) ═══ */}
-      {HERO_VIDEO_URL && (
+      {videoUrl && (
         <section ref={videoRef} className="landing-section landing-video-section reveal-section">
           <div className="landing-video-container">
             <div className="landing-video-wrapper">
               <iframe
-                src={getVideoEmbedUrl(HERO_VIDEO_URL)}
+                src={getVideoEmbedUrl(videoUrl)}
                 title="See it in action"
                 allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
                 allowFullScreen

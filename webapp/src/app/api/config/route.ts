@@ -51,6 +51,8 @@ export async function GET(request: NextRequest) {
     showLiveStatus: process.env.NEXT_PUBLIC_SHOW_LIVE_STATUS !== "false",
     // Whether users are allowed to provide their own Claude API key (default: true)
     allowUserApiKeys: process.env.ALLOW_USER_API_KEYS !== "false",
+    // Hero video URL — exposed at runtime so standalone builds pick up env changes
+    heroVideoUrl: process.env.NEXT_PUBLIC_HERO_VIDEO_URL || "",
   });
 }
 
