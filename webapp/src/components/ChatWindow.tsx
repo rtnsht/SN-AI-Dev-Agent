@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback, type RefObject } from "react"
 import type { ChatMessage, SDLCPhase, LiveStatus, FileAttachment, CategorizedPrompts, ExamplePrompt, UpdateSetSummary } from "@/lib/types";
 import MessageBubble from "./MessageBubble";
 import Image from "next/image";
+import { useRotatingText } from "@/hooks/useRotatingText";
 import { APP_NAME, APP_LOGO, APP_HERO_TAGLINE, APP_SUBTITLE, APP_TAGLINE, HERO_FEATURES, WELCOME_BADGE } from "@/lib/branding";
 
 /* ── Web Speech API type shim ── */
@@ -84,24 +85,7 @@ const SUGGESTION_FALLBACK: Record<TabKey, ExamplePrompt[]> = {
 
 /* ── Hero rotating text — auto-toggles between multiple strings ── */
 function HeroRotatingText({ texts, interval = 4000, className = "" }: { texts: string[]; interval?: number; className?: string }) {
-  const [activeIdx, setActiveIdx] = useState(0);
-  const [phase, setPhase] = useState<"active" | "exiting">("active");
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (texts.length < 2) return;
-    const id = setInterval(() => {
-      setPhase("exiting");
-      timeoutRef.current = setTimeout(() => {
-        setActiveIdx((prev) => (prev + 1) % texts.length);
-        setPhase("active");
-      }, 600);
-    }, interval);
-    return () => {
-      clearInterval(id);
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
-  }, [texts.length, interval]);
+  const { activeIdx, phase } = useRotatingText(texts, interval);
 
   if (texts.length === 0) return null;
   if (texts.length === 1) {
@@ -1290,7 +1274,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
                 {/* 4. Auto-toggling animated text */}
                 <HeroRotatingText
                   texts={[
-                    APP_HERO_TAGLINE || "What should we build?",
+                    APP_HERO_TAGLINE || APP_TAGLINE || "What should we build?",
                     APP_SUBTITLE || "Describe what you need and let's get started.",
                   ].filter(Boolean)}
                   interval={4000}

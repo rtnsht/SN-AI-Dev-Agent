@@ -5,6 +5,7 @@ import Image from "next/image";
 import ThemeToggle from "@/components/ThemeToggle";
 import ConnectModal from "@/components/ConnectModal";
 import Footer from "@/components/Footer";
+import { useRotatingText } from "@/hooks/useRotatingText";
 import {
   APP_NAME, APP_LOGO, APP_HERO_TAGLINE, APP_SUBTITLE, APP_TAGLINE,
   HERO_FEATURES, HERO_VIDEO_URL, TRUST_ITEMS, WELCOME_BADGE,
@@ -31,24 +32,7 @@ export function getVideoEmbedUrl(url: string): string {
 
 /* ── Hero rotating text — auto-toggles between multiple strings ── */
 function LandingRotatingText({ texts, interval = 4000 }: { texts: string[]; interval?: number }) {
-  const [activeIdx, setActiveIdx] = useState(0);
-  const [phase, setPhase] = useState<"active" | "exiting">("active");
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (texts.length < 2) return;
-    const id = setInterval(() => {
-      setPhase("exiting");
-      timeoutRef.current = setTimeout(() => {
-        setActiveIdx((prev) => (prev + 1) % texts.length);
-        setPhase("active");
-      }, 600);
-    }, interval);
-    return () => {
-      clearInterval(id);
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
-  }, [texts.length, interval]);
+  const { activeIdx, phase } = useRotatingText(texts, interval);
 
   if (texts.length === 0) return null;
   if (texts.length === 1) {
@@ -170,7 +154,7 @@ export default function LandingPage() {
         {/* 4. Auto-toggling animated text */}
         <LandingRotatingText
           texts={[
-            APP_HERO_TAGLINE || "Ship ServiceNow Features with AI.",
+            APP_HERO_TAGLINE || APP_TAGLINE || "Ship ServiceNow Features with AI.",
             APP_SUBTITLE || "Describe what you need in plain English. The AI generates specs, code, and deployments — you review and approve every step.",
           ].filter(Boolean)}
           interval={4000}
