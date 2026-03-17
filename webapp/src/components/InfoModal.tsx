@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo } from "react";
 import Image from "next/image";
-import { APP_NAME, APP_LOGO, APP_SUBTITLE, INFO_MODAL_FEATURES } from "@/lib/branding";
+import { APP_NAME, APP_LOGO, APP_SUBTITLE, HERO_VIDEO_URL, INFO_MODAL_FEATURES } from "@/lib/branding";
+import { getVideoEmbedUrl } from "@/components/LandingPage";
 import type { InfoModalFeature } from "@/lib/branding";
 
 interface Props {
@@ -66,6 +67,26 @@ export default function InfoModal({ open, onClose, onTryPrompt }: Props) {
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-3 sm:py-4">
+
+          {/* Video showcase */}
+          {HERO_VIDEO_URL && (
+            <div className="mb-4">
+              <p className="info-section-label">See it in action</p>
+              <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-default)" }}>
+                <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, background: "var(--surface-secondary)" }}>
+                  <iframe
+                    src={getVideoEmbedUrl(HERO_VIDEO_URL)}
+                    title="Product demo"
+                    allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
+                    allowFullScreen
+                    frameBorder={0}
+                    referrerPolicy="no-referrer-when-downgrade"
+                    style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Tier 1: Primary features — full cards */}
           {primary.length > 0 && (

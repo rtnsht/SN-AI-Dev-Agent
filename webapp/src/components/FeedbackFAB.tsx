@@ -31,6 +31,19 @@ export default function FeedbackFAB() {
   const [status, setStatus] = useState<FormStatus>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  // Hide FAB when mobile virtual keyboard is open
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const threshold = 0.75; // keyboard considered open when viewport shrinks below 75% of window height
+    const onResize = () => {
+      setKeyboardOpen(vv.height < window.innerHeight * threshold);
+    };
+    vv.addEventListener("resize", onResize);
+    return () => vv.removeEventListener("resize", onResize);
+  }, []);
 
   const resetForm = useCallback(() => {
     setType("feedback");
@@ -142,8 +155,8 @@ export default function FeedbackFAB() {
 
   return (
     <>
-      {/* Floating Action Button */}
-      {!isOpen && (
+      {/* Floating Action Button — hidden when mobile keyboard is open */}
+      {!isOpen && !keyboardOpen && (
         <button
           onClick={() => setIsOpen(true)}
           aria-label="Send feedback"
