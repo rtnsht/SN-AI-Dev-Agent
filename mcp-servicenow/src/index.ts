@@ -46,6 +46,7 @@ import * as dashboardReporter from './tools/dashboard-reporter.js';
 import * as multiInstanceManager from './tools/multi-instance-manager.js';
 import * as promotionWorkflow from './tools/promotion-workflow.js';
 import * as scopedApps from './tools/scoped-apps.js';
+import * as servicePortal from './tools/service-portal.js';
 import { ALL_TOOLS } from './tool-definitions.js';
 
 // Load environment variables
@@ -437,6 +438,50 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'sn_create_custom_app':
         result = await scopedApps.createCustomApp(snClient, scopedApps.createCustomAppSchema.parse(args));
+        break;
+
+      // Service Portal tools
+      case 'sn_get_sp_widgets':
+        result = await servicePortal.getSpWidgets(snClient, servicePortal.getSpWidgetsSchema.parse(args));
+        break;
+      case 'sn_create_sp_widget':
+        result = await servicePortal.createSpWidget(snClient, servicePortal.createSpWidgetSchema.parse(args));
+        break;
+      case 'sn_get_sp_pages':
+        result = await servicePortal.getSpPages(snClient, servicePortal.getSpPagesSchema.parse(args));
+        break;
+      case 'sn_create_sp_page':
+        result = await servicePortal.createSpPage(snClient, servicePortal.createSpPageSchema.parse(args));
+        break;
+      case 'sn_get_sp_portals':
+        result = await servicePortal.getSpPortals(snClient, servicePortal.getSpPortalsSchema.parse(args));
+        break;
+      case 'sn_create_sp_portal':
+        result = await servicePortal.createSpPortal(snClient, servicePortal.createSpPortalSchema.parse(args));
+        break;
+      case 'sn_get_sp_themes':
+        result = await servicePortal.getSpThemes(snClient, servicePortal.getSpThemesSchema.parse(args));
+        break;
+      case 'sn_create_sp_theme':
+        result = await servicePortal.createSpTheme(snClient, servicePortal.createSpThemeSchema.parse(args));
+        break;
+      case 'sn_get_sp_css':
+        result = await servicePortal.getSpCss(snClient, servicePortal.getSpCssSchema.parse(args));
+        break;
+      case 'sn_create_sp_css':
+        result = await servicePortal.createSpCss(snClient, servicePortal.createSpCssSchema.parse(args));
+        break;
+      case 'sn_get_sp_angular_providers':
+        result = await servicePortal.getSpAngularProviders(snClient, servicePortal.getSpAngularProvidersSchema.parse(args));
+        break;
+      case 'sn_create_sp_angular_provider':
+        result = await servicePortal.createSpAngularProvider(snClient, servicePortal.createSpAngularProviderSchema.parse(args));
+        break;
+      case 'sn_get_sp_header_footers':
+        result = await servicePortal.getSpHeaderFooters(snClient, servicePortal.getSpHeaderFootersSchema.parse(args));
+        break;
+      case 'sn_create_sp_header_footer':
+        result = await servicePortal.createSpHeaderFooter(snClient, servicePortal.createSpHeaderFooterSchema.parse(args));
         break;
 
       default:

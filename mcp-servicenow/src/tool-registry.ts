@@ -38,6 +38,7 @@ import * as multiInstanceManager from './tools/multi-instance-manager.js';
 import * as promotionWorkflow from './tools/promotion-workflow.js';
 import * as flowDesigner from './tools/flow-designer.js';
 import * as scopedApps from './tools/scoped-apps.js';
+import * as servicePortal from './tools/service-portal.js';
 
 /**
  * Tool handler mapping: tool name -> async function(snClient, args) => result
@@ -215,6 +216,22 @@ const TOOL_HANDLERS: Record<string, (snClient: ServiceNowClient, args: unknown) 
   sn_get_custom_apps: async (c, a) => scopedApps.getCustomApps(c, scopedApps.getCustomAppsSchema.parse(a)),
   sn_get_scope_selection_options: async (c, a) => scopedApps.getScopeSelectionOptions(c, scopedApps.getScopeSelectionOptionsSchema.parse(a)),
   sn_create_custom_app: async (c, a) => scopedApps.createCustomApp(c, scopedApps.createCustomAppSchema.parse(a)),
+
+  // Service Portal
+  sn_get_sp_widgets: async (c, a) => servicePortal.getSpWidgets(c, servicePortal.getSpWidgetsSchema.parse(a)),
+  sn_create_sp_widget: async (c, a) => servicePortal.createSpWidget(c, servicePortal.createSpWidgetSchema.parse(a)),
+  sn_get_sp_pages: async (c, a) => servicePortal.getSpPages(c, servicePortal.getSpPagesSchema.parse(a)),
+  sn_create_sp_page: async (c, a) => servicePortal.createSpPage(c, servicePortal.createSpPageSchema.parse(a)),
+  sn_get_sp_portals: async (c, a) => servicePortal.getSpPortals(c, servicePortal.getSpPortalsSchema.parse(a)),
+  sn_create_sp_portal: async (c, a) => servicePortal.createSpPortal(c, servicePortal.createSpPortalSchema.parse(a)),
+  sn_get_sp_themes: async (c, a) => servicePortal.getSpThemes(c, servicePortal.getSpThemesSchema.parse(a)),
+  sn_create_sp_theme: async (c, a) => servicePortal.createSpTheme(c, servicePortal.createSpThemeSchema.parse(a)),
+  sn_get_sp_css: async (c, a) => servicePortal.getSpCss(c, servicePortal.getSpCssSchema.parse(a)),
+  sn_create_sp_css: async (c, a) => servicePortal.createSpCss(c, servicePortal.createSpCssSchema.parse(a)),
+  sn_get_sp_angular_providers: async (c, a) => servicePortal.getSpAngularProviders(c, servicePortal.getSpAngularProvidersSchema.parse(a)),
+  sn_create_sp_angular_provider: async (c, a) => servicePortal.createSpAngularProvider(c, servicePortal.createSpAngularProviderSchema.parse(a)),
+  sn_get_sp_header_footers: async (c, a) => servicePortal.getSpHeaderFooters(c, servicePortal.getSpHeaderFootersSchema.parse(a)),
+  sn_create_sp_header_footer: async (c, a) => servicePortal.createSpHeaderFooter(c, servicePortal.createSpHeaderFooterSchema.parse(a)),
 };
 
 /**

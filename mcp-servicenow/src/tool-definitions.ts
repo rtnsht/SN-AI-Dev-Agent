@@ -1936,7 +1936,210 @@ export const SCOPED_APP_TOOLS: ToolDefinition[] = [
   }
 ];
 
-export const ALL_TOOLS = [...TOOLS, ...MORE_TOOLS, ...ADDITIONAL_TOOLS, ...BROWNFIELD_TOOLS, ...FLOW_DESIGNER_TOOLS, ...SCOPED_APP_TOOLS];
+export const SERVICE_PORTAL_TOOLS: ToolDefinition[] = [
+  // SP Widget tools
+  {
+    name: 'sn_get_sp_widgets',
+    description: 'Get Service Portal widgets. Use to discover existing widgets before creating new ones.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Encoded query filter (e.g., "nameLIKEdashboard")' },
+        limit: { type: 'number', default: 50 }
+      }
+    }
+  },
+  {
+    name: 'sn_create_sp_widget',
+    description: 'Create a Service Portal widget with HTML template, CSS, client script, and server script.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Display name of the widget' },
+        id: { type: 'string', description: 'Unique widget ID (lowercase-hyphenated, e.g., "my-custom-widget")' },
+        template: { type: 'string', description: 'HTML/Angular template body' },
+        css: { type: 'string', description: 'SCSS/CSS styles' },
+        client_script: { type: 'string', description: 'Client-side controller JavaScript' },
+        script: { type: 'string', description: 'Server-side script (data object population)' },
+        link: { type: 'string', description: 'Angular link function' },
+        description: { type: 'string', description: 'Widget description' },
+        data_table: { type: 'string', description: 'Data table reference for the widget' },
+        demo_data: { type: 'string', description: 'JSON demo/sample data' },
+        option_schema: { type: 'string', description: 'JSON schema defining widget instance options' },
+        has_preview: { type: 'boolean', description: 'Whether the widget has a preview (default: false)' },
+        controller_as: { type: 'string', description: 'Angular controller alias (default: "c")' }
+      },
+      required: ['name', 'id']
+    }
+  },
+  // SP Page tools
+  {
+    name: 'sn_get_sp_pages',
+    description: 'Get Service Portal pages.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Encoded query filter (e.g., "titleLIKEhome")' },
+        limit: { type: 'number', default: 50 }
+      }
+    }
+  },
+  {
+    name: 'sn_create_sp_page',
+    description: 'Create a Service Portal page (container for widget instances).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Unique page ID (lowercase-hyphenated, e.g., "my-custom-page")' },
+        title: { type: 'string', description: 'Page title' },
+        description: { type: 'string', description: 'Page description' },
+        category: { type: 'string', description: 'Page category' },
+        internal: { type: 'boolean', description: 'Whether the page is internal-only (default: false)' },
+        public: { type: 'boolean', description: 'Whether the page is publicly accessible (default: false)' },
+        draft: { type: 'boolean', description: 'Whether the page is a draft (default: false)' },
+        omit_watcher: { type: 'boolean', description: 'Omit Angular watchers for performance (default: false)' }
+      },
+      required: ['id', 'title']
+    }
+  },
+  // SP Portal tools
+  {
+    name: 'sn_get_sp_portals',
+    description: 'Get Service Portal portals.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Encoded query filter' },
+        limit: { type: 'number', default: 20 }
+      }
+    }
+  },
+  {
+    name: 'sn_create_sp_portal',
+    description: 'Create a Service Portal portal (top-level config with URL suffix, theme, homepage).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Portal title' },
+        url_suffix: { type: 'string', description: 'URL suffix (e.g., "myportal")' },
+        homepage: { type: 'string', description: 'sys_id of the homepage sp_page' },
+        theme: { type: 'string', description: 'sys_id of the sp_theme' },
+        logo: { type: 'string', description: 'Logo URL or sys_attachment reference' },
+        css: { type: 'string', description: 'Portal-level custom CSS' },
+        quick_start_config: { type: 'string', description: 'Quick start configuration JSON' },
+        default_: { type: 'boolean', description: 'Set as default portal (default: false)' },
+        enable_favorites: { type: 'boolean', description: 'Enable favorites feature (default: true)' }
+      },
+      required: ['title', 'url_suffix']
+    }
+  },
+  // SP Theme tools
+  {
+    name: 'sn_get_sp_themes',
+    description: 'Get Service Portal themes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Encoded query filter' },
+        limit: { type: 'number', default: 20 }
+      }
+    }
+  },
+  {
+    name: 'sn_create_sp_theme',
+    description: 'Create a Service Portal theme (CSS variables, header/footer references).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Theme name' },
+        css_variables: { type: 'string', description: 'CSS variable overrides (SCSS format)' },
+        header: { type: 'string', description: 'sys_id of the sp_header_footer for the header' },
+        footer: { type: 'string', description: 'sys_id of the sp_header_footer for the footer' },
+        navbar_fixed: { type: 'boolean', description: 'Whether the navbar is fixed at the top (default: true)' }
+      },
+      required: ['name']
+    }
+  },
+  // SP CSS tools
+  {
+    name: 'sn_get_sp_css',
+    description: 'Get Service Portal CSS includes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Encoded query filter' },
+        limit: { type: 'number', default: 50 }
+      }
+    }
+  },
+  {
+    name: 'sn_create_sp_css',
+    description: 'Create a Service Portal CSS include (shared stylesheet).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'CSS include name' },
+        css: { type: 'string', description: 'CSS/SCSS content' }
+      },
+      required: ['name', 'css']
+    }
+  },
+  // SP Angular Provider tools
+  {
+    name: 'sn_get_sp_angular_providers',
+    description: 'Get Service Portal Angular providers (services, factories, directives, filters).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Encoded query filter' },
+        limit: { type: 'number', default: 50 }
+      }
+    }
+  },
+  {
+    name: 'sn_create_sp_angular_provider',
+    description: 'Create a Service Portal Angular provider (service, factory, directive, or filter).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Provider name (camelCase)' },
+        type: { type: 'string', enum: ['factory', 'service', 'directive', 'filter', 'provider'], description: 'Angular provider type' },
+        script: { type: 'string', description: 'Provider script body' }
+      },
+      required: ['name', 'type', 'script']
+    }
+  },
+  // SP Header/Footer tools
+  {
+    name: 'sn_get_sp_header_footers',
+    description: 'Get Service Portal header/footer widgets.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Encoded query filter' },
+        limit: { type: 'number', default: 20 }
+      }
+    }
+  },
+  {
+    name: 'sn_create_sp_header_footer',
+    description: 'Create a Service Portal header or footer (template, CSS, client/server scripts).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Header/footer name' },
+        template: { type: 'string', description: 'HTML/Angular template' },
+        css: { type: 'string', description: 'CSS/SCSS styles' },
+        client_script: { type: 'string', description: 'Client-side controller JavaScript' },
+        script: { type: 'string', description: 'Server-side script' },
+        link: { type: 'string', description: 'Angular link function' }
+      },
+      required: ['name']
+    }
+  }
+];
+
+export const ALL_TOOLS = [...TOOLS, ...MORE_TOOLS, ...ADDITIONAL_TOOLS, ...BROWNFIELD_TOOLS, ...FLOW_DESIGNER_TOOLS, ...SCOPED_APP_TOOLS, ...SERVICE_PORTAL_TOOLS];
 
 /**
  * Convert tool definitions to Anthropic Messages API format.
@@ -2016,6 +2219,9 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
     // Flow read
     'sn_list_flows', 'sn_get_flow', 'sn_analyze_flow',
     'sn_list_subflows', 'sn_list_custom_actions',
+    // Service Portal read
+    'sn_get_sp_widgets', 'sn_get_sp_pages', 'sn_get_sp_portals', 'sn_get_sp_themes',
+    'sn_get_sp_css', 'sn_get_sp_angular_providers', 'sn_get_sp_header_footers',
     // Scope read
     'sn_get_custom_apps', 'sn_get_scope_selection_options',
   ]),
@@ -2044,6 +2250,9 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
     'sn_generate_report', 'sn_get_dashboard_data',
     'sn_list_flows', 'sn_get_flow', 'sn_analyze_flow',
     'sn_list_subflows', 'sn_list_custom_actions',
+    // Service Portal read
+    'sn_get_sp_widgets', 'sn_get_sp_pages', 'sn_get_sp_portals', 'sn_get_sp_themes',
+    'sn_get_sp_css', 'sn_get_sp_angular_providers', 'sn_get_sp_header_footers',
     'sn_get_custom_apps', 'sn_get_scope_selection_options',
     // Design-specific: conflict prediction, best practices, templates
     'sn_predict_conflicts', 'sn_compare_instances',
@@ -2080,6 +2289,14 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
     'sn_list_flow_variables', 'sn_create_flow_variable', 'sn_list_action_inputs', 'sn_create_action_input',
     'sn_export_flow_as_template', 'sn_list_flow_templates', 'sn_create_flow_from_template',
     'sn_execute_flow', 'sn_get_flow_execution_status', 'sn_list_flow_executions',
+    // Service Portal
+    'sn_get_sp_widgets', 'sn_create_sp_widget',
+    'sn_get_sp_pages', 'sn_create_sp_page',
+    'sn_get_sp_portals', 'sn_create_sp_portal',
+    'sn_get_sp_themes', 'sn_create_sp_theme',
+    'sn_get_sp_css', 'sn_create_sp_css',
+    'sn_get_sp_angular_providers', 'sn_create_sp_angular_provider',
+    'sn_get_sp_header_footers', 'sn_create_sp_header_footer',
     // Scope management
     'sn_get_custom_apps', 'sn_get_scope_selection_options', 'sn_create_custom_app',
     // Best practices & templates for implementation guidance
@@ -2093,6 +2310,9 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
     'sn_get_ui_policies', 'sn_get_ui_policy_actions', 'sn_get_ui_actions',
     'sn_get_acls',
     'sn_get_catalog_items', 'sn_get_catalog_item', 'sn_get_catalog_variables',
+    // Service Portal read (verification)
+    'sn_get_sp_widgets', 'sn_get_sp_pages', 'sn_get_sp_portals', 'sn_get_sp_themes',
+    'sn_get_sp_css', 'sn_get_sp_angular_providers', 'sn_get_sp_header_footers',
     // Code quality & validation
     'sn_find_anti_patterns', 'sn_code_quality_score',
     'sn_preview_change_impact', 'sn_detect_conflicts', 'sn_validate_change',
