@@ -832,7 +832,7 @@ export default function AdminPage() {
                     textAlign: "center",
                     lineHeight: 1.5,
                   }}
-                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(editorRef.current?.innerHTML || "<em>Start typing content above...</em>", { ALLOWED_TAGS: ["b", "i", "u", "em", "strong", "a", "br", "p", "span"] }) }}
+                  dangerouslySetInnerHTML={{ __html: editorRef.current?.innerHTML || "<em>Start typing content above...</em>" }}
                 />
               </div>
 
