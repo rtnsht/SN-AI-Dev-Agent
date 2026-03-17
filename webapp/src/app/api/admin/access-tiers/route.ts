@@ -15,11 +15,18 @@ export async function GET() {
       .select("*")
       .single();
 
-    // Get today's authenticated usage (from request_log)
     const today = new Date().toISOString().split("T")[0];
+
+    // Authenticated usage (from request_log)
     const { data: usageData } = await db
       .from("request_log")
       .select("user_id, request_date, request_count")
+      .eq("request_date", today);
+
+    // Anonymous usage (from anon_request_log)
+    const { data: anonData } = await db
+      .from("anon_request_log")
+      .select("ip_address, instance_url, request_date, request_count")
       .eq("request_date", today);
 
     // Get users for enrichment
@@ -34,9 +41,16 @@ export async function GET() {
       requestCount: row.request_count || 0,
     }));
 
+    const todayAnonUsage = (anonData || []).map((row) => ({
+      ipAddress: row.ip_address,
+      instanceUrl: row.instance_url,
+      requestCount: row.request_count || 0,
+    }));
+
     return NextResponse.json({
       config: config || { anon_daily_limit: 10, auth_daily_limit: 20 },
       todayUsage,
+      todayAnonUsage,
     });
   } catch (err) {
     console.error("[admin/access-tiers] GET error:", err);

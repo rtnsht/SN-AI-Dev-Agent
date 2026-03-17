@@ -24,7 +24,8 @@ export async function GET(request: NextRequest) {
       .select(
         "id, session_id, user_id, instance_url, username, user_full_name, ai_provider, model, " +
         "current_phase, started_at, ended_at, total_rounds, total_tool_calls, total_errors, " +
-        "total_input_tokens, total_output_tokens, phases, status, entries_overflow, created_at",
+        "total_input_tokens, total_output_tokens, phases, status, entries_overflow, " +
+        "ip_address, telemetry_summary, created_at",
         { count: "exact" }
       )
       .order("started_at", { ascending: false })

@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SN AI Agent — Supabase Data Flow</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0f;
+  --surface: #12121a;
+  --surface2: #1a1a26;
+  --border: #2a2a3a;
+  --text: #e8e8f0;
+  --text-dim: #8888a0;
+  --blue: #4a9eff;
+  --blue-bg: rgba(74,158,255,0.08);
+  --green: #34d399;
+  --green-bg: rgba(52,211,153,0.08);
+  --orange: #fb923c;
+  --orange-bg: rgba(251,146,60,0.08);
+  --purple: #a78bfa;
+  --purple-bg: rgba(167,139,250,0.08);
+  --red: #f87171;
+  --red-bg: rgba(248,113,113,0.08);
+  --teal: #2dd4bf;
+  --teal-bg: rgba(45,212,191,0.08);
+  --pink: #f472b6;
+  --pink-bg: rgba(244,114,182,0.08);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  overflow-x: hidden;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 40px 24px;
+}
+
+h1 {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin-bottom: 6px;
+}
+
+.subtitle {
+  color: var(--text-dim);
+  font-size: 14px;
+  margin-bottom: 32px;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 28px;
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 4px;
+  width: fit-content;
+  border: 1px solid var(--border);
+}
+
+.tab {
+  padding: 8px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-dim);
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.tab:hover { color: var(--text); }
+.tab.active {
+  background: var(--blue);
+  color: #fff;
+}
+
+.view { display: none; }
+.view.active { display: block; }
+
+/* —— RELATIONSHIP DIAGRAM —— */
+.diagram {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px;
+  min-height: 740px;
+  overflow: visible;
+}
+
+.group-label {
+  position: absolute;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.table-node {
+  position: absolute;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  min-width: 150px;
+  cursor: default;
+  transition: all 0.25s;
+  z-index: 2;
+}
+
+.table-node:hover {
+  border-color: var(--blue);
+  box-shadow: 0 0 24px rgba(74,158,255,0.15);
+  transform: translateY(-2px);
+  z-index: 10;
+}
+
+.table-node .name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.table-node .desc {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.table-node .badge {
+  display: inline-block;
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-top: 6px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.badge-auth { background: var(--blue-bg); color: var(--blue); }
+.badge-access { background: var(--green-bg); color: var(--green); }
+.badge-log { background: var(--orange-bg); color: var(--orange); }
+.badge-admin { background: var(--purple-bg); color: var(--purple); }
+.badge-trial { background: var(--teal-bg); color: var(--teal); }
+.badge-feedback { background: var(--pink-bg); color: var(--pink); }
+
+svg.lines {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+svg.lines path {
+  fill: none;
+  stroke-width: 1.8;
+  opacity: 0.25;
+  transition: opacity 0.2s;
+}
+
+/* —— TIMELINE VIEW —— */
+.timeline {
+  position: relative;
+  padding-left: 32px;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 12px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to bottom, var(--blue), var(--green), var(--orange), var(--pink), var(--purple));
+  border-radius: 2px;
+}
+
+.tl-item {
+  position: relative;
+  margin-bottom: 20px;
+  padding: 16px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: border-color 0.2s;
+}
+
+.tl-item:hover {
+  border-color: var(--blue);
+}
+
+.tl-item::before {
+  content: '';
+  position: absolute;
+  left: -26px;
+  top: 20px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--blue);
+  background: var(--bg);
+}
+
+.tl-item .phase {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+
+.tl-item .action {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.tl-item .tables-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.phase-auth { color: var(--blue); }
+.phase-connect { color: var(--green); }
+.phase-chat { color: var(--orange); }
+.phase-admin { color: var(--purple); }
+.phase-feedback { color: var(--pink); }
+
+/* —— DATA FLOW VIEW —— */
+.flow-section {
+  margin-bottom: 28px;
+}
+
+.flow-section h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.flow-section h3 .dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.flow-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 12px;
+}
+
+.flow-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  transition: border-color 0.2s;
+}
+
+.flow-card:hover {
+  border-color: var(--blue);
+}
+
+.flow-card .trigger {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.flow-card .route {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.flow-card .arrow-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.flow-card .arrow-row .arrow {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-weight: 500;
+}
+
+.chip-read { background: var(--green-bg); color: var(--green); }
+.chip-write { background: var(--orange-bg); color: var(--orange); }
+.chip-delete { background: var(--red-bg); color: var(--red); }
+
+/* —— TABLE DETAIL VIEW —— */
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 16px;
+}
+
+.detail-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  transition: border-color 0.2s;
+}
+
+.detail-card:hover {
+  border-color: var(--blue);
+}
+
+.detail-card .header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.detail-card .header .name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.detail-card .stat-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.stat .n { font-weight: 600; color: var(--text); }
+
+.detail-card .files {
+  font-size: 11px;
+  line-height: 1.9;
+  color: var(--text-dim);
+}
+
+.detail-card .files span {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text);
+  background: var(--surface2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-right: 4px;
+  display: inline-block;
+  margin-bottom: 2px;
+}
+
+/* legend */
+.legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.legend-item {
+  display: flex; align-items: center; gap: 5px;
+}
+.legend-swatch {
+  width: 12px; height: 3px; border-radius: 2px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Supabase Data Flow Map</h1>
+  <p class="subtitle">14 tables &middot; SN AI Agent &middot; How data flows from user actions to database</p>
+
+  <div class="tabs">
+    <div class="tab active" data-view="relationships">Relationships</div>
+    <div class="tab" data-view="timeline">User Journey Timeline</div>
+    <div class="tab" data-view="dataflow">Data Flow by Action</div>
+    <div class="tab" data-view="details">Table Details</div>
+  </div>
+
+  <!-- ═══ VIEW 1: RELATIONSHIP DIAGRAM ═══ -->
+  <div class="view active" id="relationships">
+    <div class="legend">
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--blue)"></div> FK line to users</div>
+      <div class="legend-item"><span class="badge badge-auth">AUTH</span></div>
+      <div class="legend-item"><span class="badge badge-access">ACCESS</span></div>
+      <div class="legend-item"><span class="badge badge-trial">TRIAL</span></div>
+      <div class="legend-item"><span class="badge badge-log">LOG</span></div>
+      <div class="legend-item"><span class="badge badge-admin">ADMIN</span></div>
+      <div class="legend-item"><span class="badge badge-feedback">FEEDBACK</span></div>
+    </div>
+    <div class="diagram" id="rel-diagram" style="height:740px;">
+      <svg class="lines" id="rel-lines"></svg>
+
+      <div class="group-label" style="top:12px;left:40px;color:var(--blue)">AUTHENTICATION</div>
+      <div class="table-node" id="n-users" style="top:44px;left:40px;">
+        <div class="name" style="color:var(--blue)">users</div>
+        <div class="desc">Central user table. FK parent for 8 tables.</div>
+        <span class="badge badge-auth">AUTH CORE</span>
+      </div>
+      <div class="table-node" id="n-sessions" style="top:44px;left:300px;">
+        <div class="name" style="color:var(--blue)">sessions</div>
+        <div class="desc">Active login sessions (JWT tokens).</div>
+        <span class="badge badge-auth">AUTH</span>
+      </div>
+      <div class="table-node" id="n-auth_tokens" style="top:44px;left:540px;">
+        <div class="name" style="color:var(--blue)">auth_tokens</div>
+        <div class="desc">Magic links, OTPs, password resets.</div>
+        <span class="badge badge-auth">AUTH</span>
+      </div>
+
+      <div class="group-label" style="top:175px;left:40px;color:var(--green)">ACCESS CONTROL</div>
+      <div class="table-node" id="n-access_requests" style="top:205px;left:40px;">
+        <div class="name" style="color:var(--green)">access_requests</div>
+        <div class="desc">User signup requests pending approval.</div>
+        <span class="badge badge-access">ACCESS</span>
+      </div>
+      <div class="table-node" id="n-invite_codes" style="top:205px;left:320px;">
+        <div class="name" style="color:var(--green)">invite_codes</div>
+        <div class="desc">Admin-created invite codes.</div>
+        <span class="badge badge-access">ACCESS</span>
+      </div>
+      <div class="table-node" id="n-access_tier_config" style="top:205px;left:580px;">
+        <div class="name" style="color:var(--green)">access_tier_config</div>
+        <div class="desc">Daily request limits (anon & auth).</div>
+        <span class="badge badge-access">ACCESS</span>
+      </div>
+
+      <div class="group-label" style="top:340px;left:40px;color:var(--teal)">TRIAL SYSTEM</div>
+      <div class="table-node" id="n-trial_config" style="top:370px;left:40px;">
+        <div class="name" style="color:var(--teal)">trial_config</div>
+        <div class="desc">Trial duration & limits (global/user/instance).</div>
+        <span class="badge badge-trial">TRIAL</span>
+      </div>
+      <div class="table-node" id="n-trial_start" style="top:370px;left:340px;">
+        <div class="name" style="color:var(--teal)">trial_start</div>
+        <div class="desc">Records when each user's trial began.</div>
+        <span class="badge badge-trial">TRIAL</span>
+      </div>
+
+      <div class="group-label" style="top:485px;left:40px;color:var(--orange)">REQUEST LOGGING</div>
+      <div class="table-node" id="n-request_log" style="top:515px;left:40px;">
+        <div class="name" style="color:var(--orange)">request_log</div>
+        <div class="desc">Daily per-user chat request counter.</div>
+        <span class="badge badge-log">LOG</span>
+      </div>
+      <div class="table-node" id="n-anon_request_log" style="top:515px;left:320px;">
+        <div class="name" style="color:var(--orange)">anon_request_log</div>
+        <div class="desc">Daily per-IP anonymous request counter.</div>
+        <span class="badge badge-log">LOG</span>
+      </div>
+      <div class="table-node" id="n-session_logs" style="top:515px;left:610px;">
+        <div class="name" style="color:var(--orange)">session_logs</div>
+        <div class="desc">AI session telemetry (rounds, tokens).</div>
+        <span class="badge badge-log">LOG</span>
+      </div>
+
+      <div class="group-label" style="top:640px;left:40px;color:var(--purple)">ADMIN / MISC</div>
+      <div class="table-node" id="n-banners" style="top:665px;left:40px;">
+        <div class="name" style="color:var(--purple)">banners</div>
+        <div class="desc">Admin announcement banners.</div>
+        <span class="badge badge-admin">ADMIN</span>
+      </div>
+      <div class="table-node" id="n-user_instances" style="top:665px;left:300px;">
+        <div class="name" style="color:var(--purple)">user_instances</div>
+        <div class="desc">ServiceNow instances connected by users.</div>
+        <span class="badge badge-admin">INSTANCE</span>
+      </div>
+      <div class="table-node" id="n-feedback_reports" style="top:665px;left:570px;">
+        <div class="name" style="color:var(--pink)">feedback_reports</div>
+        <div class="desc">User feedback and bug reports.</div>
+        <span class="badge badge-feedback">FEEDBACK</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ VIEW 2: TIMELINE ═══ -->
+  <div class="view" id="timeline">
+    <div class="timeline">
+      <div class="tl-item">
+        <div class="phase phase-auth">Phase 1 — Registration & Auth</div>
+        <div class="action">User requests access</div>
+        <div class="tables-list">
+          <span class="chip chip-read">R users</span>
+          <span class="chip chip-read">R access_requests</span>
+          <span class="chip chip-write">W access_requests</span>
+          <span class="chip chip-write">W auth_tokens</span>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="phase phase-auth">Phase 1 — Registration & Auth</div>
+        <div class="action">User verifies OTP / email</div>
+        <div class="tables-list">
+          <span class="chip chip-read">R auth_tokens</span>
+          <span class="chip chip-read">R access_requests</span>
+          <span class="chip chip-write">W auth_tokens</span>
+          <span class="chip chip-write">W access_requests</span>
+          <span class="chip chip-write">W users</span>
+          <span class="chip chip-write">W sessions</span>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="phase phase-auth">Phase 1 — Registration & Auth</div>
+        <div class="action">User registers via invite code</div>
+        <div class="tables-list">
+          <span class="chip chip-read">R invite_codes</span>
+          <span class="chip chip-read">R users</span>
+          <span class="chip chip-write">W users</span>
+          <span class="chip chip-write">W invite_codes</span>
+          <span class="chip chip-write">W sessions</span>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="phase phase-auth">Phase 1 — Registration & Auth</div>
+        <div class="action">User logs in (password or magic link)</div>
+        <div class="tables-list">
+          <span class="chip chip-read">R users</span>
+          <span class="chip chip-read">R auth_tokens</span>
+          <span class="chip chip-write">W users</span>
+          <span class="chip chip-write">W sessions</span>
+          <span class="chip chip-write">W auth_tokens</span>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="phase phase-auth">Phase 1 — Registration & Auth</div>
+        <div class="action">User sets / resets password</div>
+        <div class="tables-list">
+          <span class="chip chip-read">R sessions</span>
+          <span class="chip chip-read">R users</span>
+          <span class="chip chip-write">W users</span>
+          <span class="chip chip-write">W sessions</span>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="phase phase-connect">Phase 2 — Connect to ServiceNow</div>
+        <div class="action">User clicks "Connect"</div>
+        <div class="tables-list">
+          <span class="chip chip-read">R sessions</span>
+          <span class="chip chip-read">R users</span>
+          <span class="chip chip-write">W user_instances</span>
+          <span class="chip chip-write">W session_logs</span>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="phase phase-connect">Phase 2 — App Load</div>
+        <div class="action">App loads config, banners, trial status</div>
+        <div class="tables-list">
+          <span class="chip chip-read">R access_tier_config</span>
+          <span class="chip chip-read">R anon_request_log</span>
+          <span class="chip chip-read">R request_log</span>
+          <span class="chip chip-read">R banners</span>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="phase phase-chat">Phase 3 — Chat / AI Interaction</div>
+        <div class="action">User sends a chat message</div>
+        <div class="tables-list">
+          <span class="chip chip-read">R access_tier_config</span>
+          <span class="chip chip-read">R request_log</span>
+          <span class="chip chip-read">R anon_request_log</span>
+          <span class="chip chip-write">W request_log</span>
+          <span class="chip chip-write">W anon_request_log</span>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="phase phase-chat">Phase 3 — Trial Check (background)</div>
+        <div class="action">Trial limiter checks & records usage</div>
+        <div class="tables-list">
+          <span class="chip chip-read">R trial_config</span>
+          <span class="chip chip-read">R trial_start</span>
+          <span class="chip chip-read">R request_log</span>
+          <span class="chip chip-write">W trial_start</span>
+          <span class="chip chip-write">W request_log</span>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="phase phase-feedback">Phase 4 — Feedback</div>
+        <div class="action">User submits feedback or bug report</div>
+        <div class="tables-list">
+          <span class="chip chip-read">R users</span>
+          <span class="chip chip-write">W feedback_reports</span>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="phase phase-auth">Phase 5 — Logout</div>
+        <div class="action">User logs out</div>
+        <div class="tables-list">
+          <span class="chip chip-read">R sessions</span>
+          <span class="chip chip-delete">D sessions</span>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="phase phase-admin">Admin — User Management</div>
+        <div class="action">Admin reviews requests, manages users</div>
+        <div class="tables-list">
+          <span class="chip chip-read">R access_requests</span>
+          <span class="chip chip-read">R users</span>
+          <span class="chip chip-write">W access_requests</span>
+          <span class="chip chip-write">W users</span>
+          <span class="chip chip-write">W auth_tokens</span>
+          <span class="chip chip-delete">D sessions</span>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="phase phase-admin">Admin — Configuration</div>
+        <div class="action">Admin manages banners, invite codes, trials, tiers</div>
+        <div class="tables-list">
+          <span class="chip chip-read">R banners</span>
+          <span class="chip chip-read">R invite_codes</span>
+          <span class="chip chip-read">R trial_config</span>
+          <span class="chip chip-read">R access_tier_config</span>
+          <span class="chip chip-write">W banners</span>
+          <span class="chip chip-write">W invite_codes</span>
+          <span class="chip chip-write">W trial_config</span>
+          <span class="chip chip-write">W access_tier_config</span>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="phase phase-admin">Admin — Monitoring</div>
+        <div class="action">Admin views session logs, instances, usage</div>
+        <div class="tables-list">
+          <span class="chip chip-read">R session_logs</span>
+          <span class="chip chip-read">R user_instances</span>
+          <span class="chip chip-read">R request_log</span>
+          <span class="chip chip-read">R trial_start</span>
+          <span class="chip chip-delete">D session_logs</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ VIEW 3: DATA FLOW BY ACTION ═══ -->
+  <div class="view" id="dataflow">
+    <div class="flow-section">
+      <h3><span class="dot" style="background:var(--blue)"></span> Authentication Flows</h3>
+      <div class="flow-grid">
+        <div class="flow-card">
+          <div class="trigger">Request Access</div>
+          <div class="route">POST /api/auth/request-access</div>
+          <div class="arrow-row">
+            <span class="chip chip-read">users</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">access_requests</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">auth_tokens</span>
+          </div>
+        </div>
+        <div class="flow-card">
+          <div class="trigger">Verify OTP</div>
+          <div class="route">POST /api/auth/verify-otp</div>
+          <div class="arrow-row">
+            <span class="chip chip-read">auth_tokens</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">access_requests</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">users</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">sessions</span>
+          </div>
+        </div>
+        <div class="flow-card">
+          <div class="trigger">Login (password)</div>
+          <div class="route">POST /api/auth/login</div>
+          <div class="arrow-row">
+            <span class="chip chip-read">users</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">users</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">sessions</span>
+          </div>
+        </div>
+        <div class="flow-card">
+          <div class="trigger">Magic Link Login</div>
+          <div class="route">POST /api/auth/verify-magic-link</div>
+          <div class="arrow-row">
+            <span class="chip chip-read">auth_tokens</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">auth_tokens</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">users</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">sessions</span>
+          </div>
+        </div>
+        <div class="flow-card">
+          <div class="trigger">Register via Invite</div>
+          <div class="route">POST /api/auth/register-invite</div>
+          <div class="arrow-row">
+            <span class="chip chip-read">invite_codes</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">users</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">invite_codes</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">sessions</span>
+          </div>
+        </div>
+        <div class="flow-card">
+          <div class="trigger">Forgot Password</div>
+          <div class="route">POST /api/auth/forgot-password</div>
+          <div class="arrow-row">
+            <span class="chip chip-read">users</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">auth_tokens</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-section">
+      <h3><span class="dot" style="background:var(--green)"></span> App Usage Flows</h3>
+      <div class="flow-grid">
+        <div class="flow-card">
+          <div class="trigger">Connect to ServiceNow</div>
+          <div class="route">POST /api/session-start</div>
+          <div class="arrow-row">
+            <span class="chip chip-read">sessions</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">user_instances</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">session_logs</span>
+          </div>
+        </div>
+        <div class="flow-card">
+          <div class="trigger">Send Chat Message (authenticated)</div>
+          <div class="route">POST /api/chat or /api/chat-stream</div>
+          <div class="arrow-row">
+            <span class="chip chip-read">access_tier_config</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-read">request_log</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">request_log</span>
+          </div>
+        </div>
+        <div class="flow-card">
+          <div class="trigger">Send Chat Message (anonymous)</div>
+          <div class="route">POST /api/chat or /api/chat-stream</div>
+          <div class="arrow-row">
+            <span class="chip chip-read">access_tier_config</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-read">anon_request_log</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">anon_request_log</span>
+          </div>
+        </div>
+        <div class="flow-card">
+          <div class="trigger">Submit Feedback</div>
+          <div class="route">POST /api/feedback</div>
+          <div class="arrow-row">
+            <span class="chip chip-read">users</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">feedback_reports</span>
+          </div>
+        </div>
+        <div class="flow-card">
+          <div class="trigger">Logout</div>
+          <div class="route">POST /api/auth/logout</div>
+          <div class="arrow-row">
+            <span class="chip chip-delete">sessions</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-section">
+      <h3><span class="dot" style="background:var(--purple)"></span> Admin Flows</h3>
+      <div class="flow-grid">
+        <div class="flow-card">
+          <div class="trigger">Approve Access Request</div>
+          <div class="route">PATCH /api/admin/requests/[id]</div>
+          <div class="arrow-row">
+            <span class="chip chip-read">access_requests</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">access_requests</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">users</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">auth_tokens</span>
+          </div>
+        </div>
+        <div class="flow-card">
+          <div class="trigger">Suspend User</div>
+          <div class="route">PATCH /api/admin/users/[id]</div>
+          <div class="arrow-row">
+            <span class="chip chip-write">users</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-delete">sessions</span>
+          </div>
+        </div>
+        <div class="flow-card">
+          <div class="trigger">Manage Banners</div>
+          <div class="route">/api/admin/banners</div>
+          <div class="arrow-row">
+            <span class="chip chip-read">banners</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">banners</span>
+          </div>
+        </div>
+        <div class="flow-card">
+          <div class="trigger">Configure Trials / Tiers</div>
+          <div class="route">/api/admin/trials & /api/admin/access-tiers</div>
+          <div class="arrow-row">
+            <span class="chip chip-read">trial_config</span>
+            <span class="chip chip-read">access_tier_config</span><span class="arrow">&rarr;</span>
+            <span class="chip chip-write">trial_config</span>
+            <span class="chip chip-write">access_tier_config</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ VIEW 4: TABLE DETAILS ═══ -->
+  <div class="view" id="details">
+    <div class="detail-grid" id="detail-cards"></div>
+  </div>
+</div>
+
+<script>
+const tables = [
+  { name:'users', group:'Auth', color:'var(--blue)', inserts:4, selects:18, updates:5, deletes:0, fks:'Parent of sessions, auth_tokens, invite_codes, banners, request_log, trial_start, user_instances, session_logs', writers:['auth/verify-otp','auth/register-invite','auth/login','auth/verify-magic-link','auth/set-password','admin/requests/[id]','admin/users/[id]','middleware (seedAdmin)'], readers:['auth/login','auth/check-email','auth/request-access','auth/verify-otp','auth/forgot-password','auth/verify-magic-link','admin/users','admin/requests/[id]','admin/trials','admin/access-tiers','middleware'] },
+  { name:'sessions', group:'Auth', color:'var(--blue)', inserts:1, selects:1, updates:1, deletes:2, fks:'FK → users(id) CASCADE', writers:['auth/login','auth/verify-otp','auth/verify-magic-link','auth/register-invite','auth/set-password'], readers:['lib/auth.ts (validateSession)','middleware'] },
+  { name:'auth_tokens', group:'Auth', color:'var(--blue)', inserts:2, selects:2, updates:3, deletes:0, fks:'FK → users(id) CASCADE', writers:['auth/request-access','auth/verify-otp','auth/forgot-password','admin/requests/[id]'], readers:['lib/auth.ts (consumeAuthToken)','lib/auth.ts (consumeOTPToken)'] },
+  { name:'access_requests', group:'Access', color:'var(--green)', inserts:1, selects:5, updates:4, deletes:0, fks:'None (standalone)', writers:['auth/request-access','auth/verify-otp','auth/verify-email','admin/requests/[id]'], readers:['auth/request-access','auth/verify-otp','auth/verify-email','admin/requests','admin/requests/[id]'] },
+  { name:'invite_codes', group:'Access', color:'var(--green)', inserts:1, selects:3, updates:2, deletes:0, fks:'FK → users(id) via created_by', writers:['auth/register-invite','admin/invite-codes','admin/invite-codes/[id]'], readers:['auth/validate-invite','auth/register-invite','admin/invite-codes'] },
+  { name:'access_tier_config', group:'Access', color:'var(--green)', inserts:1, selects:2, updates:1, deletes:0, fks:'None (singleton config)', writers:['admin/access-tiers'], readers:['lib/access-tier.ts','admin/access-tiers','chat','chat-stream','config'] },
+  { name:'trial_config', group:'Trial', color:'var(--teal)', inserts:2, selects:2, updates:2, deletes:1, fks:'None (scoped config)', writers:['admin/trials'], readers:['lib/trial-limiter.ts','admin/trials'] },
+  { name:'trial_start', group:'Trial', color:'var(--teal)', inserts:1, selects:2, updates:0, deletes:0, fks:'FK → users(id) CASCADE', writers:['lib/trial-limiter.ts (first use)'], readers:['lib/trial-limiter.ts','admin/trials'] },
+  { name:'request_log', group:'Logging', color:'var(--orange)', inserts:2, selects:4, updates:2, deletes:0, fks:'FK → users(id) CASCADE', writers:['lib/access-tier.ts (chat)','lib/trial-limiter.ts'], readers:['lib/access-tier.ts','lib/trial-limiter.ts','admin/trials','admin/access-tiers'] },
+  { name:'anon_request_log', group:'Logging', color:'var(--orange)', inserts:1, selects:2, updates:1, deletes:0, fks:'None (IP-based)', writers:['lib/access-tier.ts (anon chat)'], readers:['lib/access-tier.ts','config','trial-status'] },
+  { name:'session_logs', group:'Logging', color:'var(--orange)', inserts:0, selects:2, updates:3, deletes:1, fks:'FK → users(id) SET NULL', writers:['lib/log-persistence.ts (upsert)','admin/session-logs/cleanup (RPC)'], readers:['admin/session-logs','admin/session-logs/[sessionId]'] },
+  { name:'banners', group:'Admin', color:'var(--purple)', inserts:1, selects:3, updates:1, deletes:1, fks:'FK → users(id) via created_by', writers:['admin/banners (CRUD)'], readers:['banners (public)','admin/banners'] },
+  { name:'user_instances', group:'Admin', color:'var(--purple)', inserts:1, selects:1, updates:0, deletes:0, fks:'FK → users(id) CASCADE', writers:['session-start (upsert on Connect)'], readers:['admin/instances'] },
+  { name:'feedback_reports', group:'Feedback', color:'var(--pink)', inserts:1, selects:0, updates:0, deletes:0, fks:'None (write-only)', writers:['feedback (POST)'], readers:['(admin via Supabase dashboard)'] }
+];
+
+const detailContainer = document.getElementById('detail-cards');
+tables.forEach(t => {
+  const card = document.createElement('div');
+  card.className = 'detail-card';
+  card.innerHTML = `
+    <div class="header">
+      <span class="name" style="color:${t.color}">${t.name}</span>
+      <span class="badge" style="background:${t.color}22;color:${t.color}">${t.group}</span>
+    </div>
+    <div class="stat-row">
+      <div class="stat"><span class="n">${t.inserts}</span> inserts</div>
+      <div class="stat"><span class="n">${t.selects}</span> selects</div>
+      <div class="stat"><span class="n">${t.updates}</span> updates</div>
+      <div class="stat"><span class="n">${t.deletes}</span> deletes</div>
+    </div>
+    <div class="files" style="margin-bottom:8px"><strong style="color:var(--text);font-size:11px">FK:</strong> ${t.fks}</div>
+    <div class="files"><strong style="color:var(--orange);font-size:11px">Writers:</strong> ${t.writers.map(w => `<span>${w}</span>`).join(' ')}</div>
+    <div class="files" style="margin-top:4px"><strong style="color:var(--green);font-size:11px">Readers:</strong> ${t.readers.map(r => `<span>${r}</span>`).join(' ')}</div>
+  `;
+  detailContainer.appendChild(card);
+});
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.view).classList.add('active');
+    if (tab.dataset.view === 'relationships') setTimeout(drawLines, 50);
+  });
+});
+
+function drawLines() {
+  const svg = document.getElementById('rel-lines');
+  const diagram = document.getElementById('rel-diagram');
+  svg.innerHTML = '';
+  svg.setAttribute('width', diagram.scrollWidth);
+  svg.setAttribute('height', diagram.scrollHeight);
+
+  const fks = [
+    ['n-users','n-sessions'],
+    ['n-users','n-auth_tokens'],
+    ['n-users','n-invite_codes'],
+    ['n-users','n-request_log'],
+    ['n-users','n-trial_start'],
+    ['n-users','n-user_instances'],
+    ['n-users','n-session_logs'],
+    ['n-users','n-banners'],
+  ];
+
+  fks.forEach(([fromId, toId]) => {
+    const from = document.getElementById(fromId);
+    const to = document.getElementById(toId);
+    if (!from || !to) return;
+    const fr = from.getBoundingClientRect();
+    const tr = to.getBoundingClientRect();
+    const dr = diagram.getBoundingClientRect();
+    const x1 = fr.left + fr.width / 2 - dr.left + diagram.scrollLeft;
+    const y1 = fr.top + fr.height - dr.top + diagram.scrollTop;
+    const x2 = tr.left + tr.width / 2 - dr.left + diagram.scrollLeft;
+    const y2 = tr.top - dr.top + diagram.scrollTop;
+
+    const midY = (y1 + y2) / 2;
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`);
+    path.setAttribute('stroke', 'var(--blue)');
+    svg.appendChild(path);
+  });
+}
+
+setTimeout(drawLines, 200);
+window.addEventListener('resize', drawLines);
+</script>
+</body>
+</html>
