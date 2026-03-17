@@ -15,8 +15,8 @@ export async function GET(request: NextRequest) {
     // Transform to simplified format for UI with capability badges
     const modelList = models.map((m) => {
       const inputMods = m.architecture?.input_modalities || [];
-      const promptCost = parseFloat(m.pricing.prompt) * 1_000_000;
-      const completionCost = parseFloat(m.pricing.completion) * 1_000_000;
+      const promptCost = parseFloat(m.pricing?.prompt ?? "0") * 1_000_000;
+      const completionCost = parseFloat(m.pricing?.completion ?? "0") * 1_000_000;
       const priceStr = promptCost > 0 || completionCost > 0
         ? `$${promptCost.toFixed(2)}/$${completionCost.toFixed(2)}/1M`
         : "Free";
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
         id: m.id,
         name: m.name,
         contextLength: m.context_length,
-        pricing: { prompt: parseFloat(m.pricing.prompt), completion: parseFloat(m.pricing.completion) },
+        pricing: { prompt: parseFloat(m.pricing?.prompt ?? "0"), completion: parseFloat(m.pricing?.completion ?? "0") },
         summary: `${priceStr} | ${contextStr}${caps.length ? " | " + caps.join(", ") : ""}`,
       };
     });
