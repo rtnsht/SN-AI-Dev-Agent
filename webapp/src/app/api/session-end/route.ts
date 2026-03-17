@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { endSession, log } from "@/lib/logger";
 import { getLogPersistence } from "@/lib/log-persistence";
+import { stopTelemetryStream } from "@/lib/telemetry-generator";
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,6 +20,7 @@ export async function POST(request: NextRequest) {
     }
 
     log("info", sessionId, "session_end", "Session ended — client signaled end");
+    stopTelemetryStream(sessionId);
 
     // endSession checks the in-memory sessions map; if found, it logs and
     // calls finalizeSession internally. If not found (e.g. server restarted),

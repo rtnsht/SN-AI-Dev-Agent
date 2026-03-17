@@ -5,7 +5,7 @@
 
 import fs from "fs";
 import path from "path";
-import { updateTelemetry } from "./telemetry-generator";
+import { hasActiveTelemetryStream, updateTelemetry } from "./telemetry-generator";
 import { getLogPersistence } from "./log-persistence";
 
 // Log levels
@@ -177,7 +177,7 @@ export function log(
   try { getLogPersistence()?.enqueue(sessionId, entry); } catch { /* never block logging */ }
 
   // Trigger telemetry update (throttled to every 15s internally)
-  if (sessionId.startsWith("sess_")) {
+  if (sessionId.startsWith("sess_") && hasActiveTelemetryStream(sessionId)) {
     try { updateTelemetry(sessionId); } catch { /* ignore telemetry errors */ }
   }
 

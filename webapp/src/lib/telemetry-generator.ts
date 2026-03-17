@@ -706,6 +706,26 @@ export function updateTelemetry(sessionId: string): void {
   }
 }
 
+/** Whether a session currently has an active telemetry stream interval. */
+export function hasActiveTelemetryStream(sessionId: string): boolean {
+  return activeIntervals.has(sessionId);
+}
+
+/** Stop one active telemetry stream and emit a final snapshot. */
+export function stopTelemetryStream(sessionId: string): void {
+  const interval = activeIntervals.get(sessionId);
+  if (!interval) return;
+
+  clearInterval(interval);
+  activeIntervals.delete(sessionId);
+  lastGenTime.delete(sessionId);
+  try {
+    updateTelemetry(sessionId);
+  } catch (err) {
+    console.error(`[telemetry] stopTelemetryStream update failed for ${sessionId}:`, err);
+  }
+}
+
 /** Start a background interval that updates telemetry every 15 seconds.
  *  Returns a cleanup function. Never throws (fs errors are caught inside updateTelemetry). */
 export function startTelemetryStream(sessionId: string): () => void {
@@ -729,29 +749,15 @@ export function startTelemetryStream(sessionId: string): () => void {
   activeIntervals.set(sessionId, interval);
 
   return () => {
-    clearInterval(interval);
-    activeIntervals.delete(sessionId);
-    lastGenTime.delete(sessionId);
-    try {
-      updateTelemetry(sessionId);
-    } catch (err) {
-      console.error(`[telemetry] cleanup update failed for ${sessionId}:`, err);
-    }
+    stopTelemetryStream(sessionId);
   };
 }
 
 /** Stop all active telemetry streams */
 export function stopAllTelemetryStreams(): void {
-  for (const [id, interval] of activeIntervals) {
-    clearInterval(interval);
-    lastGenTime.delete(id);
-    try {
-      updateTelemetry(id);
-    } catch (err) {
-      console.error(`[telemetry] stopAllTelemetryStreams update failed for ${id}:`, err);
-    }
+  for (const id of activeIntervals.keys()) {
+    stopTelemetryStream(id);
   }
-  activeIntervals.clear();
 }
 
 /** Helper: derive log filename from session ID (mirrors logger.ts logic) */

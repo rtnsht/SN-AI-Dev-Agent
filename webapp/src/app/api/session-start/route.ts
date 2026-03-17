@@ -7,13 +7,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { log } from "@/lib/logger";
-import { startTelemetryStream } from "@/lib/telemetry-generator";
+import { startTelemetryStream, stopTelemetryStream } from "@/lib/telemetry-generator";
 import { validateSession, SESSION_COOKIE_NAME } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
 import { getLogPersistence } from "@/lib/log-persistence";
-
-// Track cleanup functions for active sessions
-const sessionCleanups = new Map<string, () => void>();
 
 export async function POST(request: NextRequest) {
   try {
@@ -54,14 +51,11 @@ export async function POST(request: NextRequest) {
       connectTime: new Date().toISOString(),
     });
 
-    // Stop any previous stream for this session
-    if (sessionCleanups.has(sessionId)) {
-      sessionCleanups.get(sessionId)!();
-    }
+    // Stop any previous stream for this session (if one still exists).
+    stopTelemetryStream(sessionId);
 
     // Start live telemetry streaming (generates .md every 15s)
-    const cleanup = startTelemetryStream(sessionId);
-    sessionCleanups.set(sessionId, cleanup);
+    startTelemetryStream(sessionId);
 
     // Auto-capture instance in user_instances table (non-blocking)
     const userId = await resolveUserId(request);
