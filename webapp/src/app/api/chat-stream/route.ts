@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { chatStream, type UserCredentials, type ChatMessage } from "@/lib/sn-engine";
+import { chatStream, validateInstanceUrl, type UserCredentials, type ChatMessage } from "@/lib/sn-engine";
 import { checkAccess } from "@/lib/access-tier";
 import { logger, generateSessionId } from "@/lib/logger";
 
@@ -36,6 +36,16 @@ export async function POST(request: NextRequest) {
     // in-memory state doesn't persist across requests. Instead, we log directly
     // using the client-provided sessionId, which ensures all logs for a browser
     // session go to the same file (filename is derived deterministically from sessionId).
+
+    // Validate instance URL (SSRF prevention)
+    const urlError = validateInstanceUrl(credentials.instanceUrl);
+    if (urlError) {
+      logger.error(sessionId, "validation", "Invalid instance URL", { instanceUrl: credentials.instanceUrl, error: urlError });
+      return new Response(
+        JSON.stringify({ error: urlError }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
 
     if (!credentials.instanceUrl || !credentials.username || !credentials.password) {
       logger.error(sessionId, "validation", "Missing credentials", { ip });

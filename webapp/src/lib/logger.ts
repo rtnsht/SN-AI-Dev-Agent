@@ -53,21 +53,22 @@ export function generateSessionId(): string {
 // This ensures the same sessionId always maps to the same log file,
 // even across different API requests (important for serverless/edge where
 // in-memory state doesn't persist across requests)
+/** Sanitize a sessionId to prevent path traversal — allow only [a-zA-Z0-9_-] */
+function sanitizeSessionId(raw: string): string {
+  return raw.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 128);
+}
+
 function getLogFilename(sessionId: string): string {
-  // Extract the timestamp and random suffix from the session ID
-  // Format: sess_<timestamp>_<random>
-  // We use this to create a stable, deterministic filename
-  const parts = sessionId.split('_');
-  if (parts.length >= 3) {
+  const safe = sanitizeSessionId(sessionId);
+  const parts = safe.split('_');
+  if (parts.length >= 3 && parts[0] === "sess") {
     const timestamp = parts[1];
     const suffix = parts[2];
-    // Convert timestamp to date format for readability
     const date = new Date(parseInt(timestamp));
     const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
     return `session-${dateStr}-${timestamp}-${suffix}.txt`;
   }
-  // Fallback for non-standard session IDs
-  return `session-${sessionId.replace(/[^a-zA-Z0-9]/g, '-')}.txt`;
+  return `session-${safe}.txt`;
 }
 
 // Redact sensitive data from objects

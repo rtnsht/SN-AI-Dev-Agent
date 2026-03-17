@@ -135,13 +135,20 @@ async function consumeAnon(ip: string, instanceUrl?: string): Promise<void> {
   const instVal = instanceUrl || null;
 
   // Try upsert — increment request_count for existing row
-  const { data: existing } = await sb
+  let query = sb
     .from("anon_request_log")
     .select("id, request_count")
     .eq("ip_address", ip)
-    .eq("request_date", today)
-    .eq("instance_url", instVal ?? "")
-    .maybeSingle();
+    .eq("request_date", today);
+
+  // Use .is() for null values since SQL NULL != '' 
+  if (instVal === null) {
+    query = query.is("instance_url", null);
+  } else {
+    query = query.eq("instance_url", instVal);
+  }
+
+  const { data: existing } = await query.maybeSingle();
 
   if (existing) {
     await sb
@@ -168,7 +175,7 @@ async function getAuthUsage(userId: string): Promise<number> {
     .select("request_count")
     .eq("user_id", userId)
     .eq("request_date", today)
-    .single();
+    .maybeSingle();
   return data?.request_count || 0;
 }
 
@@ -180,7 +187,7 @@ async function consumeAuth(userId: string): Promise<void> {
     .select("id, request_count")
     .eq("user_id", userId)
     .eq("request_date", today)
-    .single();
+    .maybeSingle();
 
   if (existing) {
     await sb.from("request_log").update({ request_count: existing.request_count + 1 }).eq("id", existing.id);

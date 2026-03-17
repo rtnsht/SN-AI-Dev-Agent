@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
+
+const EFFECTIVE_HINT_SECRET = process.env.AUTH_HINT_SECRET || "default-hint-secret-change-me";
 
 /**
- * GET /api/auth/check-email/step
+ * GET /api/auth/check-email/step?email=...
  *
  * Reads the auth_hint HttpOnly cookie set by POST /api/auth/check-email,
- * verifies the HMAC signature, and returns the next step for the login flow.
+ * verifies the HMAC signature using the provided email, and returns the
+ * next step for the login flow.
  *
  * Returns: { step: "password" } for known users, { step: "request" } for unknown.
  */
@@ -29,13 +33,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Invalid hint" }, { status: 400 });
     }
 
-    // We can't verify the email-bound HMAC without the email, but the cookie
-    // is HttpOnly + Secure + short-lived (5 min), so tampering risk is minimal.
-    // For full verification, we'd need the email passed as a query param, but
-    // that would expose it in the URL. The HMAC still prevents value forging
-    // since attackers don't know the secret.
     if (!providedHmac || providedHmac.length !== 64) {
       return NextResponse.json({ error: "Invalid hint" }, { status: 400 });
+    }
+
+    // Verify HMAC if email is provided as query param
+    const email = request.nextUrl.searchParams.get("email")?.toLowerCase().trim();
+    if (email) {
+      const expectedHmac = crypto
+        .createHmac("sha256", EFFECTIVE_HINT_SECRET)
+        .update(`${email}|${result}`)
+        .digest("hex");
+
+      if (!crypto.timingSafeEqual(Buffer.from(providedHmac, "hex"), Buffer.from(expectedHmac, "hex"))) {
+        return NextResponse.json({ error: "Invalid hint" }, { status: 400 });
+      }
     }
 
     // Clear the cookie after reading

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { testConnection } from "@/lib/sn-engine";
+import { testConnection, validateInstanceUrl } from "@/lib/sn-engine";
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,6 +15,11 @@ export async function POST(request: NextRequest) {
         { error: "Missing required fields: instanceUrl, username, password" },
         { status: 400 }
       );
+    }
+
+    const urlError = validateInstanceUrl(instanceUrl);
+    if (urlError) {
+      return NextResponse.json({ error: urlError }, { status: 400 });
     }
 
     const result = await testConnection({ instanceUrl, username, password });

@@ -3,7 +3,11 @@ import crypto from "crypto";
 import { getSupabase } from "@/lib/supabase";
 import { checkEmailLookup } from "@/lib/auth-rate-limiter";
 
-const AUTH_HINT_SECRET = process.env.AUTH_HINT_SECRET || "default-hint-secret-change-me";
+const AUTH_HINT_SECRET = process.env.AUTH_HINT_SECRET;
+if (!AUTH_HINT_SECRET && process.env.NODE_ENV === "production") {
+  console.error("[SECURITY] AUTH_HINT_SECRET is not set in production! Generate one with: openssl rand -hex 32");
+}
+const EFFECTIVE_HINT_SECRET = AUTH_HINT_SECRET || "default-hint-secret-change-me";
 
 /**
  * POST /api/auth/check-email
@@ -45,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     // Create HMAC-signed hint: HMAC(email|result) + "." + result
     const hmac = crypto
-      .createHmac("sha256", AUTH_HINT_SECRET)
+      .createHmac("sha256", EFFECTIVE_HINT_SECRET)
       .update(`${normalizedEmail}|${result}`)
       .digest("hex");
     const hintValue = `${hmac}.${result}`;

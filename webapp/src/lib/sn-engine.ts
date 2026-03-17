@@ -386,6 +386,66 @@ function getToolDefs() {
   return _toolDefs;
 }
 
+/**
+ * Validate that an instanceUrl is a legitimate ServiceNow instance.
+ * Blocks SSRF attempts against private IPs, cloud metadata, and non-SN hosts.
+ * Returns an error string if invalid, or null if valid.
+ */
+export function validateInstanceUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url.startsWith("http") ? url : `https://${url}`);
+
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return "Only HTTP/HTTPS protocols are allowed";
+    }
+
+    const hostname = parsed.hostname.toLowerCase();
+
+    // Block private/internal IP ranges
+    const privatePatterns = [
+      /^localhost$/i,
+      /^127\.\d+\.\d+\.\d+$/,
+      /^10\.\d+\.\d+\.\d+$/,
+      /^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/,
+      /^192\.168\.\d+\.\d+$/,
+      /^169\.254\.\d+\.\d+$/, // link-local / cloud metadata
+      /^0\.0\.0\.0$/,
+      /^\[::1?\]$/,
+      /^fc[0-9a-f]{2}:/i, // IPv6 private
+      /^fe80:/i, // IPv6 link-local
+    ];
+
+    for (const pattern of privatePatterns) {
+      if (pattern.test(hostname)) {
+        return "Instance URL must not point to a private or internal address";
+      }
+    }
+
+    // Allow *.service-now.com, *.servicenow.com, or configurable allowlist
+    const allowedSuffixes = [
+      ".service-now.com",
+      ".servicenow.com",
+      ".snc.com", // ServiceNow internal
+    ];
+    const extraAllowed = process.env.SN_ALLOWED_INSTANCE_DOMAINS;
+    if (extraAllowed) {
+      for (const d of extraAllowed.split(",")) {
+        const trimmed = d.trim();
+        if (trimmed) allowedSuffixes.push(trimmed.startsWith(".") ? trimmed : `.${trimmed}`);
+      }
+    }
+
+    const isAllowed = allowedSuffixes.some((suffix) => hostname.endsWith(suffix));
+    if (!isAllowed) {
+      return `Instance URL must be a ServiceNow domain (${allowedSuffixes.join(", ")})`;
+    }
+
+    return null;
+  } catch {
+    return "Invalid URL format";
+  }
+}
+
 export interface UserCredentials {
   instanceUrl: string;
   username: string;
@@ -787,7 +847,18 @@ async function chatOpenRouter(
       } as OpenRouterMessage & { tool_calls: typeof message.tool_calls });
 
       for (const toolCall of message.tool_calls) {
-        const args = JSON.parse(toolCall.function.arguments);
+        let args: unknown;
+        try {
+          args = JSON.parse(toolCall.function.arguments);
+        } catch (parseErr) {
+          logger.error(sessionId, "openrouter_api", "Failed to parse tool call arguments", {
+            toolName: toolCall.function.name,
+            rawArgs: toolCall.function.arguments?.slice(0, 200),
+            error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+          });
+          orMessages.push({ role: "tool", tool_call_id: toolCall.id, content: JSON.stringify({ error: "Invalid JSON in tool arguments" }) });
+          continue;
+        }
         const { execution, resultJson } = await executeAndLogTool(registry, snClient, toolCall.function.name, args, sessionId);
         toolExecutions.push(execution);
         orMessages.push({ role: "tool", tool_call_id: toolCall.id, content: resultJson });
@@ -1690,13 +1761,24 @@ async function* chatStreamOpenRouter(
       } as OpenRouterMessage & { tool_calls: typeof message.tool_calls });
 
       for (const toolCall of message.tool_calls) {
-        const args = JSON.parse(toolCall.function.arguments);
+        let args: unknown;
+        try {
+          args = JSON.parse(toolCall.function.arguments);
+        } catch (parseErr) {
+          logger.error(sessionId, "openrouter_api", "Failed to parse tool call arguments (stream)", {
+            toolName: toolCall.function.name,
+            rawArgs: toolCall.function.arguments?.slice(0, 200),
+            error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+          });
+          orMessages.push({ role: "tool", tool_call_id: toolCall.id, content: JSON.stringify({ error: "Invalid JSON in tool arguments" }) });
+          continue;
+        }
         const callCount = dedup.record(toolCall.function.name, args);
         if (callCount >= 2) {
           logger.warn(sessionId, "dedup", `OpenRouter: Duplicate tool call: ${toolCall.function.name} (call #${callCount})`, { round: rounds });
         }
 
-        yield { type: "tool_start", toolName: toolCall.function.name, input: pickDisplayFields(typeof toolCall.function.arguments === "string" ? (() => { try { return JSON.parse(toolCall.function.arguments); } catch { return {}; } })() : toolCall.function.arguments) };
+        yield { type: "tool_start", toolName: toolCall.function.name, input: pickDisplayFields(args) };
         yield { type: "status", message: `Executing: ${toolCall.function.name}`, phase: "tool" };
 
         const { execution, resultJson, success } = await executeAndLogTool(registry, snClient, toolCall.function.name, args, sessionId);
