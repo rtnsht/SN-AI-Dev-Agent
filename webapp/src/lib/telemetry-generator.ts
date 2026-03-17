@@ -15,6 +15,8 @@ const THROTTLE_MS = 15_000; // 15 seconds
 const lastGenTime = new Map<string, number>();
 // Track active intervals for cleanup
 const activeIntervals = new Map<string, NodeJS.Timeout>();
+// Track in-flight generation promises to avoid overlapping work per session
+const inFlightUpdates = new Map<string, Promise<void>>();
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -85,9 +87,7 @@ interface SessionTelemetry {
 
 // ── Parser ─────────────────────────────────────────────────────────────────
 
-function parseSessionLog(logFile: string): SessionTelemetry {
-  const fullPath = path.join(LOGS_DIR, logFile);
-  const content = fs.readFileSync(fullPath, "utf-8");
+function parseSessionLog(logFile: string, content: string): SessionTelemetry {
   const lines = content.trim().split("\n").filter(Boolean);
 
   // Extract session suffix from filename: session-YYYY-MM-DD-timestamp-SUFFIX.txt
@@ -687,22 +687,55 @@ export function updateTelemetry(sessionId: string): void {
   if (now - lastTime < THROTTLE_MS) return;
   lastGenTime.set(sessionId, now);
 
+  if (inFlightUpdates.has(sessionId)) return;
+
+  const task = (async () => {
+    try {
+      // Find the log file for this session
+      const logFilename = getLogFilenameForSession(sessionId);
+      const logPath = path.join(LOGS_DIR, logFilename);
+      const content = await fs.promises.readFile(logPath, "utf-8").catch((err: unknown) => {
+        if ((err as { code?: string })?.code === "ENOENT") return null;
+        throw err;
+      });
+      if (content === null) return;
+
+      // Parse and generate
+      const telemetry = parseSessionLog(logFilename, content);
+      const summaryMd = generateMarkdown(telemetry);
+      const updatesMd = generateSessionUpdates(telemetry, sessionId);
+
+      // Write telemetry file (summary + session updates)
+      const telemetryFile = `telemetry-session-${telemetry.sessionSuffix}.md`;
+      await fs.promises.writeFile(path.join(LOGS_DIR, telemetryFile), summaryMd + updatesMd, "utf-8");
+    } catch (err) {
+      console.error(`[telemetry] Error generating telemetry for ${sessionId}:`, err);
+    }
+  })();
+
+  inFlightUpdates.set(sessionId, task);
+  void task.finally(() => {
+    inFlightUpdates.delete(sessionId);
+  });
+}
+
+/** Whether a session currently has an active telemetry stream interval. */
+export function hasActiveTelemetryStream(sessionId: string): boolean {
+  return activeIntervals.has(sessionId);
+}
+
+/** Stop one active telemetry stream and emit a final snapshot. */
+export function stopTelemetryStream(sessionId: string): void {
+  const interval = activeIntervals.get(sessionId);
+  if (!interval) return;
+
+  clearInterval(interval);
+  activeIntervals.delete(sessionId);
+  lastGenTime.delete(sessionId);
   try {
-    // Find the log file for this session
-    const logFilename = getLogFilenameForSession(sessionId);
-    const logPath = path.join(LOGS_DIR, logFilename);
-    if (!fs.existsSync(logPath)) return;
-
-    // Parse and generate
-    const telemetry = parseSessionLog(logFilename);
-    const summaryMd = generateMarkdown(telemetry);
-    const updatesMd = generateSessionUpdates(telemetry, sessionId);
-
-    // Write telemetry file (summary + session updates)
-    const telemetryFile = `telemetry-session-${telemetry.sessionSuffix}.md`;
-    fs.writeFileSync(path.join(LOGS_DIR, telemetryFile), summaryMd + updatesMd);
+    updateTelemetry(sessionId);
   } catch (err) {
-    console.error(`[telemetry] Error generating telemetry for ${sessionId}:`, err);
+    console.error(`[telemetry] stopTelemetryStream update failed for ${sessionId}:`, err);
   }
 }
 
@@ -729,29 +762,15 @@ export function startTelemetryStream(sessionId: string): () => void {
   activeIntervals.set(sessionId, interval);
 
   return () => {
-    clearInterval(interval);
-    activeIntervals.delete(sessionId);
-    lastGenTime.delete(sessionId);
-    try {
-      updateTelemetry(sessionId);
-    } catch (err) {
-      console.error(`[telemetry] cleanup update failed for ${sessionId}:`, err);
-    }
+    stopTelemetryStream(sessionId);
   };
 }
 
 /** Stop all active telemetry streams */
 export function stopAllTelemetryStreams(): void {
-  for (const [id, interval] of activeIntervals) {
-    clearInterval(interval);
-    lastGenTime.delete(id);
-    try {
-      updateTelemetry(id);
-    } catch (err) {
-      console.error(`[telemetry] stopAllTelemetryStreams update failed for ${id}:`, err);
-    }
+  for (const id of activeIntervals.keys()) {
+    stopTelemetryStream(id);
   }
-  activeIntervals.clear();
 }
 
 /** Helper: derive log filename from session ID (mirrors logger.ts logic) */

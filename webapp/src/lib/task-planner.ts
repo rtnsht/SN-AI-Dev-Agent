@@ -351,38 +351,41 @@ export async function* executePlan(
         yield { type: "task_start", taskId: task.id, taskName: task.name };
       }
 
-      // Execute all tool calls in the batch in parallel
-      const batchPromises = batch.flatMap((task) =>
-        task.tools.map(async (toolCall) => {
-          // Check cache first
-          const cached = sessionCache.get(toolCall.name, toolCall.args);
-          if (cached !== undefined) {
-            logger.info(sessionId, "cache", "Cache hit — skipping tool call", { tool: toolCall.name });
-            return { task, toolCall, result: cached, durationMs: 0, success: true, fromCache: true };
-          }
-
-          const startTime = Date.now();
-          try {
-            const { result, durationMs, success } = await executor(toolCall.name, toolCall.args);
-            // Cache the result
-            sessionCache.set(toolCall.name, toolCall.args, result);
-            return { task, toolCall, result, durationMs, success, fromCache: false };
-          } catch (err) {
-            const durationMs = Date.now() - startTime;
-            logger.warn(sessionId, "planner", `Read task tool failed: ${toolCall.name}`, {
-              error: err instanceof Error ? err.message : String(err),
-              durationMs,
-            });
-            return { task, toolCall, result: null, durationMs, success: false, fromCache: false };
-          }
-        })
+      const queuedToolCalls = batch.flatMap((task) =>
+        task.tools.map((toolCall) => ({ task, toolCall }))
       );
 
-      const batchResults = await Promise.allSettled(batchPromises);
+      for (let j = 0; j < queuedToolCalls.length; j += MAX_PARALLEL_CALLS) {
+        const toolChunk = queuedToolCalls.slice(j, j + MAX_PARALLEL_CALLS);
+        const chunkResults = await Promise.allSettled(
+          toolChunk.map(async ({ task, toolCall }) => {
+            // Check cache first
+            const cached = sessionCache.get(toolCall.name, toolCall.args);
+            if (cached !== undefined) {
+              logger.info(sessionId, "cache", "Cache hit — skipping tool call", { tool: toolCall.name });
+              return { task, toolCall, result: cached, durationMs: 0, success: true, fromCache: true };
+            }
 
-      // Yield tool-level events and collect results
-      for (const settledResult of batchResults) {
-        if (settledResult.status === "fulfilled") {
+            const startTime = Date.now();
+            try {
+              const { result, durationMs, success } = await executor(toolCall.name, toolCall.args);
+              // Cache the result
+              sessionCache.set(toolCall.name, toolCall.args, result);
+              return { task, toolCall, result, durationMs, success, fromCache: false };
+            } catch (err) {
+              const durationMs = Date.now() - startTime;
+              logger.warn(sessionId, "planner", `Read task tool failed: ${toolCall.name}`, {
+                error: err instanceof Error ? err.message : String(err),
+                durationMs,
+              });
+              return { task, toolCall, result: null, durationMs, success: false, fromCache: false };
+            }
+          })
+        );
+
+        // Yield tool-level events and collect results
+        for (const settledResult of chunkResults) {
+          if (settledResult.status !== "fulfilled") continue;
           const { task, toolCall, result, durationMs, success, fromCache } = settledResult.value;
           if (!fromCache) {
             yield { type: "plan_tool_start", taskId: task.id, toolName: toolCall.name, input: toolCall.args as Record<string, unknown> };
