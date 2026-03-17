@@ -14,8 +14,8 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status");
     const from = searchParams.get("from");
     const to = searchParams.get("to");
-    const limit = Math.min(parseInt(searchParams.get("limit") || "50", 10), 200);
-    const offset = parseInt(searchParams.get("offset") || "0", 10);
+    const limit = Math.min(Math.max(1, parseInt(searchParams.get("limit") || "50", 10) || 50), 200);
+    const offset = Math.max(0, parseInt(searchParams.get("offset") || "0", 10) || 0);
 
     const db = getSupabase();
 

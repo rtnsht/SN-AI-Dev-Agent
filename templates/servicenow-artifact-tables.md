@@ -62,6 +62,22 @@ Use this reference when creating deployment scripts to ensure ALL artifacts can 
 |---------------|------------|-------|
 | Scheduled Job | `sysauto_script` | Scheduled script execution |
 
+## Service Portal
+
+| Artifact Type | REST Table | Notes |
+|---------------|------------|-------|
+| Widget | `sp_widget` | HTML template + CSS + client/server scripts |
+| Page | `sp_page` | Container for widget instances |
+| Portal | `sp_portal` | Top-level portal config (URL suffix, theme, homepage) |
+| Theme | `sp_theme` | CSS variables, header/footer refs |
+| CSS Include | `sp_css` | Shared CSS stylesheets |
+| Angular Provider | `sp_angular_provider` | Services, factories, directives, filters |
+| Header/Footer | `sp_header_footer` | Portal header/footer widgets |
+| Widget Instance | `sp_instance` | Widget placed on a page column |
+| Page Container | `sp_container` | Layout container on a page |
+| Page Row | `sp_row` | Row within a container |
+| Page Column | `sp_column` | Column within a row |
+
 ---
 
 ## Deployment Checklist

@@ -114,6 +114,11 @@ MANDATORY after spec approval, BEFORE writing design. Prevents duplicating OOTB 
    f) Flows (if workflow): sn_list_flows status="all"
    g) Notifications: sn_query_records table="sysevent_email_action" query="collection=<table>^active=true" fields=["name","event_name","subject","condition"] limit=20
    h) Conflicts: sn_detect_conflicts targetTable="<table>"
+   i) Service Portal Widgets: sn_get_sp_widgets query="nameLIKE<keyword>"
+   j) Service Portal Pages: sn_get_sp_pages query="titleLIKE<keyword>"
+   k) Service Portal Portals: sn_get_sp_portals
+   l) Service Portal Themes: sn_get_sp_themes
+   m) SP Angular Providers: sn_get_sp_angular_providers query="nameLIKE<keyword>"
 3. Report findings BEFORE writing design: list existing artifacts, highlight overlaps, recommend REUSE/EXTEND/BUILD NEW with justification, flag conflicts.
 </discovery>
 
@@ -137,7 +142,7 @@ Ask user to review and Approve to proceed to Implementation.
 <scope_selection>
 MANDATORY after design approval, BEFORE implementation.
 
-1. Extract artifactTypes from design (e.g., ["flow", "business_rule", "script_include"])
+1. Extract artifactTypes from design (e.g., ["flow", "business_rule", "script_include", "sp_widget", "sp_page"])
 2. Present scope options:
    a) Global (REST API artifacts)
    b) Custom scoped apps (from sys_app)
@@ -170,7 +175,7 @@ All three layers run automatically on every artifact creation. Layer 3 handles t
    - If duplicateDetected: show existing sets, ask user to reuse/rename/timestamp
    - NEVER silently create duplicates
 2. Set current: sn_set_current_update_set with the sys_id
-3. Create artifacts (business rules, script includes, client scripts, dictionary records, flows, etc.)
+3. Create artifacts (business rules, script includes, client scripts, dictionary records, flows, Service Portal widgets/pages, etc.)
    - After EACH artifact creation, check "updateSetCapture" in the response
    - If updateSetCapture.moved is 0 or updateSetCapture.errors has entries, immediately call sn_move_to_update_set for that artifact
    - Track ALL created artifacts: [{table, sys_id, name}] for final verification
@@ -179,17 +184,25 @@ All three layers run automatically on every artifact creation. Layer 3 handles t
    - Dictionary records are metadata artifacts that MUST be captured in the update set
    - After creating each dictionary record, verify updateSetCapture shows moved >= 1
    - If capture fails, call sn_move_to_update_set with table="sys_dictionary" and the record sys_id
-5. Flow Designer artifacts (flows, subflows, flow actions):
+5. Service Portal artifacts (widgets, pages, portals, themes, CSS, Angular providers, headers/footers):
+   - Use dedicated SP tools: sn_create_sp_widget, sn_create_sp_page, sn_create_sp_portal, sn_create_sp_theme, sn_create_sp_css, sn_create_sp_angular_provider, sn_create_sp_header_footer
+   - SP Widgets have a multi-field structure: template (HTML/Angular), css (SCSS), client_script (controller JS), script (server-side), link (Angular link function)
+   - Widget IDs must be lowercase-hyphenated (e.g., "my-custom-widget"). Widget names are PascalCase (e.g., "MyCustomWidget").
+   - Page IDs must be lowercase-hyphenated (e.g., "my-custom-page")
+   - Build order for portal: create header/footer first, then theme (referencing header/footer sys_ids), then portal (referencing theme and homepage), then pages, then widgets, then place widget instances on pages via sn_create_record table="sp_instance"
+   - For widget instances (placing a widget on a page column), use sn_create_record with table="sp_instance" and data including widget, column, and order fields
+   - For page layout (containers, rows, columns), use sn_create_record with tables sp_container, sp_row, sp_column
+6. Flow Designer artifacts (flows, subflows, flow actions):
    - Use REST API tools (sn_create_flow, sn_create_flow_trigger, sn_create_flow_action_instance) to create draft flows
    - Note: REST-created flows are drafts — they must be activated in the Flow Designer UI to generate required snapshots
    - [CRITICAL] NEVER create duplicate logic: if the design calls for a Flow, deploy ONLY a Flow. Do NOT also create a Business Rule, Scheduled Job, or Script Include that duplicates the same logic "as a fallback." One artifact per piece of logic — no hedging.
-6. If artifacts missing from update set: use sn_move_to_update_set
-7. [MANDATORY] BEFORE marking implementation complete, run final verification:
+7. If artifacts missing from update set: use sn_move_to_update_set
+8. [MANDATORY] BEFORE marking implementation complete, run final verification:
    - Call sn_verify_update_set_capture with update_set_id and the full list of artifacts [{table, sys_id, name}]
    - This verifies ALL artifacts are in the update set and auto-moves any missing ones
    - If any artifacts remain missing after verification, report them to the user and attempt sn_move_to_update_set individually
    - ONLY proceed to PHASE_GATE if allCaptured is true or user explicitly acknowledges missing artifacts
-8. For every created/updated artifact, provide a clickable instance URL so the user can verify directly:
+9. For every created/updated artifact, provide a clickable instance URL so the user can verify directly:
    - Format: \`https://<instance>/nav_to.do?uri=<table>.do?sys_id=<sys_id>\`
    - Example: \`https://dev12345.service-now.com/nav_to.do?uri=sys_script.do?sys_id=abc123\`
 
@@ -230,6 +243,13 @@ Client Script: PascalCase, event-based → HandleHighImpactChange
 UI Policy: PascalCase, behavior → HighImpactFieldBehavior
 Custom Field: snake_case with u_ prefix → u_high_impact_justification
 Event: dot.separated.lowercase → incident.high_impact.notify
+SP Widget: PascalCase name, lowercase-hyphenated ID → MyCustomWidget / my-custom-widget
+SP Page: lowercase-hyphenated ID, Title Case title → my-custom-page / My Custom Page
+SP Portal: PascalCase title → InternalServicePortal
+SP Theme: PascalCase → CorporateDarkTheme
+SP Angular Provider: camelCase → highImpactDataService
+SP CSS: PascalCase → HighImpactStyles
+SP Header/Footer: PascalCase → CorporateHeader
 NEVER use requirement IDs in artifact names.
 </naming>
 
