@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
 import { getSupabase } from "@/lib/supabase";
 import { checkEmailLookup } from "@/lib/auth-rate-limiter";
-
-const AUTH_HINT_SECRET = process.env.AUTH_HINT_SECRET || "default-hint-secret-change-me";
+import { createAuthHintValue, getAuthHintSetCookie, isAuthHintConfigured } from "@/lib/auth-hint";
 
 /**
  * POST /api/auth/check-email
@@ -14,6 +12,11 @@ const AUTH_HINT_SECRET = process.env.AUTH_HINT_SECRET || "default-hint-secret-ch
  */
 export async function POST(request: NextRequest) {
   try {
+    if (!isAuthHintConfigured()) {
+      console.error("[auth/check-email] AUTH_HINT_SECRET is not configured");
+      return NextResponse.json({ error: "Authentication service unavailable" }, { status: 503 });
+    }
+
     const { email } = await request.json();
 
     if (!email || typeof email !== "string") {
@@ -43,12 +46,8 @@ export async function POST(request: NextRequest) {
     // Determine result: "known" if active user exists, "unknown" otherwise
     const result = user && user.status !== "suspended" ? "known" : "unknown";
 
-    // Create HMAC-signed hint: HMAC(email|result) + "." + result
-    const hmac = crypto
-      .createHmac("sha256", AUTH_HINT_SECRET)
-      .update(`${normalizedEmail}|${result}`)
-      .digest("hex");
-    const hintValue = `${hmac}.${result}`;
+    // Create signed hint cookie payload (result + issuedAt + nonce + HMAC signature).
+    const hintValue = createAuthHintValue(result);
 
     // Always return the same response body
     const response = NextResponse.json({ continue: true });
@@ -56,7 +55,7 @@ export async function POST(request: NextRequest) {
     // Set HttpOnly cookie with the hint
     response.headers.set(
       "Set-Cookie",
-      `auth_hint=${hintValue}; HttpOnly; Secure; SameSite=Lax; Max-Age=300; Path=/`
+      getAuthHintSetCookie(hintValue)
     );
 
     return response;
