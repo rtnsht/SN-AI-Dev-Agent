@@ -40,6 +40,7 @@ const PUBLIC_PATHS = [
   "/api/session-start",    // session telemetry init (used from public /app page)
   "/api/session-end",      // session finalization (used from public /app page + sendBeacon)
 ];
+const USER_CONTEXT_HEADERS = ["x-user-id", "x-user-email", "x-user-name", "x-user-role"] as const;
 
 /** Check if a path is public (no auth needed) */
 function isPublicPath(pathname: string): boolean {
@@ -63,6 +64,15 @@ function isPublicPath(pathname: string): boolean {
 /** Check if a path requires admin role */
 function isAdminPath(pathname: string): boolean {
   return pathname.startsWith("/admin") || pathname.startsWith("/api/admin/");
+}
+
+/** Remove any client-supplied user context headers before routing. */
+function sanitizeUserHeaders(headers: Headers): Headers {
+  const sanitized = new Headers(headers);
+  for (const headerName of USER_CONTEXT_HEADERS) {
+    sanitized.delete(headerName);
+  }
+  return sanitized;
 }
 
 export async function middleware(request: NextRequest) {
@@ -94,7 +104,9 @@ export async function middleware(request: NextRequest) {
         }
       }
     }
-    return NextResponse.next();
+    return NextResponse.next({
+      request: { headers: sanitizeUserHeaders(request.headers) },
+    });
   }
 
   // Seed admin on first request (idempotent)
@@ -130,7 +142,9 @@ export async function middleware(request: NextRequest) {
         // Non-fatal — proceed without user context
       }
     }
-    return NextResponse.next();
+    return NextResponse.next({
+      request: { headers: sanitizeUserHeaders(request.headers) },
+    });
   }
 
   // Extract session cookie
@@ -188,7 +202,7 @@ function addUserHeaders(
   request: NextRequest,
   user: { id: string; email: string; name: string; role: string }
 ): NextResponse {
-  const requestHeaders = new Headers(request.headers);
+  const requestHeaders = sanitizeUserHeaders(request.headers);
   requestHeaders.set("x-user-id", user.id);
   requestHeaders.set("x-user-email", user.email);
   requestHeaders.set("x-user-name", user.name);
