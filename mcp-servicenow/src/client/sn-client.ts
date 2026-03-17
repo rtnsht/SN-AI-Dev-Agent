@@ -450,7 +450,8 @@ export class ServiceNowClient {
       `/api/now/table/${table}`,
       { params }
     );
-    return response.data.result;
+    const result = response.data.result;
+    return Array.isArray(result) ? result : [];
   }
 
   /**
@@ -567,11 +568,11 @@ export class ServiceNowClient {
   }
 
   /** Expose credentials for SDK CI mode (used by sn_deploy_sdk_flow tool) */
-  get credentials(): { instanceUrl: string; username: string; password: string } {
+  /** Returns instance URL and username for display. Password is never exposed. */
+  get credentials(): { instanceUrl: string; username: string } {
     return {
       instanceUrl: this.config.instanceUrl,
       username: this.config.username,
-      password: this.config.password,
     };
   }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ChatMessage, ToolExecution, SDLCPhase, UserChoicesBlock } from "@/lib/types";
@@ -244,7 +244,7 @@ const MD_COMPONENTS: Record<string, any> = {
 };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-export default function MessageBubble({ message, onApprove, onChoiceSelect, showToolDetails = true, userName }: Props) {
+function MessageBubbleInner({ message, onApprove, onChoiceSelect, showToolDetails = true, userName }: Props) {
   const [approving, setApproving] = useState(false);
 
   if (message.role === "system") return <SystemMessage message={message} />;
@@ -396,4 +396,7 @@ export default function MessageBubble({ message, onApprove, onChoiceSelect, show
     </div>
   );
 }
+
+const MessageBubble = memo(MessageBubbleInner);
+export default MessageBubble;
 

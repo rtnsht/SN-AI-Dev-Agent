@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, type RefObject } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, memo, type RefObject } from "react";
 import type { ChatMessage, SDLCPhase, LiveStatus, FileAttachment, CategorizedPrompts, ExamplePrompt, UpdateSetSummary } from "@/lib/types";
 import MessageBubble from "./MessageBubble";
 import Image from "next/image";
@@ -505,22 +505,19 @@ function InlineAgentActivity({ activityLog, liveStatus, onCancel }: { activityLo
     }
   }, [activityLog, expanded]);
 
-  const processed = processActivityLog(activityLog);
-  const toolCount = processed.filter(e => e.phase === "tool").length;
-  const taskCount = processed.filter(e => e.phase === "task").length;
+  const processed = useMemo(() => processActivityLog(activityLog), [activityLog]);
+  const toolCount = useMemo(() => processed.filter(e => e.phase === "tool").length, [processed]);
+  const taskCount = useMemo(() => processed.filter(e => e.phase === "task").length, [processed]);
   const elapsed = Math.round((Date.now() - startTime.current) / 1000);
 
-  // Determine if we have task-grouped entries (planner was used)
   const hasTasks = taskCount > 0;
 
-  // Header text: latest tool's friendly label, task name, or latest status
   const latestEntry = processed[processed.length - 1];
   const headerText = latestEntry
     ? (latestEntry.taskName ? `Task: ${latestEntry.taskName}` : latestEntry.toolName ? friendlyToolLabel(latestEntry.toolName, latestEntry.toolInput) : latestEntry.message)
     : "Thinking...";
 
-  // Group tool entries under their parent task (for two-level rendering)
-  const taskGroups = hasTasks ? groupByTask(processed) : null;
+  const taskGroups = useMemo(() => hasTasks ? groupByTask(processed) : null, [hasTasks, processed]);
 
   return (
     <div className="agent-activity-container rounded-xl overflow-hidden" style={{ background: "var(--surface-secondary)", border: "1px solid color-mix(in srgb, var(--color-primary) 15%, var(--border-default))" }}>

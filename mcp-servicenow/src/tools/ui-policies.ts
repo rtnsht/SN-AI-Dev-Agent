@@ -223,7 +223,11 @@ export async function createUiPolicyAction(client: ServiceNowClient, input: z.in
   }
 
   const uiPolicy = uiPolicyRecords[0];
-  const tableName = uiPolicy.table;
+  // table can be a string or a reference object {value, display_value}
+  const rawTable = uiPolicy.table;
+  const tableName = rawTable && typeof rawTable === "object" && "value" in (rawTable as Record<string, unknown>)
+    ? String((rawTable as Record<string, unknown>).value || (rawTable as Record<string, unknown>).display_value || "")
+    : String(rawTable || "");
 
   if (!tableName) {
     throw new Error(`UI Policy "${input.uiPolicySysId}" does not have a table specified`);
