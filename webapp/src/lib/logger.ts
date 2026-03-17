@@ -5,7 +5,7 @@
 
 import fs from "fs";
 import path from "path";
-import { updateTelemetry } from "./telemetry-generator";
+import { hasActiveTelemetryStream, updateTelemetry } from "./telemetry-generator";
 import { getLogPersistence } from "./log-persistence";
 
 // Log levels
@@ -36,12 +36,13 @@ const sessions = new Map<string, SessionContext>();
 
 // Logs directory (at project root)
 const LOGS_DIR = path.join(process.cwd(), "logs");
+let logsDirEnsured = false;
 
 // Ensure logs directory exists
 function ensureLogsDir(): void {
-  if (!fs.existsSync(LOGS_DIR)) {
-    fs.mkdirSync(LOGS_DIR, { recursive: true });
-  }
+  if (logsDirEnsured) return;
+  fs.mkdirSync(LOGS_DIR, { recursive: true });
+  logsDirEnsured = true;
 }
 
 // Generate unique session ID
@@ -165,7 +166,11 @@ export function log(
     const logLine = JSON.stringify(entry) + "\n";
     const filename = getLogFilename(sessionId);
     const filepath = path.join(LOGS_DIR, filename);
-    fs.appendFileSync(filepath, logLine);
+    fs.appendFile(filepath, logLine, (err) => {
+      if (err && process.env.NODE_ENV !== "test") {
+        console.warn("[logger] File write skipped (fs error):", err.message);
+      }
+    });
   } catch (err) {
     // Read-only or restricted fs (e.g. Render) — do not rethrow; console output below
     if (process.env.NODE_ENV !== "test") {
@@ -177,7 +182,7 @@ export function log(
   try { getLogPersistence()?.enqueue(sessionId, entry); } catch { /* never block logging */ }
 
   // Trigger telemetry update (throttled to every 15s internally)
-  if (sessionId.startsWith("sess_")) {
+  if (sessionId.startsWith("sess_") && hasActiveTelemetryStream(sessionId)) {
     try { updateTelemetry(sessionId); } catch { /* ignore telemetry errors */ }
   }
 

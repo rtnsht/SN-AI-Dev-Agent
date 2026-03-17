@@ -11,7 +11,6 @@ const SUPPORTED_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
   "application/msword", // .doc (limited support)
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
-  "application/vnd.ms-excel", // .xls
 ]);
 
 export function isSupportedFileType(mimeType: string): boolean {
@@ -34,8 +33,7 @@ export async function extractText(file: FileAttachment): Promise<string> {
   }
 
   if (
-    file.mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-    file.mimeType === "application/vnd.ms-excel"
+    file.mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
   ) {
     return extractExcelText(buffer, file.name);
   }
@@ -73,17 +71,27 @@ async function extractWordText(buffer: Buffer, name: string): Promise<string> {
 async function extractExcelText(buffer: Buffer, name: string): Promise<string> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const XLSX = require("xlsx");
-    const workbook = XLSX.read(buffer, { type: "buffer" });
+    const ExcelJS = require("exceljs");
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
     const lines: string[] = [];
 
-    for (const sheetName of workbook.SheetNames) {
-      const sheet = workbook.Sheets[sheetName];
-      // Convert to CSV for readable text representation
-      const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
-      if (csv.trim()) {
-        lines.push(`--- Sheet: ${sheetName} ---`);
-        lines.push(csv.trim());
+    for (const sheet of workbook.worksheets) {
+      const rows: string[] = [];
+      sheet.eachRow({ includeEmpty: false }, (row: { values: unknown[] }) => {
+        const cells = row.values
+          .slice(1)
+          .map((cell: unknown) => toCsvCell(cell))
+          .filter((value: string, index: number, arr: string[]) => {
+            if (value !== "") return true;
+            return arr.slice(index + 1).some((next) => next !== "");
+          });
+        if (cells.length > 0) rows.push(cells.join(","));
+      });
+
+      if (rows.length > 0) {
+        lines.push(`--- Sheet: ${sheet.name} ---`);
+        lines.push(rows.join("\n"));
         lines.push("");
       }
     }
@@ -94,6 +102,32 @@ async function extractExcelText(buffer: Buffer, name: string): Promise<string> {
   } catch (err) {
     return `[Failed to parse Excel file "${name}": ${err instanceof Error ? err.message : String(err)}]`;
   }
+}
+
+function toCsvCell(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return escapeCsv(value);
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+
+  if (typeof value === "object") {
+    const cellObj = value as { result?: unknown; text?: string; richText?: Array<{ text?: string }> };
+    if (cellObj.richText?.length) {
+      return escapeCsv(cellObj.richText.map((part) => part.text || "").join(""));
+    }
+    if (cellObj.result !== undefined && cellObj.result !== null) {
+      return escapeCsv(String(cellObj.result));
+    }
+    if (cellObj.text) {
+      return escapeCsv(cellObj.text);
+    }
+  }
+
+  return escapeCsv(String(value));
+}
+
+function escapeCsv(raw: string): string {
+  if (!/[",\n]/.test(raw)) return raw;
+  return `"${raw.replace(/"/g, '""')}"`;
 }
 
 /**
