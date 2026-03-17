@@ -338,6 +338,9 @@ export default function Home() {
               remaining: Math.max(0, dailyLimit - dailyUsed),
               resetsAt: null,
               windowHours: 24,
+              anonUsed: data.accessStatus.anonUsed ?? 0,
+              authUsed: data.accessStatus.authUsed ?? 0,
+              isAuthenticated: !!data.isAuthenticated,
             });
           }
         }
@@ -355,6 +358,49 @@ export default function Home() {
       })
       .catch(() => {}); // ignore — default to false
   }, []);
+
+  // Sync usage bar from 429 error response data
+  const syncUsageFrom429 = useCallback((errorData: { dailyUsed?: number; dailyLimit?: number; anonUsed?: number; authUsed?: number }) => {
+    const dailyUsed = errorData.dailyUsed ?? 0;
+    const dailyLimit = errorData.dailyLimit ?? 0;
+    if (dailyLimit > 0) {
+      setUsage((prev) => ({
+        used: dailyUsed,
+        max: dailyLimit,
+        remaining: Math.max(0, dailyLimit - dailyUsed),
+        resetsAt: prev?.resetsAt ?? null,
+        windowHours: prev?.windowHours ?? 24,
+        anonUsed: errorData.anonUsed ?? prev?.anonUsed ?? 0,
+        authUsed: errorData.authUsed ?? prev?.authUsed ?? 0,
+        isAuthenticated: prev?.isAuthenticated,
+      }));
+    }
+  }, []);
+
+  // Refresh usage counts from the server (called by refresh icon in SettingsPanel)
+  const refreshUsage = useCallback(async () => {
+    try {
+      const params = new URLSearchParams();
+      if (credentials.instanceUrl) params.set("instanceUrl", credentials.instanceUrl);
+      const res = await fetch(`/api/trial-status?${params}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const dailyUsed = data.dailyUsed ?? 0;
+      const dailyLimit = data.dailyLimit ?? 0;
+      if (dailyLimit > 0) {
+        setUsage({
+          used: dailyUsed,
+          max: dailyLimit,
+          remaining: Math.max(0, dailyLimit - dailyUsed),
+          resetsAt: null,
+          windowHours: 24,
+          anonUsed: data.anonUsed ?? 0,
+          authUsed: data.authUsed ?? 0,
+          isAuthenticated: !!data.isAuthenticated,
+        });
+      }
+    } catch { /* non-fatal */ }
+  }, [credentials.instanceUrl]);
 
   // Fetch OpenRouter models when provider changes to openrouter
   useEffect(() => {
@@ -586,6 +632,7 @@ export default function Home() {
             setLiveStatus(null);
 
             if (res.status === 429) {
+              syncUsageFrom429(errorData);
               if (errorData.error === "signup_required") {
                 // Anonymous user hit daily limit — show signup gate
                 setPendingRetry({ text, images, files });
@@ -926,6 +973,7 @@ export default function Home() {
             setTimeout(() => handleSendRef.current("approved"), 100);
           }
         } else if (res.status === 429) {
+          syncUsageFrom429(data);
           if (data.error === "signup_required") {
             setPendingRetry({ text, images, files });
             setGateInfo((prev) => ({ ...prev, dailyUsed: data.dailyUsed ?? prev.dailyUsed, dailyLimit: data.dailyLimit ?? prev.dailyLimit }));
@@ -1192,7 +1240,7 @@ export default function Home() {
     credentials, setCredentials, connected, connInfo, isConnecting,
     onConnect: handleConnect, onReconnect: handleReconnect,
     serverApiKeyConfigured, serverOpenRouterKeyConfigured, serverSnCredsConfigured,
-    usage, rateLimitHit, trialStatus,
+    usage, rateLimitHit, trialStatus, onRefreshUsage: refreshUsage,
     onApiKeyProvided: () => {
       setRateLimitHit(false);
       if (pendingRetry) {

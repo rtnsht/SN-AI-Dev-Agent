@@ -248,6 +248,12 @@ export interface UsageInfo {
   remaining: number;
   resetsAt: string | null;
   windowHours: number;
+  /** Anonymous requests from this IP today */
+  anonUsed?: number;
+  /** Authenticated requests from this user today */
+  authUsed?: number;
+  /** Whether this user is authenticated */
+  isAuthenticated?: boolean;
 }
 
 /** Trial status for per-user daily request limits */

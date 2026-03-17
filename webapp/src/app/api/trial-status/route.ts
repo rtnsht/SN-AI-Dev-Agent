@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAccessStatus, getTierLimits } from "@/lib/access-tier";
 
-/** GET /api/trial-status — return current access tier status */
+/** GET /api/trial-status — return current access tier status with anon/auth breakdown */
 export async function GET(request: NextRequest) {
   try {
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
     const userId = request.headers.get("x-user-id") || null;
+    const instanceUrl = request.nextUrl.searchParams.get("instanceUrl") || undefined;
 
-    const status = await getAccessStatus(ip, userId, false);
+    const status = await getAccessStatus(ip, userId, false, instanceUrl);
     const limits = await getTierLimits();
 
     return NextResponse.json({

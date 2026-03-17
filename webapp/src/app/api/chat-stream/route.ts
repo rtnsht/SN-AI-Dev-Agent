@@ -93,6 +93,8 @@ export async function POST(request: NextRequest) {
             tier: access.tier,
             dailyUsed: access.dailyUsed,
             dailyLimit: access.dailyLimit,
+            anonUsed: access.anonUsed,
+            authUsed: access.authUsed,
             allowUserApiKeys: allowUserKeys,
           }),
           { status: 429, headers: { "Content-Type": "application/json" } }

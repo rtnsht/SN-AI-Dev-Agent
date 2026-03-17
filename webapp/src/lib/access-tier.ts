@@ -32,6 +32,10 @@ export interface AccessCheckResult {
   /** Which gate to show when blocked */
   gate: "none" | "signup" | "apikey";
   message?: string;
+  /** Breakdown: anonymous requests from this IP today */
+  anonUsed?: number;
+  /** Breakdown: authenticated requests from this user today */
+  authUsed?: number;
 }
 
 /* ── Default limits (overridden by admin config) ────────── */
@@ -208,26 +212,33 @@ export async function checkAccess(
 
   const limits = await getTierLimits();
 
-  // Tier 2: Authenticated user
+  // Tier 2: Authenticated user — combined anon + auth budget
   if (userId) {
-    const dailyUsed = await getAuthUsage(userId);
-    if (dailyUsed >= limits.authDailyLimit) {
+    const authUsed = await getAuthUsage(userId);
+    const anonUsed = await getAnonUsage(ip, instanceUrl);
+    const combinedUsed = authUsed + anonUsed;
+
+    if (combinedUsed >= limits.authDailyLimit) {
       return {
         allowed: false,
         tier: "authenticated",
-        dailyUsed,
+        dailyUsed: combinedUsed,
         dailyLimit: limits.authDailyLimit,
         gate: "apikey",
         message: `You've used all ${limits.authDailyLimit} daily requests. Add your own API key for unlimited access.`,
+        anonUsed,
+        authUsed,
       };
     }
     await consumeAuth(userId);
     return {
       allowed: true,
       tier: "authenticated",
-      dailyUsed: dailyUsed + 1,
+      dailyUsed: combinedUsed + 1,
       dailyLimit: limits.authDailyLimit,
       gate: "none",
+      anonUsed,
+      authUsed: authUsed + 1,
     };
   }
 
@@ -241,6 +252,8 @@ export async function checkAccess(
       dailyLimit: limits.anonDailyLimit,
       gate: "signup",
       message: `You've used all ${limits.anonDailyLimit} free requests for today. Sign up to get ${limits.authDailyLimit} daily requests.`,
+      anonUsed,
+      authUsed: 0,
     };
   }
   await consumeAnon(ip, instanceUrl);
@@ -250,6 +263,8 @@ export async function checkAccess(
     dailyUsed: anonUsed + 1,
     dailyLimit: limits.anonDailyLimit,
     gate: "none",
+    anonUsed: anonUsed + 1,
+    authUsed: 0,
   };
 }
 
@@ -269,13 +284,17 @@ export async function getAccessStatus(
   const limits = await getTierLimits();
 
   if (userId) {
-    const dailyUsed = await getAuthUsage(userId);
+    const authUsed = await getAuthUsage(userId);
+    const anonUsed = await getAnonUsage(ip, instanceUrl);
+    const combinedUsed = authUsed + anonUsed;
     return {
-      allowed: dailyUsed < limits.authDailyLimit,
+      allowed: combinedUsed < limits.authDailyLimit,
       tier: "authenticated",
-      dailyUsed,
+      dailyUsed: combinedUsed,
       dailyLimit: limits.authDailyLimit,
-      gate: dailyUsed >= limits.authDailyLimit ? "apikey" : "none",
+      gate: combinedUsed >= limits.authDailyLimit ? "apikey" : "none",
+      anonUsed,
+      authUsed,
     };
   }
 
@@ -286,5 +305,7 @@ export async function getAccessStatus(
     dailyUsed: anonUsed,
     dailyLimit: limits.anonDailyLimit,
     gate: anonUsed >= limits.anonDailyLimit ? "signup" : "none",
+    anonUsed,
+    authUsed: 0,
   };
 }
