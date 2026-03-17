@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
+import DOMPurify from "isomorphic-dompurify";
 
 interface BannerData {
   id: string;
@@ -59,7 +60,7 @@ export default function BannerDisplay() {
             position: "relative",
           }}
         >
-          <span dangerouslySetInnerHTML={{ __html: banner.content_html }} />
+          <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(banner.content_html || "", { ALLOWED_TAGS: ["b", "i", "u", "em", "strong", "a", "br", "p", "span"] }) }} />
           <button
             onClick={() => setDismissed((prev) => new Set(prev).add(banner.id))}
             aria-label="Dismiss banner"

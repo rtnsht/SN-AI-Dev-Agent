@@ -4,8 +4,10 @@
  */
 
 import { OpenRouterModel } from "./types";
+import { fetchWithTimeout } from "./fetch-with-timeout";
 
 const OPENROUTER_API_BASE = "https://openrouter.ai/api/v1";
+const FETCH_TIMEOUT_MS = 30_000;
 
 export interface OpenRouterConfig {
   apiKey: string;
@@ -92,17 +94,21 @@ export async function fetchOpenRouterModels(apiKey?: string): Promise<OpenRouter
     headers["Authorization"] = `Bearer ${apiKey}`;
   }
 
-  const response = await fetch(`${OPENROUTER_API_BASE}/models`, { headers });
+  const response = await fetchWithTimeout(`${OPENROUTER_API_BASE}/models`, {
+    headers,
+    timeoutMs: FETCH_TIMEOUT_MS,
+  });
   
   if (!response.ok) {
     throw new Error(`Failed to fetch OpenRouter models: ${response.status}`);
   }
 
   const data = await response.json();
-  
+
+  const rawModels = Array.isArray(data?.data) ? data.data : [];
   // Strict filtering for ServiceNow AI Dev Agent use:
   // Must support tool calling + reasoning, with sufficient context for complex agent workflows
-  const models = (data.data as OpenRouterModel[])
+  const models = (rawModels as OpenRouterModel[])
     .filter((m) => {
       const params = m.supported_parameters || [];
 
@@ -113,17 +119,17 @@ export async function fetchOpenRouterModels(apiKey?: string): Promise<OpenRouter
       if (!params.includes("reasoning") && !params.includes("include_reasoning")) return false;
 
       // MUST: sufficient context for complex agent work (64K minimum)
-      if (m.context_length < 64000) return false;
+      if ((m.context_length ?? 0) < 64000) return false;
 
       // MUST: accept text input
       const inputMods = m.architecture?.input_modalities || [];
       if (!inputMods.includes("text")) return false;
 
       // EXCLUDE: routers, free routers, image-generation-only models
-      if (m.id.startsWith("openrouter/")) return false;
+      if (m.id?.startsWith("openrouter/")) return false;
 
       // EXCLUDE: models with negative pricing (routers)
-      if (parseFloat(m.pricing.prompt) < 0) return false;
+      if (parseFloat(m.pricing?.prompt ?? "0") < 0) return false;
 
       // EXCLUDE: models whose primary output is images (not text-focused)
       const outputMods = m.architecture?.output_modalities || [];
@@ -162,10 +168,11 @@ export async function chatCompletion(
     headers["X-OpenRouter-Title"] = config.siteName;
   }
 
-  const response = await fetch(`${OPENROUTER_API_BASE}/chat/completions`, {
+  const response = await fetchWithTimeout(`${OPENROUTER_API_BASE}/chat/completions`, {
     method: "POST",
     headers,
     body: JSON.stringify(request),
+    timeoutMs: FETCH_TIMEOUT_MS,
   });
 
   if (!response.ok) {

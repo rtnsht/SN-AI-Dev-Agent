@@ -3,12 +3,15 @@
  * Sends plain-text emails via the ZeptoMail Send Mail API.
  */
 
+import { fetchWithTimeout } from "./fetch-with-timeout";
+
 const ZEPTOMAIL_API_URL = process.env.ZEPTOMAIL_API_URL || "https://api.zeptomail.com/v1.1/email";
 const ZEPTOMAIL_API_KEY = process.env.ZEPTOMAIL_API_KEY || "";
 const FROM_EMAIL = process.env.ZEPTOMAIL_FROM_EMAIL || "";
 const FROM_NAME = process.env.ZEPTOMAIL_FROM_NAME || "SN AI Agent";
 const BOUNCE_ADDRESS = process.env.ZEPTOMAIL_BOUNCE_ADDRESS || "";
 const APP_URL = process.env.APP_URL || "http://localhost:3000";
+const FETCH_TIMEOUT_MS = 15_000;
 
 interface SendEmailOpts {
   to: string;
@@ -24,7 +27,7 @@ export async function sendEmail(opts: SendEmailOpts): Promise<{ success: boolean
   }
 
   try {
-    const res = await fetch(ZEPTOMAIL_API_URL, {
+    const res = await fetchWithTimeout(ZEPTOMAIL_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -37,6 +40,7 @@ export async function sendEmail(opts: SendEmailOpts): Promise<{ success: boolean
         subject: opts.subject,
         textbody: opts.body,
       }),
+      timeoutMs: FETCH_TIMEOUT_MS,
     });
 
     if (!res.ok) {
