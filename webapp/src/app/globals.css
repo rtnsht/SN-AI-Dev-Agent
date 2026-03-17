@@ -218,17 +218,64 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 16px;
+  border-radius: 20px;
   transition: box-shadow var(--transition-normal), filter var(--transition-normal);
-  box-shadow: 0 0 32px color-mix(in srgb, var(--color-primary) 12%, transparent);
+  animation: logoBreath 3s ease-in-out infinite;
+}
+@keyframes logoBreath {
+  0%, 100% { box-shadow: 0 0 32px color-mix(in srgb, var(--color-primary) 12%, transparent); }
+  50%      { box-shadow: 0 0 56px color-mix(in srgb, var(--color-primary) 24%, transparent),
+                         0 0 96px color-mix(in srgb, var(--color-primary) 8%, transparent); }
 }
 [data-theme="light"] .hero-logo-container {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.04);
   filter: brightness(1.05) contrast(1.02);
+  animation: logoBreathLight 3s ease-in-out infinite;
+}
+@keyframes logoBreathLight {
+  0%, 100% { box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.04); }
+  50%      { box-shadow: 0 4px 32px rgba(0, 0, 0, 0.15), 0 0 24px color-mix(in srgb, var(--color-primary) 12%, transparent); }
 }
 .hero-logo {
   object-fit: contain;
   filter: drop-shadow(0 0 12px color-mix(in srgb, var(--color-primary) 20%, transparent));
+}
+
+/* ── Hero rotating text ── */
+.hero-rotating-text {
+  position: relative;
+  width: 100%;
+  min-height: 56px;
+  text-align: center;
+}
+.landing-rotating-text {
+  min-height: 120px;
+  margin-bottom: 32px;
+}
+.hero-rotating-text-item {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.6s ease, transform 0.6s ease;
+  will-change: opacity, transform;
+}
+.hero-rotating-text-item.active {
+  opacity: 1;
+  transform: translateY(0);
+}
+.hero-rotating-text-item.exiting {
+  opacity: 0;
+  transform: translateY(-12px);
+}
+.landing-rotating-headline {
+  font-size: clamp(20px, 3vw, 32px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--text-primary);
+  max-width: 600px;
 }
 
 /* ── Hero tagline ── */
@@ -1463,12 +1510,19 @@ body {
     padding: 100px 20px 48px;
   }
   .landing-logo-container {
-    width: 56px;
-    height: 56px;
-    margin-bottom: 20px;
+    width: 88px !important;
+    height: 88px !important;
+    margin-bottom: 16px;
+  }
+  .landing-logo-container .hero-logo {
+    width: 88px !important;
+    height: 88px !important;
   }
   .landing-title {
     font-size: 32px;
+  }
+  .landing-rotating-text {
+    min-height: 80px;
   }
   .landing-cta-group {
     flex-direction: column;
