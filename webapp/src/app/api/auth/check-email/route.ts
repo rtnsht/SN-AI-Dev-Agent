@@ -3,7 +3,10 @@ import crypto from "crypto";
 import { getSupabase } from "@/lib/supabase";
 import { checkEmailLookup } from "@/lib/auth-rate-limiter";
 
-const AUTH_HINT_SECRET = process.env.AUTH_HINT_SECRET || "default-hint-secret-change-me";
+// In production, AUTH_HINT_SECRET must be set — no default to prevent HMAC forgery
+const AUTH_HINT_SECRET =
+  process.env.AUTH_HINT_SECRET ||
+  (process.env.NODE_ENV === "production" ? "" : "default-hint-secret-change-me");
 
 /**
  * POST /api/auth/check-email
@@ -14,6 +17,11 @@ const AUTH_HINT_SECRET = process.env.AUTH_HINT_SECRET || "default-hint-secret-ch
  */
 export async function POST(request: NextRequest) {
   try {
+    if (!AUTH_HINT_SECRET) {
+      console.error("[auth/check-email] AUTH_HINT_SECRET is required in production");
+      return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
+    }
+
     const { email } = await request.json();
 
     if (!email || typeof email !== "string") {

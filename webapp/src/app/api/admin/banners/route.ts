@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
+import { sanitizeBannerHtml } from "@/lib/sanitize-html";
 
 /** GET /api/admin/banners — list all banners */
 export async function GET() {
@@ -34,11 +35,12 @@ export async function POST(request: NextRequest) {
     }
 
     const db = getSupabase();
+    const sanitizedHtml = sanitizeBannerHtml(content_html.trim());
     const { data, error } = await db
       .from("banners")
       .insert({
         title: title.trim(),
-        content_html: content_html.trim(),
+        content_html: sanitizedHtml,
         pages: pages && pages.length > 0 ? pages : ["all"],
         bg_color: bg_color || "#1e40af",
         text_color: text_color || "#ffffff",

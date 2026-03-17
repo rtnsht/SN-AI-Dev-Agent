@@ -159,13 +159,17 @@ export function log(
     ...(durationMs !== undefined && { durationMs }),
   };
 
-  // Write to session-specific file (non-throwing: fallback to console-only on EACCES/EROFS)
+  // Write to session-specific file (async, non-blocking; fallback to console-only on EACCES/EROFS)
   try {
     ensureLogsDir();
     const logLine = JSON.stringify(entry) + "\n";
     const filename = getLogFilename(sessionId);
     const filepath = path.join(LOGS_DIR, filename);
-    fs.appendFileSync(filepath, logLine);
+    void fs.promises.appendFile(filepath, logLine).catch((err) => {
+      if (process.env.NODE_ENV !== "test") {
+        console.warn("[logger] File write skipped (fs error):", err instanceof Error ? err.message : String(err));
+      }
+    });
   } catch (err) {
     // Read-only or restricted fs (e.g. Render) — do not rethrow; console output below
     if (process.env.NODE_ENV !== "test") {

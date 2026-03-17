@@ -62,8 +62,8 @@ export interface OpenRouterModel {
 
 /** Convert OpenRouter model to ModelOption */
 export function openRouterModelToOption(model: OpenRouterModel): ModelOption {
-  const promptCost = parseFloat(model.pricing.prompt) * 1000000; // Cost per 1M tokens
-  const completionCost = parseFloat(model.pricing.completion) * 1000000;
+  const promptCost = parseFloat(model.pricing?.prompt ?? "0") * 1000000; // Cost per 1M tokens
+  const completionCost = parseFloat(model.pricing?.completion ?? "0") * 1000000;
   const priceStr = promptCost > 0 || completionCost > 0
     ? `$${promptCost.toFixed(2)}/$${completionCost.toFixed(2)} per 1M tokens`
     : "Free";
