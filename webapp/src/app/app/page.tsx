@@ -166,8 +166,7 @@ export default function Home() {
 
   // Clear connection error when user edits credentials
   useEffect(() => {
-    if (connectionError) setConnectionError(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setConnectionError(null);
   }, [credentials.instanceUrl, credentials.username, credentials.password]);
 
   // Accumulate liveStatus changes into the activity log (skip tool events — handled directly in stream parser)
