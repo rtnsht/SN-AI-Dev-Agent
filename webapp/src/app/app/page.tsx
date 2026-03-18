@@ -603,7 +603,8 @@ export default function Home() {
             instanceUrl: credentials.instanceUrl,
             username: credentials.username,
             userFullName: data.userInfo?.name || "",
-            model: selectedModel,
+            model: (aiProvider === "openrouter" ? openRouterModels : ANTHROPIC_MODELS)
+              .find((m) => m.key === selectedModel)?.modelId || selectedModel,
             aiProvider,
             hasAdmin: data.hasAdmin,
             hasSecurityAdmin: data.hasSecurityAdmin,
