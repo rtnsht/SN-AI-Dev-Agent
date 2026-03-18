@@ -502,10 +502,15 @@ export default function SettingsPanel({
       </div>
 
       {connectionError && !connected && (
-        <div className="mt-3 p-3 rounded-md text-[11px]" style={{
-          background: "rgba(249,115,115,0.08)",
-          border: "1px solid rgba(249,115,115,0.25)",
-        }}>
+        <div
+          className="mt-3 p-3 rounded-md text-[11px]"
+          style={{
+            background: "rgba(249,115,115,0.08)",
+            border: "1px solid rgba(249,115,115,0.25)",
+          }}
+          role="alert"
+          aria-live="assertive"
+        >
           <div className="font-medium mb-1" style={{ color: "var(--color-danger)" }}>
             Connection Failed
           </div>
