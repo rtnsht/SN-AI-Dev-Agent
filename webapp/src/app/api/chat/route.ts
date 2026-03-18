@@ -3,7 +3,7 @@ import { chat, type UserCredentials, type ChatMessage } from "@/lib/sn-engine";
 import { checkAccess } from "@/lib/access-tier";
 import { logger, generateSessionId } from "@/lib/logger";
 
-export const maxDuration = 120; // Allow up to 2 minutes for tool-use loops
+export const maxDuration = 300; // Allow up to 5 minutes for tool-use loops
 
 export async function POST(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";

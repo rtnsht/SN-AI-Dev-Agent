@@ -1085,9 +1085,14 @@ export default function Home() {
             { role: "system", type: "info", content: "⏹ Request cancelled.", timestamp: new Date().toISOString() },
           ]);
         } else {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          const isNetworkTimeout = errMsg.includes("network error") || errMsg.includes("Failed to fetch") || errMsg.includes("terminated");
+          const displayMsg = isNetworkTimeout
+            ? "Connection lost — the server may still be processing. This can happen during long operations. Please wait a moment and try again."
+            : `Unexpected error: ${errMsg}`;
           setMessages((prev) => [
             ...prev,
-            { role: "system", type: "error", content: `Network error: ${err instanceof Error ? err.message : String(err)}`, timestamp: new Date().toISOString() },
+            { role: "system", type: "error", content: displayMsg, timestamp: new Date().toISOString() },
           ]);
         }
       } finally {

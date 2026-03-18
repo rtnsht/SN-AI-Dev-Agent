@@ -3,7 +3,7 @@ import { chatStream, type UserCredentials, type ChatMessage } from "@/lib/sn-eng
 import { checkAccess } from "@/lib/access-tier";
 import { logger, generateSessionId } from "@/lib/logger";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
@@ -178,6 +178,13 @@ export async function POST(request: NextRequest) {
           }
         };
 
+        // SSE heartbeat keepalive — prevents idle connection timeout on proxies/platforms (e.g. Render)
+        const HEARTBEAT_INTERVAL_MS = 15_000;
+        const heartbeatPayload = encoder.encode(": heartbeat\n\n");
+        const heartbeatInterval = setInterval(() => {
+          safeEnqueue(heartbeatPayload);
+        }, HEARTBEAT_INTERVAL_MS);
+
         try {
           for await (const event of chatStream(credentials, chatMessages, selectedModel, 30, sessionId, phase, abortController.signal)) {
             if (event.type === "tool_end") toolCount++;
@@ -199,6 +206,7 @@ export async function POST(request: NextRequest) {
           safeEnqueue(encoder.encode(errorEvent));
           // Don't end session on stream error - client may retry
         } finally {
+          clearInterval(heartbeatInterval);
           safeClose();
         }
       },
