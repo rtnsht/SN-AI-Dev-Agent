@@ -61,6 +61,22 @@ class LogPersistence {
   constructor() {
     this.startFlushLoop();
     this.registerShutdownHook();
+    // Non-blocking connectivity check on startup
+    this.checkConnectivity().catch(() => {});
+  }
+
+  private async checkConnectivity(): Promise<void> {
+    try {
+      const db = getSupabase();
+      const { error } = await db.from("session_logs").select("session_id").limit(1);
+      if (error) {
+        console.error("[log-persistence] Supabase connectivity check FAILED:", error.message, error.code);
+      } else {
+        console.log("[log-persistence] Supabase connectivity check PASSED — session_logs table accessible");
+      }
+    } catch (err) {
+      console.error("[log-persistence] Supabase connectivity check ERROR (missing SUPABASE_URL/SUPABASE_SERVICE_KEY?):", err);
+    }
   }
 
   enqueue(sessionId: string, entry: LogEntry): void {
@@ -72,6 +88,7 @@ class LogPersistence {
     if (!entries) {
       entries = [];
       this.buffer.set(sessionId, entries);
+      console.log(`[log-persistence] New session buffer: ${sessionId} (active buffers: ${this.buffer.size})`);
     }
 
     const entrySize = JSON.stringify(entry).length;
@@ -151,7 +168,14 @@ class LogPersistence {
         });
 
         if (error) {
-          console.error(`[log-persistence] RPC failed for ${sessionId}:`, error.message, error.details || "");
+          const isRpcMissing = error.message?.includes("Could not find") ||
+                               error.code === "PGRST202" ||
+                               (error.message?.includes("function") && error.message?.includes("does not exist"));
+          if (isRpcMissing) {
+            console.error(`[log-persistence] RPC function 'append_session_log_entries' NOT FOUND in Supabase. Run migration 010_fix_session_logs_rpc.sql. Falling back to direct write.`);
+          } else {
+            console.error(`[log-persistence] RPC failed for ${sessionId}:`, error.message, error.code, error.details || "");
+          }
           writeSucceeded = await this.upsertFallback(sessionId, entriesToAppend, cumulative, overflow);
         } else {
           console.log(`[log-persistence] RPC succeeded for ${sessionId}: ${entriesToAppend.length} entries appended`);
@@ -306,6 +330,7 @@ class LogPersistence {
   ): Promise<boolean> {
     try {
       const db = getSupabase();
+      console.log(`[log-persistence] upsertFallback: attempting for ${sessionId}, ${entries.length} entries`);
 
       // Fetch existing log_entries to merge instead of overwrite
       let mergedEntries = entries;
@@ -343,12 +368,13 @@ class LogPersistence {
         { onConflict: "session_id" }
       );
       if (error) {
-        console.error(`[log-persistence] upsertFallback DB error for ${sessionId}:`, error.message, error.details);
+        console.error(`[log-persistence] upsertFallback FAILED for ${sessionId}:`, error.message, error.code, error.details, error.hint);
         return false;
       }
+      console.log(`[log-persistence] upsertFallback SUCCEEDED for ${sessionId}: ${mergedEntries.length} entries written`);
       return true;
     } catch (err) {
-      console.error(`[log-persistence] upsertFallback failed for ${sessionId}:`, err);
+      console.error(`[log-persistence] upsertFallback exception for ${sessionId}:`, err);
       return false;
     }
   }
@@ -427,7 +453,14 @@ class LogPersistence {
   }
 
   private startFlushLoop(): void {
+    console.log(`[log-persistence] Flush loop started (interval=${FLUSH_INTERVAL_MS}ms)`);
     this.flushInterval = setInterval(() => {
+      const sessionCount = [...this.buffer.keys()].filter(
+        (id) => (this.buffer.get(id)?.length || 0) > 0
+      ).length;
+      if (sessionCount > 0) {
+        console.log(`[log-persistence] Flush loop tick: ${sessionCount} session(s) with buffered entries`);
+      }
       this.flushAll(FLUSH_INTERVAL_MS - 1000).catch((err) => {
         console.error("[log-persistence] flush loop error:", err);
       });
@@ -455,10 +488,20 @@ function sleep(ms: number): Promise<void> {
 
 // Singleton — only instantiated when enabled
 let _instance: LogPersistence | null = null;
+let _disabledLogged = false;
 
 export function getLogPersistence(): LogPersistence | null {
-  if (!ENABLED) return null;
+  if (!ENABLED) {
+    if (!_disabledLogged) {
+      console.warn(
+        `[log-persistence] DISABLED — LOG_PERSISTENCE_ENABLED is not "true" (current value: ${JSON.stringify(process.env.LOG_PERSISTENCE_ENABLED)})`
+      );
+      _disabledLogged = true;
+    }
+    return null;
+  }
   if (!_instance) {
+    console.log(`[log-persistence] Initializing singleton — flush interval: ${FLUSH_INTERVAL_MS}ms`);
     _instance = new LogPersistence();
   }
   return _instance;
