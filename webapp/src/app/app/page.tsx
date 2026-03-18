@@ -47,19 +47,25 @@ function stripHeavyData(messages: ChatMessage[]): ChatMessage[] {
 function getFriendlyErrorMessage(raw: string): string {
   const lower = raw.toLowerCase();
   if (lower.includes("enotfound"))
-    return "Instance not found. Please check the URL is correct (e.g. https://your-instance.service-now.com).";
+    return "Instance not found. Please check that the URL is correct (e.g., https://your-instance.service-now.com) and try again.";
   if (lower.includes("econnrefused"))
-    return "Connection refused. The instance may be down or the URL is incorrect.";
+    return "Connection refused. The instance may be down or the URL may be incorrect. Please verify and try again.";
   if (lower.includes("etimedout") || lower.includes("econnaborted") || lower.includes("timeout"))
-    return "Connection timed out. The instance may be hibernating or unreachable. Try waking it up in your browser first.";
+    return "Connection timed out. The instance may be hibernating or unreachable. Try opening it in your browser first, then reconnect.";
   if (lower.includes("econnreset") || lower.includes("socket hang up"))
     return "Connection was reset unexpectedly. Please try again.";
+  if (lower.includes("login page") || lower.includes("redirect"))
+    return "Authentication failed. The server redirected to a login page instead of responding to the API request. Please check your username and password, then reconnect.";
+  if (lower.includes("user") && lower.includes("not found"))
+    return "The username was not found on this instance. Please check the username and reconnect with valid credentials.";
   if (lower.includes("401") || lower.includes("unauthorized") || lower.includes("invalid user") || lower.includes("invalid password"))
-    return "Authentication failed. Please check your username and password.";
+    return "Authentication failed. Please check your username and password, then reconnect.";
   if (lower.includes("403") || lower.includes("forbidden"))
-    return "Access denied. This user may not have REST API access on the instance.";
+    return "Access denied. This user may not have REST API access on this instance. Please verify the user's permissions and reconnect.";
   if (lower.includes("404"))
-    return "Instance API not found. Please verify the instance URL is correct.";
+    return "Instance API endpoint not found. Please verify the instance URL is correct and try again.";
+  if (lower.includes("no roles") || lower.includes("does not have any roles"))
+    return "This user does not have any roles assigned on the instance. Please assign the required roles (e.g., admin, itil) and reconnect.";
   if (lower.includes("missing required fields") || lower.includes("please provide"))
     return raw;
   if (
@@ -72,9 +78,9 @@ function getFriendlyErrorMessage(raw: string): string {
     lower.includes("altname_invalid") ||
     lower.includes("self signed")
   )
-    return "SSL/certificate error. The instance may have an invalid or expired certificate.";
+    return "SSL/certificate error. The instance may have an invalid or expired certificate. Please verify and try again.";
   if (lower.includes("networkerror") || lower.includes("network error") || lower.includes("failed to fetch"))
-    return "Network error. Please check your internet connection.";
+    return "Network error. Please check your internet connection and try again.";
   return "Connection failed. Please verify your settings and try again.";
 }
 
@@ -507,7 +513,34 @@ export default function Home() {
           password: credentials.password,
         }),
       });
+
+      // Handle HTTP-level errors (e.g., 400, 500) before parsing JSON
+      if (!res.ok) {
+        let errorData: { message?: string } | null = null;
+        try { errorData = await res.json(); } catch { /* response may not be JSON */ }
+        const rawMsg = errorData?.message || `Server returned status ${res.status}`;
+        const friendly = getFriendlyErrorMessage(rawMsg);
+        setConnectionError(friendly);
+        const errMsgs = [...messagesRef.current, { role: "system" as const, type: "error" as const, content: `Connection failed: ${friendly}`, timestamp: new Date().toISOString() }];
+        messagesRef.current = errMsgs;
+        setMessages(errMsgs);
+        setIsConnecting(false);
+        return;
+      }
+
       const data: ConnectionResult = await res.json();
+
+      // Handle no-roles: block connection and show error with reconnect guidance
+      if (data.success && data.noRoles) {
+        const noRolesMsg = "This user does not have any roles assigned on this instance. Please assign the required roles (e.g., admin, itil) and reconnect.";
+        setConnectionError(noRolesMsg);
+        const errMsgs = [...messagesRef.current, { role: "system" as const, type: "error" as const, content: `Connection failed: ${noRolesMsg}`, timestamp: new Date().toISOString() }];
+        messagesRef.current = errMsgs;
+        setMessages(errMsgs);
+        setIsConnecting(false);
+        return;
+      }
+
       if (data.success) {
         setConnected(true);
         setConnInfo(data);

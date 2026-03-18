@@ -815,14 +815,29 @@ export async function testConnection(credentials: Omit<UserCredentials, "claudeA
   if (!(connResult as any)?.success) return connResult;
 
   // 2. Get current user sys_id
-  const userRecords = await snClient.getRecords("sys_user", {
-    sysparm_query: `user_name=${credentials.username}`,
-    sysparm_fields: "sys_id,user_name,name,email",
-    sysparm_limit: 1,
-  });
-  const user = userRecords?.[0];
-  const userSysId = user?.sys_id;
-  const userName = user?.name || credentials.username;
+  let user: Record<string, unknown> | undefined;
+  let userSysId: unknown;
+  let userName: string = credentials.username;
+  try {
+    const userRecords = await snClient.getRecords("sys_user", {
+      sysparm_query: `user_name=${credentials.username}`,
+      sysparm_fields: "sys_id,user_name,name,email",
+      sysparm_limit: 1,
+    });
+    user = userRecords?.[0];
+    userSysId = user?.sys_id;
+    userName = (user?.name as string) || credentials.username;
+  } catch (err) {
+    console.warn("[testConnection] User lookup failed:", err);
+  }
+
+  // If the user was not found, the username is likely wrong
+  if (!user || !userSysId) {
+    return {
+      success: false,
+      message: `User "${credentials.username}" was not found on this instance. Please check the username and try again.`,
+    };
+  }
 
   // 3. Check roles via sys_user_has_role with display values
   //    ServiceNow returns reference fields as objects { link, value } by default.
@@ -854,6 +869,7 @@ export async function testConnection(credentials: Omit<UserCredentials, "claudeA
 
   const hasAdmin = roles.includes("admin");
   const hasSecurityAdmin = roles.includes("security_admin");
+  const noRoles = roles.length === 0;
 
   // 4. Fetch assignment groups for the user (non-blocking — fallback to empty)
   let assignmentGroups: { sysId: string; name: string }[] = [];
@@ -893,6 +909,7 @@ export async function testConnection(credentials: Omit<UserCredentials, "claudeA
     roles,
     hasAdmin,
     hasSecurityAdmin,
+    noRoles,
   };
 }
 
