@@ -32,13 +32,13 @@ export default function ThemeProvider({ children }: { children: React.ReactNode 
   const [theme, setTheme] = useState<Theme>("dark");
   const [mounted, setMounted] = useState(false);
 
-  // Always start in dark mode — user can toggle to light, but each session starts dark
+  // Restore saved theme from localStorage (defaults to dark)
   useEffect(() => {
-    const initial: Theme = "dark";
+    const saved = localStorage.getItem("app-theme");
+    const initial: Theme = saved === "light" ? "light" : "dark";
     setTheme(initial);
     document.documentElement.setAttribute("data-theme", initial);
     applyBrandColors(initial);
-    localStorage.setItem("app-theme", initial);
     setMounted(true);
   }, []);
 
