@@ -277,14 +277,14 @@ function summarizeDroppedMessages(dropped: Anthropic.MessageParam[]): string {
  *   2. Drop middle messages, replace with extractive summary (Phase 4b)
  *   3. Keep first 2 + summary + last N recent messages
  */
-function trimConversationHistory(messages: Anthropic.MessageParam[]): Anthropic.MessageParam[] {
+function trimConversationHistory(messages: Anthropic.MessageParam[], sessionId: string = "system"): Anthropic.MessageParam[] {
   const estimatedTokens = estimateConversationTokens(messages);
 
   if (estimatedTokens < CONTEXT_WARNING_TOKENS) {
     return messages;
   }
 
-  logger.info("system", "context_mgmt", "Context budget exceeded, applying progressive compression", {
+  logger.info(sessionId, "context_mgmt", "Context budget exceeded, applying progressive compression", {
     estimatedTokens,
     warningThreshold: CONTEXT_WARNING_TOKENS,
     messageCount: messages.length,
@@ -293,7 +293,7 @@ function trimConversationHistory(messages: Anthropic.MessageParam[]): Anthropic.
   // Step 1: Compress old tool results (keeps all messages, just shrinks content)
   let compressed = compressOldToolResults(messages);
   let compressedTokens = estimateConversationTokens(compressed);
-  logger.info("system", "context_mgmt", "After tool-result compression", { tokensAfter: compressedTokens, tokensBefore: estimatedTokens });
+  logger.info(sessionId, "context_mgmt", "After tool-result compression", { tokensAfter: compressedTokens, tokensBefore: estimatedTokens });
 
   if (compressedTokens < CONTEXT_WARNING_TOKENS) {
     return compressed;
@@ -325,7 +325,7 @@ function trimConversationHistory(messages: Anthropic.MessageParam[]): Anthropic.
   result.push(...compressed.slice(-recentCount));
 
   const newTokens = estimateConversationTokens(result);
-  logger.info("system", "context_mgmt", "Dropped middle messages with extractive summary", {
+  logger.info(sessionId, "context_mgmt", "Dropped middle messages with extractive summary", {
     tokensBefore: estimatedTokens,
     tokensAfter: newTokens,
     messagesBefore: messages.length,
@@ -634,7 +634,7 @@ export async function chat(
   while (rounds < maxToolRounds) {
     rounds++;
 
-    const trimmedMessages = trimConversationHistory(anthropicMessages);
+    const trimmedMessages = trimConversationHistory(anthropicMessages, sessionId);
     if (trimmedMessages.length !== anthropicMessages.length) {
       const beforeCount = anthropicMessages.length;
       anthropicMessages.length = 0;
@@ -1404,7 +1404,7 @@ export async function* chatStream(
 
     rounds++;
 
-    const trimmedMessages = trimConversationHistory(anthropicMessages);
+    const trimmedMessages = trimConversationHistory(anthropicMessages, sessionId);
     if (trimmedMessages.length !== anthropicMessages.length) {
       const beforeCount = anthropicMessages.length;
       anthropicMessages.length = 0;

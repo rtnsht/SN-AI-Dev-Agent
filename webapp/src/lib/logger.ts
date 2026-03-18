@@ -85,8 +85,15 @@ function redactSensitive(obj: unknown): unknown {
       lowerKey.includes("apikey") ||
       lowerKey.includes("api_key") ||
       lowerKey.includes("secret") ||
-      lowerKey.includes("token") ||
-      lowerKey.includes("credential")
+      lowerKey.includes("credential") ||
+      // Auth tokens only — preserve metric fields like inputTokens, outputTokens
+      lowerKey === "token" ||
+      lowerKey.includes("sessiontoken") ||
+      lowerKey.includes("authtoken") ||
+      lowerKey.includes("accesstoken") ||
+      lowerKey.includes("refreshtoken") ||
+      lowerKey.includes("bearertoken") ||
+      lowerKey.includes("csrf")
     ) {
       result[key] = "[REDACTED]";
     } else if (typeof value === "object") {
@@ -125,19 +132,17 @@ export function getSession(sessionId: string): SessionContext | undefined {
   return sessions.get(sessionId);
 }
 
-// End session
-export function endSession(sessionId: string, outcome: "success" | "error" | "cancelled"): void {
+// End session — returns the finalization promise so callers can await flush completion
+export function endSession(sessionId: string, outcome: "success" | "error" | "cancelled"): Promise<void> | undefined {
   const session = sessions.get(sessionId);
   if (session) {
     const durationMs = Date.now() - session.startTime.getTime();
     log("info", sessionId, "session", "Session ended", { outcome, durationMs });
     sessions.delete(sessionId);
 
-    // Final flush to Supabase + mark complete (async, non-blocking)
     const status = outcome === "success" ? "completed" : outcome;
-    getLogPersistence()
-      ?.finalizeSession(sessionId, { outcome: status, durationMs })
-      .catch(() => {});
+    return getLogPersistence()
+      ?.finalizeSession(sessionId, { outcome: status, durationMs });
   }
 }
 

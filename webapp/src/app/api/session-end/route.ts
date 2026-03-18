@@ -22,17 +22,20 @@ export async function POST(request: NextRequest) {
     log("info", sessionId, "session_end", "Session ended — client signaled end");
     stopTelemetryStream(sessionId);
 
-    // endSession checks the in-memory sessions map; if found, it logs and
-    // calls finalizeSession internally. If not found (e.g. server restarted),
-    // we fall back to finalizing directly.
-    endSession(sessionId, "success");
+    // endSession checks the in-memory sessions map; if found, it returns the
+    // finalizeSession promise so we can await the flush before responding.
+    // If not found (e.g. server restarted), we fall back to finalizing directly.
+    const endPromise = endSession(sessionId, "success");
 
-    // Fallback: if the session wasn't in the in-memory map, finalizeSession
-    // was never called above. Safe to call again — it's idempotent (flush +
-    // UPDATE status = completed).
-    getLogPersistence()
-      ?.finalizeSession(sessionId, { outcome: "completed" })
-      .catch(() => {});
+    try {
+      if (endPromise) {
+        await endPromise;
+      } else {
+        await getLogPersistence()?.finalizeSession(sessionId, { outcome: "completed" });
+      }
+    } catch (flushErr) {
+      console.error("[session-end] finalizeSession error:", flushErr);
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {
