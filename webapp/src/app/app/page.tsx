@@ -60,12 +60,21 @@ function getFriendlyErrorMessage(raw: string): string {
     return "Access denied. This user may not have REST API access on the instance.";
   if (lower.includes("404"))
     return "Instance API not found. Please verify the instance URL is correct.";
-  if (lower.includes("networkerror") || lower.includes("failed to fetch") || lower.includes("network"))
-    return "Network error. Please check your internet connection.";
   if (lower.includes("missing required fields") || lower.includes("please provide"))
     return raw;
-  if (lower.includes("certificate") || lower.includes("ssl") || lower.includes("cert"))
+  if (
+    lower.includes("certificate") ||
+    lower.includes("ssl") ||
+    lower.includes("cert") ||
+    lower.includes("tls") ||
+    lower.includes("x509") ||
+    lower.includes("err_tls") ||
+    lower.includes("altname_invalid") ||
+    lower.includes("self signed")
+  )
     return "SSL/certificate error. The instance may have an invalid or expired certificate.";
+  if (lower.includes("networkerror") || lower.includes("network error") || lower.includes("failed to fetch"))
+    return "Network error. Please check your internet connection.";
   return "Connection failed. Please verify your settings and try again.";
 }
 
