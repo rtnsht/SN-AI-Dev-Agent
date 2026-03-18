@@ -141,12 +141,20 @@ export default function SettingsPanel({
         )}
         <Image src={APP_LOGO} alt="App Logo" width={32} height={32} className="rounded-md" unoptimized />
         <div>
-          <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Connection</h2>
-          <p className="sidebar-group-label" style={{ padding: 0, fontSize: "10px" }}>ServiceNow Instance</p>
+          <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Settings</h2>
+          <p className="text-[10px]" style={{ color: "var(--text-disabled)", padding: 0 }}>Configure your connection</p>
         </div>
       </div>
 
-      <div className="space-y-3 flex-1 overflow-y-auto">
+      <div className="space-y-4 flex-1 overflow-y-auto">
+        {/* ── Section 1: ServiceNow Instance ── */}
+        <div style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "12px" }}>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-semibold" style={{ background: "rgba(76,125,255,0.1)", color: "var(--color-info)", border: "1px solid rgba(76,125,255,0.2)" }}>1</span>
+            <span className="text-[11px] font-semibold" style={{ color: "var(--text-primary)" }}>ServiceNow Instance</span>
+            <svg className="w-3.5 h-3.5 ml-auto" style={{ color: "var(--text-disabled)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
+          </div>
+          <div className="space-y-3">
         <div>
           <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Instance URL</label>
           {serverSnCredsConfigured ? (
@@ -155,7 +163,7 @@ export default function SettingsPanel({
               <span className="text-[11px] truncate" style={{ color: "var(--color-success)" }}>{credentials.instanceUrl}</span>
             </div>
           ) : (
-            <input type="url" placeholder="https://dev12345.service-now.com" value={credentials.instanceUrl} onChange={(e) => update("instanceUrl", e.target.value)} className={INPUT_CLS} style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-secondary)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }} disabled={fieldsDisabled} />
+            <input type="url" placeholder="https://dev12345.service-now.com" value={credentials.instanceUrl} onChange={(e) => update("instanceUrl", e.target.value)} className={INPUT_CLS} style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }} disabled={fieldsDisabled} />
           )}
         </div>
         <div>
@@ -166,7 +174,7 @@ export default function SettingsPanel({
               <span className="text-[11px]" style={{ color: "var(--color-success)" }}>{credentials.username}</span>
             </div>
           ) : (
-            <input type="text" placeholder="admin" value={credentials.username} onChange={(e) => update("username", e.target.value)} className={INPUT_CLS} style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-secondary)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }} disabled={fieldsDisabled} />
+            <input type="text" placeholder="admin" value={credentials.username} onChange={(e) => update("username", e.target.value)} className={INPUT_CLS} style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }} disabled={fieldsDisabled} />
           )}
         </div>
         <div>
@@ -177,12 +185,21 @@ export default function SettingsPanel({
               <span className="text-[11px]" style={{ color: "var(--color-success)" }}>Provided by server</span>
             </div>
           ) : (
-            <input type="password" placeholder="••••••••" value={credentials.password} onChange={(e) => update("password", e.target.value)} className={INPUT_CLS} style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-secondary)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }} disabled={fieldsDisabled} />
+            <input type="password" placeholder="••••••••" value={credentials.password} onChange={(e) => update("password", e.target.value)} className={INPUT_CLS} style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }} disabled={fieldsDisabled} />
           )}
         </div>
+          </div>{/* end space-y-3 */}
+        </div>{/* end Section 1 card */}
 
-        {/* AI Provider Selection */}
-        <div className="pt-3" style={{ borderTop: "1px solid var(--border-default)" }}>
+        {/* ── Section 2: AI Configuration ── */}
+        <div style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "12px" }}>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-semibold" style={{ background: "rgba(168,85,247,0.1)", color: "#a855f7", border: "1px solid rgba(168,85,247,0.2)" }}>2</span>
+            <span className="text-[11px] font-semibold" style={{ color: "var(--text-primary)" }}>AI Configuration</span>
+            <svg className="w-3.5 h-3.5 ml-auto" style={{ color: "var(--text-disabled)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+          </div>
+          <div className="space-y-3">
+        <div>
           <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>AI Provider</label>
           <div className="flex gap-2">
             <button
@@ -190,7 +207,7 @@ export default function SettingsPanel({
               disabled={modelLocked || fieldsDisabled}
               className={`flex-1 px-3 py-2 rounded-md text-[11px] font-medium transition-colors ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
               style={{
-                background: aiProvider === "anthropic" ? "rgba(76,125,255,0.1)" : "var(--surface-secondary)",
+                background: aiProvider === "anthropic" ? "rgba(76,125,255,0.1)" : "var(--surface-elevated)",
                 border: `1px solid ${aiProvider === "anthropic" ? "rgba(76,125,255,0.3)" : "var(--border-emphasis)"}`,
                 color: aiProvider === "anthropic" ? "var(--color-info)" : "var(--text-secondary)",
               }}
@@ -202,7 +219,7 @@ export default function SettingsPanel({
               disabled={modelLocked || fieldsDisabled}
               className={`flex-1 px-3 py-2 rounded-md text-[11px] font-medium transition-colors ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
               style={{
-                background: aiProvider === "openrouter" ? "rgba(168,85,247,0.1)" : "var(--surface-secondary)",
+                background: aiProvider === "openrouter" ? "rgba(168,85,247,0.1)" : "var(--surface-elevated)",
                 border: `1px solid ${aiProvider === "openrouter" ? "rgba(168,85,247,0.3)" : "var(--border-emphasis)"}`,
                 color: aiProvider === "openrouter" ? "#a855f7" : "var(--text-secondary)",
               }}
@@ -219,7 +236,7 @@ export default function SettingsPanel({
         </div>
 
         {/* API Key Section */}
-        <div className="pt-3" style={{ borderTop: "1px solid var(--border-default)" }}>
+        <div className="pt-3" style={{ borderTop: "1px solid var(--border-default)" }} >
           <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>
             {aiProvider === "openrouter" ? "OpenRouter API Key" : "Claude API Key"}
           </label>
@@ -255,7 +272,7 @@ export default function SettingsPanel({
                     }}
                     className={INPUT_CLS}
                     style={{
-                      background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-secondary)",
+                      background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)",
                       border: rateLimitHit ? "1px solid rgba(245,196,81,0.3)" : "1px solid var(--border-emphasis)",
                       color: "var(--text-primary)",
                       opacity: fieldsDisabled ? 0.7 : 1,
@@ -285,7 +302,7 @@ export default function SettingsPanel({
                   value={credentials.openRouterApiKey}
                   onChange={(e) => update("openRouterApiKey", e.target.value)}
                   className={INPUT_CLS}
-                  style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-secondary)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }}
+                  style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }}
                   disabled={fieldsDisabled}
                 />
               )}
@@ -336,7 +353,7 @@ export default function SettingsPanel({
           <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>AI Model</label>
 
           {modelsLoading ? (
-            <div className="flex items-center gap-2 px-3 py-3 rounded-md" style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-emphasis)" }}>
+            <div className="flex items-center gap-2 px-3 py-3 rounded-md" style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-emphasis)" }}>
               <svg className="w-4 h-4 animate-spin" style={{ color: "var(--text-disabled)" }} fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -350,7 +367,7 @@ export default function SettingsPanel({
                 onChange={(e) => !modelLocked && !fieldsDisabled && setSelectedModel(e.target.value)}
                 disabled={modelLocked || fieldsDisabled}
                 className={`${INPUT_CLS} ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : ""}`}
-                style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)" }}
+                style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)" }}
               >
                 {displayModels.map((opt) => (
                   <option key={opt.key} value={opt.key}>{opt.label}</option>
@@ -374,7 +391,7 @@ export default function SettingsPanel({
                     disabled={modelLocked || fieldsDisabled}
                     className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
                     style={{
-                      background: isSelected ? `color-mix(in srgb, ${accentColor} 8%, transparent)` : "var(--surface-secondary)",
+                      background: isSelected ? `color-mix(in srgb, ${accentColor} 8%, transparent)` : "var(--surface-elevated)",
                       border: `1px solid ${isSelected ? `color-mix(in srgb, ${accentColor} 30%, transparent)` : "var(--border-emphasis)"}`,
                     }}
                   >
@@ -420,6 +437,8 @@ export default function SettingsPanel({
             </div>
           )}
         </div>
+          </div>{/* end space-y-3 */}
+        </div>{/* end Section 2 card */}
 
         {/* Connection status card */}
         {connected && connInfo && (
