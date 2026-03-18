@@ -13,12 +13,15 @@ export async function POST(request: NextRequest) {
     const password = body.password || (canUseServerCreds ? process.env.SN_PASSWORD || "" : "");
 
     if (!instanceUrl || !username || !password) {
-      return NextResponse.json({
-        success: false,
-        message: canUseServerCreds
-          ? "Missing required fields: instanceUrl, username, password"
-          : "Please provide instance URL, username, and password.",
-      });
+      return NextResponse.json(
+        {
+          success: false,
+          message: canUseServerCreds
+            ? "Missing required fields: instanceUrl, username, password"
+            : "Please provide instance URL, username, and password.",
+        },
+        { status: 400 },
+      );
     }
 
     const result = await testConnection({ instanceUrl, username, password });
@@ -27,7 +30,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Test connection error:", error);
     const message = error instanceof Error ? error.message : "Connection test failed";
-    return NextResponse.json({ success: false, message });
+    return NextResponse.json({ success: false, message }, { status: 500 });
   }
 }
 
