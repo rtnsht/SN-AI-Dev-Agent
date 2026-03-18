@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { chat, type UserCredentials, type ChatMessage } from "@/lib/sn-engine";
 import { checkAccess } from "@/lib/access-tier";
 import { logger, generateSessionId } from "@/lib/logger";
+import { getSupabase } from "@/lib/supabase";
 
 export const maxDuration = 300; // Allow up to 5 minutes for tool-use loops
 
@@ -133,6 +134,17 @@ export async function POST(request: NextRequest) {
     }));
 
     const selectedModel = model || "claude-sonnet-4-6";
+
+    // Update session_logs.model to reflect the actual model used in this chat
+    if (sessionId && sessionId !== "unknown") {
+      try {
+        getSupabase().from("session_logs")
+          .update({ model: selectedModel, updated_at: new Date().toISOString() })
+          .eq("session_id", sessionId)
+          .then(() => {}).catch(() => {});
+      } catch { /* non-blocking */ }
+    }
+
     const imageCount = chatMessages.reduce((acc, m) => acc + (m.images?.length || 0), 0);
 
     // Log per-message timestamps for audit trail
