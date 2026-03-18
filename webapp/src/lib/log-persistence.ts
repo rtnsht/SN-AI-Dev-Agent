@@ -10,7 +10,7 @@
  *  - Staggered flush: batches of 20 sessions, 500ms gaps, max 10 concurrent
  *  - JSONB cap: 500 entries/row, then metadata-only updates
  *  - SIGTERM: best-effort flush with 7s timeout
- *  - Upsert-based self-healing if initSession failed
+ *  - Upsert-based self-healing if session row was not created
  *  - Per-session flush lock to prevent concurrent flushes
  *  - Cumulative counters across flushes (not per-batch)
  *  - Fetch+merge fallback to prevent log_entries overwrite
@@ -36,18 +36,6 @@ interface LogEntry {
   message: string;
   data?: Record<string, unknown>;
   durationMs?: number;
-}
-
-interface SessionMetadata {
-  sessionId: string;
-  userId?: string;
-  instanceUrl?: string;
-  username?: string;
-  userFullName?: string;
-  aiProvider?: string;
-  model?: string;
-  ipAddress?: string;
-  userAgent?: string;
 }
 
 interface SessionCounters {
@@ -96,32 +84,6 @@ class LogPersistence {
 
     entries.push(entry);
     this.globalBufferBytes += entrySize;
-  }
-
-  async initSession(metadata: SessionMetadata): Promise<void> {
-    try {
-      const db = getSupabase();
-      // BUG-7 fix: Don't include started_at in the upsert payload.
-      // The DB column has DEFAULT now() for INSERT; on conflict (reconnect)
-      // the original started_at is preserved.
-      await db.from("session_logs").upsert(
-        {
-          session_id: metadata.sessionId,
-          user_id: metadata.userId || null,
-          instance_url: metadata.instanceUrl || null,
-          username: metadata.username || null,
-          user_full_name: metadata.userFullName || null,
-          ai_provider: metadata.aiProvider || null,
-          model: metadata.model || null,
-          ip_address: metadata.ipAddress || null,
-          user_agent: metadata.userAgent || null,
-          status: "active",
-        },
-        { onConflict: "session_id" }
-      );
-    } catch (err) {
-      console.error("[log-persistence] initSession failed (will self-heal on flush):", err);
-    }
   }
 
   async flush(sessionId: string): Promise<void> {
@@ -337,7 +299,7 @@ class LogPersistence {
         // Row doesn't exist yet — use entries as-is (INSERT path)
       }
 
-      await db.from("session_logs").upsert(
+      const { error } = await db.from("session_logs").upsert(
         {
           session_id: sessionId,
           log_entries: mergedEntries,
@@ -353,6 +315,10 @@ class LogPersistence {
         },
         { onConflict: "session_id" }
       );
+      if (error) {
+        console.error(`[log-persistence] upsertFallback DB error for ${sessionId}:`, error.message, error.details);
+        return false;
+      }
       return true;
     } catch (err) {
       console.error(`[log-persistence] upsertFallback failed for ${sessionId}:`, err);
