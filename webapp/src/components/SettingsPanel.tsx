@@ -42,6 +42,7 @@ interface Props {
 }
 
 const INPUT_CLS = "w-full px-3 py-2.5 rounded-md text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-info)] focus:border-transparent";
+const OPENROUTER_COLOR = "#a855f7";
 
 function UsageDisplay({ usage, onRefresh }: { usage: UsageInfo; onRefresh?: () => Promise<void> }) {
   const [refreshing, setRefreshing] = useState(false);
@@ -152,292 +153,292 @@ export default function SettingsPanel({
           <div className="flex items-center gap-2 mb-3">
             <span className="flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-semibold" style={{ background: "rgba(76,125,255,0.1)", color: "var(--color-info)", border: "1px solid rgba(76,125,255,0.2)" }}>1</span>
             <span className="text-[11px] font-semibold" style={{ color: "var(--text-primary)" }}>ServiceNow Instance</span>
-            <svg className="w-3.5 h-3.5 ml-auto" style={{ color: "var(--text-disabled)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
+            <svg className="w-3.5 h-3.5 ml-auto" style={{ color: "var(--text-disabled)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
           </div>
           <div className="space-y-3">
-        <div>
-          <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Instance URL</label>
-          {serverSnCredsConfigured ? (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
-              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
-              <span className="text-[11px] truncate" style={{ color: "var(--color-success)" }}>{credentials.instanceUrl}</span>
+            <div>
+              <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Instance URL</label>
+              {serverSnCredsConfigured ? (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
+                  <span className="text-[11px] truncate" style={{ color: "var(--color-success)" }}>{credentials.instanceUrl}</span>
+                </div>
+              ) : (
+                <input type="url" placeholder="https://dev12345.service-now.com" value={credentials.instanceUrl} onChange={(e) => update("instanceUrl", e.target.value)} className={INPUT_CLS} style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }} disabled={fieldsDisabled} />
+              )}
             </div>
-          ) : (
-            <input type="url" placeholder="https://dev12345.service-now.com" value={credentials.instanceUrl} onChange={(e) => update("instanceUrl", e.target.value)} className={INPUT_CLS} style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }} disabled={fieldsDisabled} />
-          )}
-        </div>
-        <div>
-          <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Username</label>
-          {serverSnCredsConfigured ? (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
-              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
-              <span className="text-[11px]" style={{ color: "var(--color-success)" }}>{credentials.username}</span>
+            <div>
+              <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Username</label>
+              {serverSnCredsConfigured ? (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
+                  <span className="text-[11px]" style={{ color: "var(--color-success)" }}>{credentials.username}</span>
+                </div>
+              ) : (
+                <input type="text" placeholder="admin" value={credentials.username} onChange={(e) => update("username", e.target.value)} className={INPUT_CLS} style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }} disabled={fieldsDisabled} />
+              )}
             </div>
-          ) : (
-            <input type="text" placeholder="admin" value={credentials.username} onChange={(e) => update("username", e.target.value)} className={INPUT_CLS} style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }} disabled={fieldsDisabled} />
-          )}
-        </div>
-        <div>
-          <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Password</label>
-          {serverSnCredsConfigured ? (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
-              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
-              <span className="text-[11px]" style={{ color: "var(--color-success)" }}>Provided by server</span>
+            <div>
+              <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Password</label>
+              {serverSnCredsConfigured ? (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
+                  <span className="text-[11px]" style={{ color: "var(--color-success)" }}>Provided by server</span>
+                </div>
+              ) : (
+                <input type="password" placeholder="••••••••" value={credentials.password} onChange={(e) => update("password", e.target.value)} className={INPUT_CLS} style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }} disabled={fieldsDisabled} />
+              )}
             </div>
-          ) : (
-            <input type="password" placeholder="••••••••" value={credentials.password} onChange={(e) => update("password", e.target.value)} className={INPUT_CLS} style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }} disabled={fieldsDisabled} />
-          )}
-        </div>
-          </div>{/* end space-y-3 */}
+          </div>
         </div>{/* end Section 1 card */}
 
         {/* ── Section 2: AI Configuration ── */}
         <div style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "12px" }}>
           <div className="flex items-center gap-2 mb-3">
-            <span className="flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-semibold" style={{ background: "rgba(168,85,247,0.1)", color: "#a855f7", border: "1px solid rgba(168,85,247,0.2)" }}>2</span>
+            <span className="flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-semibold" style={{ background: "rgba(168,85,247,0.1)", color: OPENROUTER_COLOR, border: "1px solid rgba(168,85,247,0.2)" }}>2</span>
             <span className="text-[11px] font-semibold" style={{ color: "var(--text-primary)" }}>AI Configuration</span>
-            <svg className="w-3.5 h-3.5 ml-auto" style={{ color: "var(--text-disabled)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+            <svg className="w-3.5 h-3.5 ml-auto" style={{ color: "var(--text-disabled)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
           </div>
           <div className="space-y-3">
-        <div>
-          <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>AI Provider</label>
-          <div className="flex gap-2">
-            <button
-              onClick={() => !modelLocked && !fieldsDisabled && setAiProvider("anthropic")}
-              disabled={modelLocked || fieldsDisabled}
-              className={`flex-1 px-3 py-2 rounded-md text-[11px] font-medium transition-colors ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
-              style={{
-                background: aiProvider === "anthropic" ? "rgba(76,125,255,0.1)" : "var(--surface-elevated)",
-                border: `1px solid ${aiProvider === "anthropic" ? "rgba(76,125,255,0.3)" : "var(--border-emphasis)"}`,
-                color: aiProvider === "anthropic" ? "var(--color-info)" : "var(--text-secondary)",
-              }}
-            >
-              Anthropic
-            </button>
-            <button
-              onClick={() => !modelLocked && !fieldsDisabled && setAiProvider("openrouter")}
-              disabled={modelLocked || fieldsDisabled}
-              className={`flex-1 px-3 py-2 rounded-md text-[11px] font-medium transition-colors ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
-              style={{
-                background: aiProvider === "openrouter" ? "rgba(168,85,247,0.1)" : "var(--surface-elevated)",
-                border: `1px solid ${aiProvider === "openrouter" ? "rgba(168,85,247,0.3)" : "var(--border-emphasis)"}`,
-                color: aiProvider === "openrouter" ? "#a855f7" : "var(--text-secondary)",
-              }}
-            >
-              OpenRouter
-            </button>
-          </div>
-          {(modelLocked || connected) && (
-            <p className="text-[10px] mt-1 flex items-center gap-1" style={{ color: "var(--text-disabled)" }}>
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-              Locked — click Reconnect to change
-            </p>
-          )}
-        </div>
+            <div>
+              <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>AI Provider</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => !modelLocked && !fieldsDisabled && setAiProvider("anthropic")}
+                  disabled={modelLocked || fieldsDisabled}
+                  className={`flex-1 px-3 py-2 rounded-md text-[11px] font-medium transition-colors ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+                  style={{
+                    background: aiProvider === "anthropic" ? "rgba(76,125,255,0.1)" : "var(--surface-elevated)",
+                    border: `1px solid ${aiProvider === "anthropic" ? "rgba(76,125,255,0.3)" : "var(--border-emphasis)"}`,
+                    color: aiProvider === "anthropic" ? "var(--color-info)" : "var(--text-secondary)",
+                  }}
+                >
+                  Anthropic
+                </button>
+                <button
+                  onClick={() => !modelLocked && !fieldsDisabled && setAiProvider("openrouter")}
+                  disabled={modelLocked || fieldsDisabled}
+                  className={`flex-1 px-3 py-2 rounded-md text-[11px] font-medium transition-colors ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+                  style={{
+                    background: aiProvider === "openrouter" ? "rgba(168,85,247,0.1)" : "var(--surface-elevated)",
+                    border: `1px solid ${aiProvider === "openrouter" ? "rgba(168,85,247,0.3)" : "var(--border-emphasis)"}`,
+                    color: aiProvider === "openrouter" ? OPENROUTER_COLOR : "var(--text-secondary)",
+                  }}
+                >
+                  OpenRouter
+                </button>
+              </div>
+              {(modelLocked || connected) && (
+                <p className="text-[10px] mt-1 flex items-center gap-1" style={{ color: "var(--text-disabled)" }}>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                  Locked — click Reconnect to change
+                </p>
+              )}
+            </div>
 
-        {/* API Key Section */}
-        <div className="pt-3" style={{ borderTop: "1px solid var(--border-default)" }} >
-          <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>
-            {aiProvider === "openrouter" ? "OpenRouter API Key" : "Claude API Key"}
-          </label>
+            {/* API Key Section */}
+            <div className="pt-3" style={{ borderTop: "1px solid var(--border-default)" }}>
+              <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>
+                {aiProvider === "openrouter" ? "OpenRouter API Key" : "Claude API Key"}
+              </label>
 
-          {aiProvider === "anthropic" ? (
-            <>
-              {!allowUserApiKeys && serverApiKeyConfigured ? (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
-                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
-                  <span className="text-[11px]" style={{ color: "var(--color-success)" }}>Managed by server</span>
-                  <svg className="w-3 h-3 ml-auto" style={{ color: "var(--text-disabled)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                </div>
-              ) : serverApiKeyConfigured && !rateLimitHit && !credentials.claudeApiKey ? (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
-                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
-                  <span className="text-[11px]" style={{ color: "var(--color-success)" }}>Provided by server</span>
-                </div>
-              ) : allowUserApiKeys ? (
+              {aiProvider === "anthropic" ? (
                 <>
-                  {rateLimitHit && (
-                    <div className="mb-2 px-3 py-2 rounded-md" style={{ background: "rgba(245,196,81,0.06)", border: "1px solid rgba(245,196,81,0.15)" }}>
-                      <p className="text-[11px] font-medium" style={{ color: "var(--color-warning)" }}>⚡ Free tier limit reached</p>
-                      <p className="text-[10px] mt-0.5" style={{ color: "var(--text-disabled)" }}>Enter your own API key below to continue.</p>
+                  {!allowUserApiKeys && serverApiKeyConfigured ? (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
+                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
+                      <span className="text-[11px]" style={{ color: "var(--color-success)" }}>Managed by server</span>
+                      <svg className="w-3 h-3 ml-auto" style={{ color: "var(--text-disabled)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                    </div>
+                  ) : serverApiKeyConfigured && !rateLimitHit && !credentials.claudeApiKey ? (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
+                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
+                      <span className="text-[11px]" style={{ color: "var(--color-success)" }}>Provided by server</span>
+                    </div>
+                  ) : allowUserApiKeys ? (
+                    <>
+                      {rateLimitHit && (
+                        <div className="mb-2 px-3 py-2 rounded-md" style={{ background: "rgba(245,196,81,0.06)", border: "1px solid rgba(245,196,81,0.15)" }}>
+                          <p className="text-[11px] font-medium" style={{ color: "var(--color-warning)" }}>⚡ Free tier limit reached</p>
+                          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-disabled)" }}>Enter your own API key below to continue.</p>
+                        </div>
+                      )}
+                      <input
+                        type="password"
+                        placeholder="sk-ant-..."
+                        value={credentials.claudeApiKey}
+                        onChange={(e) => {
+                          update("claudeApiKey", e.target.value);
+                          if (e.target.value && rateLimitHit) onApiKeyProvided();
+                        }}
+                        className={INPUT_CLS}
+                        style={{
+                          background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)",
+                          border: rateLimitHit ? "1px solid rgba(245,196,81,0.3)" : "1px solid var(--border-emphasis)",
+                          color: "var(--text-primary)",
+                          opacity: fieldsDisabled ? 0.7 : 1,
+                          ...(rateLimitHit ? { boxShadow: "0 0 0 2px rgba(245,196,81,0.15)" } : {}),
+                        }}
+                        disabled={fieldsDisabled}
+                      />
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(249,115,115,0.06)", border: "1px solid rgba(249,115,115,0.15)" }}>
+                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-failed)" }} />
+                      <span className="text-[11px]" style={{ color: "var(--color-danger)" }}>No API key configured. Contact admin.</span>
                     </div>
                   )}
-                  <input
-                    type="password"
-                    placeholder="sk-ant-..."
-                    value={credentials.claudeApiKey}
-                    onChange={(e) => {
-                      update("claudeApiKey", e.target.value);
-                      if (e.target.value && rateLimitHit) onApiKeyProvided();
-                    }}
-                    className={INPUT_CLS}
-                    style={{
-                      background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)",
-                      border: rateLimitHit ? "1px solid rgba(245,196,81,0.3)" : "1px solid var(--border-emphasis)",
-                      color: "var(--text-primary)",
-                      opacity: fieldsDisabled ? 0.7 : 1,
-                      ...(rateLimitHit ? { boxShadow: "0 0 0 2px rgba(245,196,81,0.15)" } : {}),
-                    }}
-                    disabled={fieldsDisabled}
-                  />
                 </>
               ) : (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(249,115,115,0.06)", border: "1px solid rgba(249,115,115,0.15)" }}>
-                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-failed)" }} />
-                  <span className="text-[11px]" style={{ color: "var(--color-danger)" }}>No API key configured. Contact admin.</span>
-                </div>
+                <>
+                  {serverOpenRouterKeyConfigured && !credentials.openRouterApiKey ? (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
+                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
+                      <span className="text-[11px]" style={{ color: "var(--color-success)" }}>Provided by server</span>
+                    </div>
+                  ) : (
+                    <input
+                      type="password"
+                      placeholder="sk-or-v1-..."
+                      value={credentials.openRouterApiKey}
+                      onChange={(e) => update("openRouterApiKey", e.target.value)}
+                      className={INPUT_CLS}
+                      style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }}
+                      disabled={fieldsDisabled}
+                    />
+                  )}
+                  <p className="text-[10px] mt-1.5 leading-relaxed" style={{ color: "var(--text-disabled)" }}>
+                    Get your key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: OPENROUTER_COLOR }}>openrouter.ai/keys</a>
+                  </p>
+                </>
               )}
-            </>
-          ) : (
-            <>
-              {serverOpenRouterKeyConfigured && !credentials.openRouterApiKey ? (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
-                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
-                  <span className="text-[11px]" style={{ color: "var(--color-success)" }}>Provided by server</span>
-                </div>
-              ) : (
-                <input
-                  type="password"
-                  placeholder="sk-or-v1-..."
-                  value={credentials.openRouterApiKey}
-                  onChange={(e) => update("openRouterApiKey", e.target.value)}
-                  className={INPUT_CLS}
-                  style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }}
-                  disabled={fieldsDisabled}
-                />
+
+              {/* Usage info */}
+              {usage && ((aiProvider === "anthropic" && serverApiKeyConfigured && !credentials.claudeApiKey) || (aiProvider === "openrouter" && serverOpenRouterKeyConfigured && !credentials.openRouterApiKey)) && (
+                <UsageDisplay usage={usage} onRefresh={onRefreshUsage} />
               )}
-              <p className="text-[10px] mt-1.5 leading-relaxed" style={{ color: "var(--text-disabled)" }}>
-                Get your key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: "#a855f7" }}>openrouter.ai/keys</a>
-              </p>
-            </>
-          )}
 
-          {/* Usage info */}
-          {usage && ((aiProvider === "anthropic" && serverApiKeyConfigured && !credentials.claudeApiKey) || (aiProvider === "openrouter" && serverOpenRouterKeyConfigured && !credentials.openRouterApiKey)) && (
-            <UsageDisplay usage={usage} onRefresh={onRefreshUsage} />
-          )}
-
-          {/* Trial status */}
-          {trialStatus?.isConfigured && (
-            <div className="mt-2 space-y-1.5" style={{ padding: "8px", borderRadius: "8px", background: "var(--surface-elevated)" }}>
-              <div className="flex items-center justify-between text-[10px]">
-                <span style={{ color: "var(--text-secondary)" }}>
-                  {trialStatus.dailyUsed}/{trialStatus.dailyLimit} daily requests
-                </span>
-                <span className="font-medium" style={{
-                  color: trialStatus.trialExpired ? "var(--color-danger)" : trialStatus.daysLeft <= 2 ? "var(--color-warning)" : "var(--text-disabled)"
-                }}>
-                  {trialStatus.trialExpired ? "Trial ended" : `${trialStatus.daysLeft}d left`}
-                </span>
-              </div>
-              <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "var(--surface-app)" }}>
-                <div
-                  className="h-full rounded-full transition-all duration-500"
-                  style={{
-                    width: `${Math.min(100, (trialStatus.dailyUsed / trialStatus.dailyLimit) * 100)}%`,
-                    background: trialStatus.dailyUsed >= trialStatus.dailyLimit ? "var(--color-danger)" : "var(--color-info)",
-                  }}
-                />
-              </div>
-              {(trialStatus.trialExpired || trialStatus.dailyUsed >= trialStatus.dailyLimit) && allowUserApiKeys && (
-                <p className="text-[10px] mt-1" style={{ color: "var(--color-warning)" }}>
-                  Connect your own API key to continue
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Model selection */}
-        <div className="pt-3" style={{ borderTop: "1px solid var(--border-default)" }}>
-          <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>AI Model</label>
-
-          {modelsLoading ? (
-            <div className="flex items-center gap-2 px-3 py-3 rounded-md" style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-emphasis)" }}>
-              <svg className="w-4 h-4 animate-spin" style={{ color: "var(--text-disabled)" }} fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              <span className="text-[11px]" style={{ color: "var(--text-disabled)" }}>Loading models...</span>
-            </div>
-          ) : aiProvider === "openrouter" && displayModels.length > 10 ? (
-            <>
-              <select
-                value={selectedModel}
-                onChange={(e) => !modelLocked && !fieldsDisabled && setSelectedModel(e.target.value)}
-                disabled={modelLocked || fieldsDisabled}
-                className={`${INPUT_CLS} ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : ""}`}
-                style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)" }}
-              >
-                {displayModels.map((opt) => (
-                  <option key={opt.key} value={opt.key}>{opt.label}</option>
-                ))}
-              </select>
-              {selectedModel && (
-                <p className="text-[10px] mt-1" style={{ color: "var(--text-disabled)" }}>
-                  {displayModels.find(m => m.key === selectedModel)?.description || ""}
-                </p>
-              )}
-            </>
-          ) : (
-            <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
-              {displayModels.map((opt) => {
-                const isSelected = selectedModel === opt.key;
-                const accentColor = aiProvider === "openrouter" ? "#a855f7" : "var(--color-info)";
-                return (
-                  <button
-                    key={opt.key}
-                    onClick={() => !modelLocked && !fieldsDisabled && setSelectedModel(opt.key)}
-                    disabled={modelLocked || fieldsDisabled}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
-                    style={{
-                      background: isSelected ? `color-mix(in srgb, ${accentColor} 8%, transparent)` : "var(--surface-elevated)",
-                      border: `1px solid ${isSelected ? `color-mix(in srgb, ${accentColor} 30%, transparent)` : "var(--border-emphasis)"}`,
-                    }}
-                  >
+              {/* Trial status */}
+              {trialStatus?.isConfigured && (
+                <div className="mt-2 space-y-1.5" style={{ padding: "8px", borderRadius: "8px", background: "var(--surface-elevated)" }}>
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span style={{ color: "var(--text-secondary)" }}>
+                      {trialStatus.dailyUsed}/{trialStatus.dailyLimit} daily requests
+                    </span>
+                    <span className="font-medium" style={{
+                      color: trialStatus.trialExpired ? "var(--color-danger)" : trialStatus.daysLeft <= 2 ? "var(--color-warning)" : "var(--text-disabled)"
+                    }}>
+                      {trialStatus.trialExpired ? "Trial ended" : `${trialStatus.daysLeft}d left`}
+                    </span>
+                  </div>
+                  <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "var(--surface-app)" }}>
                     <div
-                      className="w-3 h-3 rounded-full flex-shrink-0 flex items-center justify-center"
-                      style={{ border: `2px solid ${isSelected ? accentColor : "var(--text-disabled)"}` }}
-                    >
-                      {isSelected && (
-                        <div className="w-1.5 h-1.5 rounded-full" style={{ background: accentColor }} />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-medium" style={{ color: isSelected ? accentColor : "var(--text-primary)" }}>{opt.label}</p>
-                      <p className="text-[10px] truncate" style={{ color: "var(--text-disabled)" }}>{opt.description}</p>
-                    </div>
-                  </button>
-                );
-              })}
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${Math.min(100, (trialStatus.dailyUsed / trialStatus.dailyLimit) * 100)}%`,
+                        background: trialStatus.dailyUsed >= trialStatus.dailyLimit ? "var(--color-danger)" : "var(--color-info)",
+                      }}
+                    />
+                  </div>
+                  {(trialStatus.trialExpired || trialStatus.dailyUsed >= trialStatus.dailyLimit) && allowUserApiKeys && (
+                    <p className="text-[10px] mt-1" style={{ color: "var(--color-warning)" }}>
+                      Connect your own API key to continue
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
-          )}
 
-          {(modelLocked || connected) && (
-            <p className="text-[10px] mt-1.5 flex items-center gap-1" style={{ color: "var(--text-disabled)" }}>
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-              Locked — click Reconnect to change
-            </p>
-          )}
+            {/* Model selection */}
+            <div className="pt-3" style={{ borderTop: "1px solid var(--border-default)" }}>
+              <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>AI Model</label>
 
-          {aiProvider === "openrouter" && displayModels.length > 0 && (
-            <div
-              className="mt-2 px-3 py-2 rounded-md text-[10px] leading-relaxed"
-              style={{
-                background: "rgba(168,85,247,0.06)",
-                border: "1px solid rgba(168,85,247,0.2)",
-                color: "var(--text-secondary)",
-              }}
-            >
-              <span className="font-semibold" style={{ color: "#a855f7" }}>Tested with</span>{" "}
-              Claude, Gemini, ChatGPT, and Qwen. Other models in the list may also work — all listed models support tool calling and coding.
-              <span className="block mt-1" style={{ color: "var(--text-disabled)" }}>
-                {displayModels.length} models available
-              </span>
+              {modelsLoading ? (
+                <div className="flex items-center gap-2 px-3 py-3 rounded-md" style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-emphasis)" }}>
+                  <svg className="w-4 h-4 animate-spin" style={{ color: "var(--text-disabled)" }} fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  <span className="text-[11px]" style={{ color: "var(--text-disabled)" }}>Loading models...</span>
+                </div>
+              ) : aiProvider === "openrouter" && displayModels.length > 10 ? (
+                <>
+                  <select
+                    value={selectedModel}
+                    onChange={(e) => !modelLocked && !fieldsDisabled && setSelectedModel(e.target.value)}
+                    disabled={modelLocked || fieldsDisabled}
+                    className={`${INPUT_CLS} ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : ""}`}
+                    style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)" }}
+                  >
+                    {displayModels.map((opt) => (
+                      <option key={opt.key} value={opt.key}>{opt.label}</option>
+                    ))}
+                  </select>
+                  {selectedModel && (
+                    <p className="text-[10px] mt-1" style={{ color: "var(--text-disabled)" }}>
+                      {displayModels.find(m => m.key === selectedModel)?.description || ""}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                  {displayModels.map((opt) => {
+                    const isSelected = selectedModel === opt.key;
+                    const accentColor = aiProvider === "openrouter" ? OPENROUTER_COLOR : "var(--color-info)";
+                    return (
+                      <button
+                        key={opt.key}
+                        onClick={() => !modelLocked && !fieldsDisabled && setSelectedModel(opt.key)}
+                        disabled={modelLocked || fieldsDisabled}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+                        style={{
+                          background: isSelected ? `color-mix(in srgb, ${accentColor} 8%, transparent)` : "var(--surface-elevated)",
+                          border: `1px solid ${isSelected ? `color-mix(in srgb, ${accentColor} 30%, transparent)` : "var(--border-emphasis)"}`,
+                        }}
+                      >
+                        <div
+                          className="w-3 h-3 rounded-full flex-shrink-0 flex items-center justify-center"
+                          style={{ border: `2px solid ${isSelected ? accentColor : "var(--text-disabled)"}` }}
+                        >
+                          {isSelected && (
+                            <div className="w-1.5 h-1.5 rounded-full" style={{ background: accentColor }} />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-medium" style={{ color: isSelected ? accentColor : "var(--text-primary)" }}>{opt.label}</p>
+                          <p className="text-[10px] truncate" style={{ color: "var(--text-disabled)" }}>{opt.description}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {(modelLocked || connected) && (
+                <p className="text-[10px] mt-1.5 flex items-center gap-1" style={{ color: "var(--text-disabled)" }}>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                  Locked — click Reconnect to change
+                </p>
+              )}
+
+              {aiProvider === "openrouter" && displayModels.length > 0 && (
+                <div
+                  className="mt-2 px-3 py-2 rounded-md text-[10px] leading-relaxed"
+                  style={{
+                    background: "rgba(168,85,247,0.06)",
+                    border: "1px solid rgba(168,85,247,0.2)",
+                    color: "var(--text-secondary)",
+                  }}
+                >
+                  <span className="font-semibold" style={{ color: OPENROUTER_COLOR }}>Tested with</span>{" "}
+                  Claude, Gemini, ChatGPT, and Qwen. Other models in the list may also work — all listed models support tool calling and coding.
+                  <span className="block mt-1" style={{ color: "var(--text-disabled)" }}>
+                    {displayModels.length} models available
+                  </span>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-          </div>{/* end space-y-3 */}
+          </div>
         </div>{/* end Section 2 card */}
 
         {/* Connection status card */}
