@@ -502,14 +502,14 @@ export default function SettingsPanel({
       </div>
 
       {connectionError && !connected && (
-        <div className="mt-3 p-3 rounded-md text-sm" style={{
+        <div className="mt-3 p-3 rounded-md text-[11px]" style={{
           background: "rgba(249,115,115,0.08)",
           border: "1px solid rgba(249,115,115,0.25)",
         }}>
-          <div className="font-medium mb-1" style={{ color: "var(--color-error, #f97373)" }}>
+          <div className="font-medium mb-1" style={{ color: "var(--color-danger)" }}>
             Connection Failed
           </div>
-          <div style={{ color: "var(--text-secondary)" }}>{connectionError}</div>
+          <div className="text-[10px]" style={{ color: "var(--text-secondary)" }}>{connectionError}</div>
         </div>
       )}
 

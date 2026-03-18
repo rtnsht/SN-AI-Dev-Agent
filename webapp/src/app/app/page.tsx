@@ -43,6 +43,32 @@ function stripHeavyData(messages: ChatMessage[]): ChatMessage[] {
   }));
 }
 
+/** Map raw connection errors to user-friendly messages */
+function getFriendlyErrorMessage(raw: string): string {
+  const lower = raw.toLowerCase();
+  if (lower.includes("enotfound"))
+    return "Instance not found. Please check the URL is correct (e.g. https://your-instance.service-now.com).";
+  if (lower.includes("econnrefused"))
+    return "Connection refused. The instance may be down or the URL is incorrect.";
+  if (lower.includes("etimedout") || lower.includes("econnaborted") || lower.includes("timeout"))
+    return "Connection timed out. The instance may be hibernating or unreachable. Try waking it up in your browser first.";
+  if (lower.includes("econnreset") || lower.includes("socket hang up"))
+    return "Connection was reset unexpectedly. Please try again.";
+  if (lower.includes("401") || lower.includes("unauthorized") || lower.includes("invalid user") || lower.includes("invalid password"))
+    return "Authentication failed. Please check your username and password.";
+  if (lower.includes("403") || lower.includes("forbidden"))
+    return "Access denied. This user may not have REST API access on the instance.";
+  if (lower.includes("404"))
+    return "Instance API not found. Please verify the instance URL is correct.";
+  if (lower.includes("networkerror") || lower.includes("failed to fetch") || lower.includes("network"))
+    return "Network error. Please check your internet connection.";
+  if (lower.includes("missing required fields") || lower.includes("please provide"))
+    return raw;
+  if (lower.includes("certificate") || lower.includes("ssl") || lower.includes("cert"))
+    return "SSL/certificate error. The instance may have an invalid or expired certificate.";
+  return "Connection failed. Please verify your settings and try again.";
+}
+
 export default function Home() {
   const [credentials, setCredentials] = useState({
     instanceUrl: "",
@@ -460,32 +486,6 @@ export default function Home() {
     }
   }, [aiProvider, modelLocked, openRouterModels]);
 
-  /** Map raw connection errors to user-friendly messages */
-  const getFriendlyErrorMessage = (raw: string): string => {
-    const lower = raw.toLowerCase();
-    if (lower.includes("enotfound"))
-      return "Instance not found. Please check the URL is correct (e.g. https://your-instance.service-now.com).";
-    if (lower.includes("econnrefused"))
-      return "Connection refused. The instance may be down or the URL is incorrect.";
-    if (lower.includes("etimedout") || lower.includes("econnaborted") || lower.includes("timeout"))
-      return "Connection timed out. The instance may be hibernating or unreachable. Try waking it up in your browser first.";
-    if (lower.includes("econnreset") || lower.includes("socket hang up"))
-      return "Connection was reset unexpectedly. Please try again.";
-    if (lower.includes("401") || lower.includes("unauthorized") || lower.includes("invalid user") || lower.includes("invalid password"))
-      return "Authentication failed. Please check your username and password.";
-    if (lower.includes("403") || lower.includes("forbidden"))
-      return "Access denied. This user may not have REST API access on the instance.";
-    if (lower.includes("404"))
-      return "Instance API not found. Please verify the instance URL is correct.";
-    if (lower.includes("networkerror") || lower.includes("failed to fetch") || lower.includes("network"))
-      return "Network error. Please check your internet connection.";
-    if (lower.includes("missing required fields") || lower.includes("please provide"))
-      return raw;
-    if (lower.includes("certificate") || lower.includes("ssl") || lower.includes("cert"))
-      return "SSL/certificate error. The instance may have an invalid or expired certificate.";
-    return raw;
-  };
-
   const handleConnect = useCallback(async () => {
     setIsConnecting(true);
     setConnectionError(null);
@@ -579,7 +579,7 @@ export default function Home() {
           : undefined;
         fetchCategorizedPromptsFromApi(credentials, userContext);
       } else {
-        const rawMsg = data.message || (data as Record<string, unknown>).error as string || "Unknown error";
+        const rawMsg = data.message || "Unknown error";
         const friendly = getFriendlyErrorMessage(rawMsg);
         setConnectionError(friendly);
         const errMsgs = [...messagesRef.current, { role: "system" as const, type: "error" as const, content: `Connection failed: ${friendly}`, timestamp: new Date().toISOString() }];
