@@ -319,7 +319,7 @@ export default function SettingsPanel({
 
           {/* Trial status */}
           {trialStatus?.isConfigured && (
-            <div className="mt-2 space-y-1.5" style={{ padding: "8px", borderRadius: "8px", background: "var(--surface-secondary)" }}>
+            <div className="mt-2 space-y-1.5" style={{ padding: "8px", borderRadius: "8px", background: "var(--surface-elevated)" }}>
               <div className="flex items-center justify-between text-[10px]">
                 <span style={{ color: "var(--text-secondary)" }}>
                   {trialStatus.dailyUsed}/{trialStatus.dailyLimit} daily requests
