@@ -417,8 +417,26 @@ export class ServiceNowClient {
   async testConnection(): Promise<{ success: boolean; message: string; instanceInfo?: unknown }> {
     try {
       const response = await this.client.get('/api/now/table/sys_user', {
-        params: { sysparm_limit: 1 }
+        params: { sysparm_limit: 1 },
+        maxRedirects: 0 // Don't follow redirects — a redirect means auth failed (e.g., SSO login page)
       });
+
+      // Validate response is actual JSON API data, not an HTML login page
+      const contentType = String(response.headers['content-type'] || '');
+      if (!contentType.includes('application/json')) {
+        return {
+          success: false,
+          message: 'Authentication failed. The server returned a login page instead of API data. Please check your username and password.'
+        };
+      }
+
+      // Validate response has expected ServiceNow API structure
+      if (!response.data || !response.data.result) {
+        return {
+          success: false,
+          message: 'Authentication failed. The server did not return a valid API response. Please check your credentials.'
+        };
+      }
 
       return {
         success: true,
@@ -430,10 +448,23 @@ export class ServiceNowClient {
       };
     } catch (error) {
       const axiosError = error as AxiosError<SNErrorResponse>;
-      return {
-        success: false,
-        message: axiosError.response?.data?.error?.message || axiosError.message
-      };
+      const status = axiosError.response?.status;
+      const serverMsg = axiosError.response?.data?.error?.message;
+
+      // Handle redirect responses (3xx) — indicates SSO/login redirect
+      if (status && status >= 300 && status < 400) {
+        return {
+          success: false,
+          message: 'Authentication failed. The server redirected to a login page. Please check your username and password.'
+        };
+      }
+
+      // Build a descriptive message that includes status code for pattern matching
+      let message = serverMsg || axiosError.message;
+      if (status) {
+        message = `${status}: ${message}`;
+      }
+      return { success: false, message };
     }
   }
 

@@ -216,6 +216,7 @@ export interface ConnectionResult {
   roles?: string[];
   hasAdmin?: boolean;
   hasSecurityAdmin?: boolean;
+  noRoles?: boolean;
   helperApis?: HelperApisInfo;
 }
 
