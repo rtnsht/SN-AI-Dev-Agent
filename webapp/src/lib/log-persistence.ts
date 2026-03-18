@@ -53,6 +53,7 @@ class LogPersistence {
   private entriesFlushed = new Map<string, number>();
   private cumulativeCounters = new Map<string, SessionCounters>();
   private flushing = new Set<string>();
+  private finalized = new Set<string>(); // Bug 6: prevent double-finalization
   private globalBufferBytes = 0;
   private flushInterval: NodeJS.Timeout | null = null;
   private shuttingDown = false;
@@ -110,6 +111,8 @@ class LogPersistence {
 
     const flushedSoFar = this.entriesFlushed.get(sessionId) || 0;
 
+    console.log(`[log-persistence] Flush: sessionId=${sessionId}, entries=${batch.length}, flushedSoFar=${flushedSoFar}`);
+
     // BUG-3+4 fix: Accumulate counters across flushes, not per-batch
     const batchCounters = this.extractCounters(batch);
     const cumulative = this.accumulateCounters(sessionId, batchCounters);
@@ -148,8 +151,10 @@ class LogPersistence {
         });
 
         if (error) {
+          console.error(`[log-persistence] RPC failed for ${sessionId}:`, error.message, error.details || "");
           writeSucceeded = await this.upsertFallback(sessionId, entriesToAppend, cumulative, overflow);
         } else {
+          console.log(`[log-persistence] RPC succeeded for ${sessionId}: ${entriesToAppend.length} entries appended`);
           writeSucceeded = true;
         }
 
@@ -213,6 +218,19 @@ class LogPersistence {
     sessionId: string,
     telemetrySummary?: Record<string, unknown>
   ): Promise<void> {
+    // Bug 6: prevent double-finalization (endSession + direct call from session-end route)
+    if (this.finalized.has(sessionId)) return;
+    this.finalized.add(sessionId);
+
+    console.log(`[log-persistence] Finalizing session ${sessionId}`);
+
+    // Bug 4: wait for any in-progress periodic flush to complete before flushing
+    let waitAttempts = 0;
+    while (this.flushing.has(sessionId) && waitAttempts < 20) {
+      await sleep(50);
+      waitAttempts++;
+    }
+
     await this.flush(sessionId);
 
     try {
@@ -230,9 +248,16 @@ class LogPersistence {
       console.error(`[log-persistence] finalizeSession failed for ${sessionId}:`, err);
     }
 
-    this.buffer.delete(sessionId);
-    this.entriesFlushed.delete(sessionId);
-    this.cumulativeCounters.delete(sessionId);
+    // Bug 2: only delete buffer if flush succeeded (buffer is empty)
+    const remaining = this.buffer.get(sessionId);
+    if (!remaining || remaining.length === 0) {
+      this.buffer.delete(sessionId);
+      this.entriesFlushed.delete(sessionId);
+      this.cumulativeCounters.delete(sessionId);
+    } else {
+      console.warn(`[log-persistence] ${remaining.length} entries still in buffer after finalize for ${sessionId}`);
+    }
+    this.finalized.delete(sessionId); // Allow re-finalization if session resumes after server restart
   }
 
   async flushAll(timeoutMs: number = SIGTERM_TIMEOUT_MS): Promise<void> {
@@ -284,19 +309,21 @@ class LogPersistence {
 
       // Fetch existing log_entries to merge instead of overwrite
       let mergedEntries = entries;
-      try {
-        const { data: existing } = await db
-          .from("session_logs")
-          .select("log_entries")
-          .eq("session_id", sessionId)
-          .single();
+      const { data: existing, error: fetchError } = await db
+        .from("session_logs")
+        .select("log_entries")
+        .eq("session_id", sessionId)
+        .maybeSingle(); // maybeSingle returns null (not error) for 0 rows
 
-        if (existing?.log_entries && Array.isArray(existing.log_entries)) {
-          const combined = [...existing.log_entries, ...entries];
-          mergedEntries = combined.slice(-JSONB_ENTRIES_CAP);
-        }
-      } catch {
-        // Row doesn't exist yet — use entries as-is (INSERT path)
+      if (fetchError) {
+        // Genuine DB error — abort to avoid overwriting existing entries
+        console.error(`[log-persistence] upsertFallback fetch failed for ${sessionId}, aborting to prevent overwrite:`, fetchError.message);
+        return false;
+      }
+
+      if (existing?.log_entries && Array.isArray(existing.log_entries)) {
+        const combined = [...existing.log_entries, ...entries];
+        mergedEntries = combined.slice(-JSONB_ENTRIES_CAP);
       }
 
       const { error } = await db.from("session_logs").upsert(

@@ -28,11 +28,12 @@ export async function POST(request: NextRequest) {
     endSession(sessionId, "success");
 
     // Fallback: if the session wasn't in the in-memory map, finalizeSession
-    // was never called above. Safe to call again — it's idempotent (flush +
-    // UPDATE status = completed).
-    getLogPersistence()
-      ?.finalizeSession(sessionId, { outcome: "completed" })
-      .catch(() => {});
+    // was never called above. Safe to call again — guarded by finalized Set.
+    try {
+      await getLogPersistence()?.finalizeSession(sessionId, { outcome: "completed" });
+    } catch (flushErr) {
+      console.error("[session-end] finalizeSession error:", flushErr);
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {

@@ -85,8 +85,15 @@ function redactSensitive(obj: unknown): unknown {
       lowerKey.includes("apikey") ||
       lowerKey.includes("api_key") ||
       lowerKey.includes("secret") ||
-      lowerKey.includes("token") ||
-      lowerKey.includes("credential")
+      lowerKey.includes("credential") ||
+      // Auth tokens only — preserve metric fields like inputTokens, outputTokens
+      lowerKey === "token" ||
+      lowerKey.includes("sessiontoken") ||
+      lowerKey.includes("authtoken") ||
+      lowerKey.includes("accesstoken") ||
+      lowerKey.includes("refreshtoken") ||
+      lowerKey.includes("bearertoken") ||
+      lowerKey.includes("csrf")
     ) {
       result[key] = "[REDACTED]";
     } else if (typeof value === "object") {
