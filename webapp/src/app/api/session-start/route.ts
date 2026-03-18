@@ -10,7 +10,6 @@ import { log } from "@/lib/logger";
 import { startTelemetryStream, stopTelemetryStream } from "@/lib/telemetry-generator";
 import { validateSession, SESSION_COOKIE_NAME } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
-import { getLogPersistence } from "@/lib/log-persistence";
 
 export async function POST(request: NextRequest) {
   try {
@@ -63,18 +62,10 @@ export async function POST(request: NextRequest) {
       captureInstance(request, instanceUrl, username).catch(() => { /* non-critical */ });
     }
 
-    // Persist session metadata to Supabase (non-blocking)
-    getLogPersistence()?.initSession({
-      sessionId,
-      userId: userId || undefined,
-      instanceUrl: instanceUrl || undefined,
-      username: username || undefined,
-      userFullName: userFullName || undefined,
-      aiProvider: aiProvider || undefined,
-      model: model || undefined,
-      ipAddress: ip,
-      userAgent,
-    }).catch(() => { /* non-critical */ });
+    // Persist session metadata to Supabase (awaited to guarantee row creation)
+    await createSessionLog(sessionId, userId, {
+      instanceUrl, username, userFullName, aiProvider, model,
+    }, ip, userAgent);
 
     return NextResponse.json({ success: true, sessionId });
   } catch (err) {
@@ -95,6 +86,41 @@ async function resolveUserId(request: NextRequest): Promise<string | null> {
     return session?.user?.id || null;
   } catch {
     return null;
+  }
+}
+
+/** Write session metadata directly to session_logs table.
+ *  Uses getSupabase() directly (not through LogPersistence) to guarantee
+ *  the row is created. Checks and logs Supabase errors instead of swallowing them. */
+async function createSessionLog(
+  sessionId: string,
+  userId: string | null,
+  metadata: { instanceUrl?: string; username?: string; userFullName?: string; aiProvider?: string; model?: string },
+  ip: string,
+  userAgent: string
+): Promise<void> {
+  try {
+    const db = getSupabase();
+    const { error } = await db.from("session_logs").upsert(
+      {
+        session_id: sessionId,
+        user_id: userId || null,
+        instance_url: metadata.instanceUrl || null,
+        username: metadata.username || null,
+        user_full_name: metadata.userFullName || null,
+        ai_provider: metadata.aiProvider || null,
+        model: metadata.model || null,
+        ip_address: ip,
+        user_agent: userAgent,
+        status: "active",
+      },
+      { onConflict: "session_id" }
+    );
+    if (error) {
+      console.error("[session-start] session_logs write FAILED:", error.message, error.details, error.hint);
+    }
+  } catch (err) {
+    console.error("[session-start] session_logs write error:", err);
   }
 }
 
