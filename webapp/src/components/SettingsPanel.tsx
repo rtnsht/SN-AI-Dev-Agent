@@ -12,6 +12,7 @@ interface Props {
   connected: boolean;
   connInfo: ConnectionResult | null;
   isConnecting: boolean;
+  connectionError?: string | null;
   onConnect: () => void;
   onReconnect?: () => void;
   serverApiKeyConfigured: boolean;
@@ -107,7 +108,7 @@ function UsageDisplay({ usage, onRefresh }: { usage: UsageInfo; onRefresh?: () =
 }
 
 export default function SettingsPanel({
-  credentials, setCredentials, connected, connInfo, isConnecting, onConnect, onReconnect,
+  credentials, setCredentials, connected, connInfo, isConnecting, connectionError, onConnect, onReconnect,
   serverApiKeyConfigured, serverOpenRouterKeyConfigured, serverSnCredsConfigured,
   usage, rateLimitHit, onApiKeyProvided,
   aiProvider, setAiProvider, selectedModel, setSelectedModel, modelOptions, modelsLoading = false,
@@ -499,6 +500,23 @@ export default function SettingsPanel({
           </div>
         )}
       </div>
+
+      {connectionError && !connected && (
+        <div
+          className="mt-3 p-3 rounded-md text-[11px]"
+          style={{
+            background: "rgba(249,115,115,0.08)",
+            border: "1px solid rgba(249,115,115,0.25)",
+          }}
+          role="alert"
+          aria-live="assertive"
+        >
+          <div className="font-medium mb-1" style={{ color: "var(--color-danger)" }}>
+            Connection Failed
+          </div>
+          <div className="text-[10px]" style={{ color: "var(--text-secondary)" }}>{connectionError}</div>
+        </div>
+      )}
 
       <div className="mt-4">
         {connected ? (
