@@ -732,6 +732,35 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
   // Accumulates finalized transcript segments across onresult events
   const finalTranscriptRef = useRef("");
 
+  /* ── Prompt enhance state ── */
+  const [enhancing, setEnhancing] = useState<"grammar" | "enhance" | null>(null);
+  const [preEnhanceText, setPreEnhanceText] = useState<string | null>(null);
+
+  const handleEnhance = useCallback(async (mode: "grammar" | "enhance") => {
+    if (!input.trim() || enhancing) return;
+    setEnhancing(mode);
+    setPreEnhanceText(input);
+    try {
+      const res = await fetch("/api/enhance-prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: input.trim(), mode }),
+      });
+      const data = await res.json();
+      if (res.ok && data.text) {
+        setInput(data.text);
+      }
+    } catch { /* silent */ }
+    setEnhancing(null);
+  }, [input, enhancing]);
+
+  const handleUndoEnhance = useCallback(() => {
+    if (preEnhanceText !== null) {
+      setInput(preEnhanceText);
+      setPreEnhanceText(null);
+    }
+  }, [preEnhanceText]);
+
   /** Check browser support on mount */
   useEffect(() => {
     setSpeechSupported(getSpeechRecognition() !== null);
@@ -1119,6 +1148,51 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
             </div>
             <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { if (e.target.files) addImageFiles(e.target.files); e.target.value = ""; }} />
             <input ref={docInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" multiple className="hidden" onChange={(e) => { if (e.target.files) addDocFiles(e.target.files); e.target.value = ""; }} />
+
+            {/* Grammar & Enhance buttons — visible when there's text */}
+            {connected && input.trim() && !isLoading && (
+              <>
+                <button
+                  onClick={() => handleEnhance("grammar")}
+                  disabled={!!enhancing}
+                  className="h-7 px-2.5 rounded-md flex items-center gap-1.5 text-[11px] font-medium transition-colors disabled:opacity-40"
+                  style={{ color: "var(--text-secondary)", background: "var(--surface-elevated)" }}
+                  title="Fix grammar & spelling"
+                >
+                  {enhancing === "grammar" ? (
+                    <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  )}
+                  Grammar
+                </button>
+                <button
+                  onClick={() => handleEnhance("enhance")}
+                  disabled={!!enhancing}
+                  className="h-7 px-2.5 rounded-md flex items-center gap-1.5 text-[11px] font-medium transition-colors disabled:opacity-40"
+                  style={{ color: "var(--text-secondary)", background: "var(--surface-elevated)" }}
+                  title="Enhance & optimize prompt"
+                >
+                  {enhancing === "enhance" ? (
+                    <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
+                  )}
+                  Enhance
+                </button>
+                {preEnhanceText !== null && !enhancing && (
+                  <button
+                    onClick={handleUndoEnhance}
+                    className="h-7 px-2 rounded-md flex items-center gap-1 text-[11px] transition-colors"
+                    style={{ color: "var(--text-disabled)" }}
+                    title="Undo enhancement"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a5 5 0 010 10H9m-6-10l4-4m-4 4l4 4" /></svg>
+                    Undo
+                  </button>
+                )}
+              </>
+            )}
 
             <div className="flex-1" />
 

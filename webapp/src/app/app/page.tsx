@@ -1510,7 +1510,7 @@ export default function Home() {
                       Clear cache & refresh
                     </button>
                     <button
-                      onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}
+                      onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/"; }}
                       className="flex items-center gap-2.5 px-3.5 py-2 text-[12px] w-full transition-colors"
                       style={{ color: "var(--text-secondary)" }}
                       onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-secondary)"; e.currentTarget.style.color = "var(--text-primary)"; }}

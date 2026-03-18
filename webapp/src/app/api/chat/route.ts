@@ -138,10 +138,10 @@ export async function POST(request: NextRequest) {
     // Update session_logs.model to reflect the actual model used in this chat
     if (sessionId && sessionId !== "unknown") {
       try {
-        getSupabase().from("session_logs")
+        void getSupabase().from("session_logs")
           .update({ model: selectedModel, updated_at: new Date().toISOString() })
           .eq("session_id", sessionId)
-          .then(() => {}).catch(() => {});
+          .then(() => {});
       } catch { /* non-blocking */ }
     }
 
