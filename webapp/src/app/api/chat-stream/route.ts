@@ -134,10 +134,10 @@ export async function POST(request: NextRequest) {
     // (may differ from what was set at connect time if user changed the dropdown)
     if (sessionId && sessionId !== "unknown") {
       try {
-        getSupabase().from("session_logs")
+        void getSupabase().from("session_logs")
           .update({ model: selectedModel, updated_at: new Date().toISOString() })
           .eq("session_id", sessionId)
-          .then(() => {}).catch(() => {});
+          .then(() => {});
       } catch { /* non-blocking */ }
     }
 

@@ -971,6 +971,22 @@ body {
   align-items: center;
   gap: 8px;
 }
+.landing-header-signin {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+.landing-header-signin:hover {
+  color: var(--text-primary);
+}
 .landing-header-cta {
   display: inline-flex;
   align-items: center;
