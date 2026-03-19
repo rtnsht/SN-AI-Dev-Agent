@@ -13,9 +13,11 @@ import ConnectModal from "@/components/ConnectModal";
 import ThemeToggle from "@/components/ThemeToggle";
 import SuggestionPanel from "@/components/SuggestionPanel";
 import type { ChatMessage, ConnectionResult, UsageInfo, TrialStatus, SDLCPhase, LiveStatus, AIProvider, ModelOption, FileAttachment, CategorizedPrompts } from "@/lib/types";
-import { parsePhaseGate, parseUserChoices, ANTHROPIC_MODELS, SDLC_PHASES, openRouterModelToOption } from "@/lib/types";
+import { parsePhaseGate, parseUserChoices, ANTHROPIC_MODELS, SDLC_PHASES } from "@/lib/types";
 import { APP_NAME, APP_LOGO, SHOW_INFO_BUTTON, CREATOR_NAME, CREATOR_LINKEDIN, FOOTER_TAGLINE, FOOTER_COPYRIGHT } from "@/lib/branding";
-import { Menu, User } from "lucide-react";
+import { User, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from "lucide-react";
+import { selectPrompts, DEFAULT_CONFIG } from "@/lib/suggestion-engine";
+import type { PromptPoolMap, ScoredPrompt } from "@/lib/suggestion-engine";
 
 /* ── Session persistence keys (sessionStorage) ──────────────── */
 const SK = {
@@ -29,6 +31,8 @@ const SK = {
   PHASE: "ai-phase",
   COMPLETED_PHASES: "ai-completed-phases",
   SESSION_ID: "ai-session-id",
+  CATEGORIZED_PROMPTS: "ai-categorized-prompts",
+  SEEN_SUGGESTIONS: "ai-seen-suggestions",
 } as const;
 
 const ALL_SESSION_KEYS = Object.values(SK);
@@ -151,6 +155,8 @@ export default function Home() {
   const [categorizedPrompts, setCategorizedPrompts] = useState<CategorizedPrompts | null>(null);
   const [promptsRefreshing, setPromptsRefreshing] = useState(false);
   const [promptsLastRefreshed, setPromptsLastRefreshed] = useState<number | null>(null);
+  const [promptPools, setPromptPools] = useState<PromptPoolMap | null>(null);
+  const [seenSuggestionHashes, setSeenSuggestionHashes] = useState<string[]>([]);
   // Mobile two-step flow: 'hero' = landing page, 'connect' = full-screen connection panel
   const [mobileStep, setMobileStep] = useState<"hero" | "connect">("hero");
   // Logged-in webapp user info (name, role) from /api/auth/me
@@ -263,6 +269,16 @@ export default function Home() {
       if (savedPhase) setCurrentPhase(savedPhase as SDLCPhase);
       const savedCompleted = sessionStorage.getItem(SK.COMPLETED_PHASES);
       if (savedCompleted) setCompletedPhases(JSON.parse(savedCompleted));
+
+      // Restore cached suggestions
+      const savedPrompts = sessionStorage.getItem(SK.CATEGORIZED_PROMPTS);
+      if (savedPrompts) {
+        try { setCategorizedPrompts(JSON.parse(savedPrompts)); } catch { /* corrupt */ }
+      }
+      const savedSeen = sessionStorage.getItem(SK.SEEN_SUGGESTIONS);
+      if (savedSeen) {
+        try { setSeenSuggestionHashes(JSON.parse(savedSeen)); } catch { /* corrupt */ }
+      }
 
       // Show settings panel so user can re-enter password
       setShowSettings(true);
@@ -641,7 +657,8 @@ export default function Home() {
     } finally {
       setIsConnecting(false);
     }
-  }, [credentials, clientSessionId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchCategorizedPromptsFromApi is stable ([] deps) but declared after this hook
+  }, [credentials, clientSessionId, aiProvider, openRouterModels, selectedModel]);
 
   const handleSend = useCallback(
     async (text: string, images?: string[], files?: FileAttachment[], hidden?: boolean) => {
@@ -1105,7 +1122,7 @@ export default function Home() {
         setIsLoading(false);
       }
     },
-    [credentials, isLoading, serverApiKeyConfigured, activeReqId, selectedModel, modelLocked, pendingRetry, allowUserApiKeys, streamingEnabled, currentPhase, clientSessionId]
+    [credentials, isLoading, serverApiKeyConfigured, activeReqId, selectedModel, modelLocked, pendingRetry, allowUserApiKeys, streamingEnabled, currentPhase, clientSessionId, aiProvider, openRouterModels]
   );
 
   // Keep ref updated with latest handleSend to avoid stale closures in setTimeout callbacks
@@ -1219,6 +1236,7 @@ export default function Home() {
   const fetchCategorizedPromptsFromApi = useCallback(
     (creds: typeof credentials, userCtx?: { sysId: string; roles: string[]; assignmentGroups: { sysId: string; name: string }[] }) => {
       setPromptsRefreshing(true);
+      const currentSeen = (() => { try { const raw = sessionStorage.getItem(SK.SEEN_SUGGESTIONS); return raw ? JSON.parse(raw) : []; } catch { return []; } })();
       fetch("/api/instance-prompts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1227,6 +1245,7 @@ export default function Home() {
           username: creds.username,
           password: creds.password,
           userContext: userCtx,
+          seenHashes: currentSeen,
         }),
       })
         .then((r) => r.json())
@@ -1234,6 +1253,16 @@ export default function Home() {
           if (d.prompts && typeof d.prompts === "object" && d.prompts.foryou) {
             setCategorizedPrompts(d.prompts);
             setPromptsLastRefreshed(Date.now());
+            if (d._pools) setPromptPools(d._pools);
+            if (d.promptHashes) {
+              setSeenSuggestionHashes((prev) => {
+                const merged = [...prev, ...d.promptHashes.filter((h: string) => !prev.includes(h))];
+                const trimmed = merged.length > 200 ? merged.slice(merged.length - 200) : merged;
+                try { sessionStorage.setItem(SK.SEEN_SUGGESTIONS, JSON.stringify(trimmed)); } catch { /* quota */ }
+                return trimmed;
+              });
+            }
+            try { sessionStorage.setItem(SK.CATEGORIZED_PROMPTS, JSON.stringify(d.prompts)); } catch { /* quota */ }
           }
         })
         .catch(() => { /* non-critical */ })
@@ -1263,6 +1292,25 @@ export default function Home() {
     fetchCategorizedPromptsFromApi(credentials, userCtx);
   }, [connected, connInfo, credentials, fetchCategorizedPromptsFromApi]);
 
+  /** Client-side shuffle: re-select from cached pools without API call */
+  const handleShufflePrompts = useCallback(() => {
+    if (!promptPools) return;
+    try {
+      const n = DEFAULT_CONFIG.promptsPerCategory;
+      const seenSet = new Set(seenSuggestionHashes);
+      const currentUpdates = categorizedPrompts?.updates ?? [];
+      setCategorizedPrompts({
+        foryou: selectPrompts(promptPools.foryou as ScoredPrompt[], n, seenSet),
+        build: selectPrompts(promptPools.build as ScoredPrompt[], n, seenSet),
+        explore: selectPrompts(promptPools.explore as ScoredPrompt[], n, seenSet),
+        quick: selectPrompts(promptPools.quick as ScoredPrompt[], n, seenSet),
+        updates: currentUpdates,
+      });
+    } catch (e) {
+      console.warn("Shuffle failed:", e);
+    }
+  }, [promptPools, seenSuggestionHashes, categorizedPrompts?.updates]);
+
   /** Click a sidebar suggestion -> populate chat input (user sends manually) */
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const handlePopulateInput = useCallback((prompt: string) => {
@@ -1279,6 +1327,9 @@ export default function Home() {
     setModelLocked(false);
     setCategorizedPrompts(null);
     setPromptsLastRefreshed(null);
+    setPromptPools(null);
+    setSeenSuggestionHashes([]);
+    try { sessionStorage.removeItem(SK.SEEN_SUGGESTIONS); sessionStorage.removeItem(SK.CATEGORIZED_PROMPTS); } catch { /* ok */ }
   }, []);
 
 
@@ -1396,9 +1447,9 @@ export default function Home() {
               style={{ color: "var(--text-secondary)" }}
               onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-elevated)")}
               onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-              title="Toggle settings (Cmd+1)"
+              title={showSettings ? "Collapse settings panel" : "Expand settings panel"}
             >
-              <Menu className="w-5 h-5" strokeWidth={1.5} />
+              {showSettings ? <PanelLeftClose className="w-5 h-5" strokeWidth={1.5} /> : <PanelLeftOpen className="w-5 h-5" strokeWidth={1.5} />}
             </button>
 
             {/* App identity */}
@@ -1450,19 +1501,6 @@ export default function Home() {
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                   <span className="hidden sm:inline">New Chat</span>
                 </button>
-            )}
-            {/* Right panel toggle */}
-            {connected && (
-              <button
-                onClick={() => setShowRightPanel(!showRightPanel)}
-                className="p-2 rounded-md transition-colors flex-shrink-0"
-                style={{ color: "var(--text-secondary)" }}
-                onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-elevated)")}
-                onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-                title={showRightPanel ? "Hide suggestions panel" : "Show suggestions panel"}
-              >
-                <Menu className="w-5 h-5" strokeWidth={1.5} />
-              </button>
             )}
             {/* Sign In when not authenticated; otherwise profile avatar + dropdown */}
             {!appUser ? (
@@ -1540,6 +1578,19 @@ export default function Home() {
               )}
             </div>
             )}
+            {/* Right panel toggle */}
+            {connected && (
+              <button
+                onClick={() => setShowRightPanel(!showRightPanel)}
+                className="p-2 rounded-md transition-colors flex-shrink-0"
+                style={{ color: "var(--text-secondary)" }}
+                onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-elevated)")}
+                onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                title={showRightPanel ? "Collapse suggestions panel" : "Expand suggestions panel"}
+              >
+                {showRightPanel ? <PanelRightClose className="w-5 h-5" strokeWidth={1.5} /> : <PanelRightOpen className="w-5 h-5" strokeWidth={1.5} />}
+              </button>
+            )}
           </div>
         </header>
 
@@ -1615,6 +1666,7 @@ export default function Home() {
               prompts={categorizedPrompts}
               onSuggestionClick={handlePopulateInput}
               onRefresh={handleRefreshPrompts}
+              onShuffle={promptPools ? handleShufflePrompts : undefined}
               isRefreshing={promptsRefreshing}
               lastRefreshed={promptsLastRefreshed}
             />

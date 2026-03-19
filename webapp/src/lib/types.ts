@@ -243,6 +243,8 @@ export interface CategorizedPrompts {
   updates: UpdateSetSummary[];
 }
 
+export type { PromptPoolMap } from "./suggestion-engine/types";
+
 export interface UsageInfo {
   used: number;
   max: number;
