@@ -1512,10 +1512,14 @@ body {
 /* ═══ Mobile responsive ═══ */
 @media (max-width: 640px) {
   .landing-header {
-    padding: 0 16px;
+    height: auto;
+    min-height: 60px;
+    align-items: flex-start;
+    padding: 8px 16px;
   }
   .landing-header-right {
     flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 6px;
   }
   .landing-header-signin,

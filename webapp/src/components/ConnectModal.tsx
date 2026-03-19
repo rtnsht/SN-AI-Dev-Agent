@@ -71,6 +71,11 @@ export default function ConnectModal({ open, onClose }: ConnectModalProps) {
 
       // Now fetch the hint (cookie was set by the POST)
       const stepRes = await fetch("/api/auth/check-email/step");
+      if (!stepRes.ok) {
+        setError("We could not verify your email flow. Please try again.");
+        setStep("email");
+        return;
+      }
       const stepData = await stepRes.json();
 
       if (stepData.step === "password") {
@@ -106,16 +111,18 @@ export default function ConnectModal({ open, onClose }: ConnectModalProps) {
       }
 
       if (data.mustSetPassword) {
+        handleClose();
         router.push("/auth/set-password");
         return;
       }
 
+      handleClose();
       router.push("/app");
     } catch {
       setError("Something went wrong. Please try again.");
       setStep("password");
     }
-  }, [email, password, router]);
+  }, [email, password, router, handleClose]);
 
   /** Step 2b: Request Access — sends OTP */
   const handleRequestAccess = useCallback(async (e: React.FormEvent) => {
