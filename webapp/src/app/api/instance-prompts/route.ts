@@ -10,18 +10,20 @@ export async function POST(request: NextRequest) {
     const password = body.password || process.env.SN_PASSWORD || "";
 
     if (!instanceUrl || !username || !password) {
-      return NextResponse.json({ prompts: null });
+      return NextResponse.json({ prompts: null }, { status: 400 });
     }
 
     const userContext = body.userContext || undefined;
+    const seenHashes: string[] = Array.isArray(body.seenHashes) ? body.seenHashes : [];
 
-    const prompts = await fetchCategorizedPrompts(
+    const { prompts, pools, promptHashes } = await fetchCategorizedPrompts(
       { instanceUrl, username, password },
-      userContext
+      userContext,
+      seenHashes.length > 0 ? seenHashes : undefined,
     );
-    return NextResponse.json({ prompts });
+    return NextResponse.json({ prompts, _pools: pools, promptHashes });
   } catch (error) {
     console.error("Instance prompts error:", error);
-    return NextResponse.json({ prompts: null });
+    return NextResponse.json({ prompts: null, error: "Failed to fetch suggestions" }, { status: 500 });
   }
 }

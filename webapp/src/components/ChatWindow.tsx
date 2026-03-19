@@ -6,6 +6,7 @@ import type { ChatMessage, SDLCPhase, LiveStatus, FileAttachment, CategorizedPro
 import MessageBubble from "./MessageBubble";
 import Image from "next/image";
 import { APP_NAME, APP_LOGO, APP_HERO_TAGLINE, APP_SUBTITLE, APP_TAGLINE, HERO_FEATURES, WELCOME_BADGE } from "@/lib/branding";
+import { SUGGESTION_FALLBACK } from "@/lib/suggestion-engine";
 
 /* ── Web Speech API type shim ── */
 interface SpeechRecognitionEvent extends Event {
@@ -52,34 +53,8 @@ const SUGGESTION_TABS = [
 
 type TabKey = typeof SUGGESTION_TABS[number]["key"];
 
-/** Static fallback suggestions (used when disconnected or fetch failed) */
-const SUGGESTION_FALLBACK: Record<TabKey, ExamplePrompt[]> = {
-  foryou: [
-    { icon: "🏗️", text: "Build a high-priority incident justification feature with manager approval", desc: "Feature build" },
-    { icon: "📦", text: "Create a catalog item for requesting a new laptop with approval workflow", desc: "Catalog" },
-    { icon: "🔍", text: "Analyze my instance health and show me any anti-patterns", desc: "Health check" },
-    { icon: "⚙️", text: "List all custom business rules on the incident table", desc: "Instance review" },
-  ],
-  build: [
-    { icon: "🏗️", text: "Build an onboarding workflow that provisions accounts across IT systems", desc: "Workflow" },
-    { icon: "📝", text: "Create a change request template with risk assessment and CAB approval", desc: "Template" },
-    { icon: "💡", text: "Add a custom field to incident that tracks customer sentiment", desc: "Enhancement" },
-    { icon: "📖", text: "Build a knowledge article approval workflow with draft and publish states", desc: "Workflow" },
-  ],
-  explore: [
-    { icon: "⚙️", text: "Show me all active business rules on the incident table", desc: "Business rules" },
-    { icon: "🛡️", text: "Audit my ACLs and find any overly permissive rules", desc: "Security audit" },
-    { icon: "⏰", text: "List all scheduled jobs and their run frequencies", desc: "Scheduled jobs" },
-    { icon: "🔍", text: "Find unused script includes in my instance", desc: "Cleanup" },
-  ],
-  quick: [
-    { icon: "❓", text: "How many open incidents are assigned to my group?", desc: "Incidents" },
-    { icon: "📝", text: "What update sets are in progress right now?", desc: "Update sets" },
-    { icon: "🗂️", text: "Show the schema for the cmdb_ci_server table", desc: "Schema" },
-    { icon: "📧", text: "List all notification email templates for incidents", desc: "Notifications" },
-  ],
-  updates: [],
-};
+/** Re-export shared fallback for use in this component (imported from suggestion-engine) */
+const FALLBACK = SUGGESTION_FALLBACK as Record<TabKey, ExamplePrompt[]>;
 
 
 
@@ -992,7 +967,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
   const promptTabKey = isUpdatesTab ? null : activeTab;
   const dynamicList = promptTabKey ? categorizedPrompts?.[promptTabKey] as ExamplePrompt[] | undefined : undefined;
   const currentSuggestions: ExamplePrompt[] =
-    dynamicList && dynamicList.length > 0 ? dynamicList : SUGGESTION_FALLBACK[activeTab];
+    dynamicList && dynamicList.length > 0 ? dynamicList : FALLBACK[activeTab];
   const isDynamic = !!(dynamicList && dynamicList.length > 0);
   const updatesList: UpdateSetSummary[] = categorizedPrompts?.updates ?? [];
 

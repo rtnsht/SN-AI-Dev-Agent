@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import type { CategorizedPrompts, ExamplePrompt, UpdateSetSummary } from "@/lib/types";
+import { SUGGESTION_FALLBACK } from "@/lib/suggestion-engine";
 
 const PROMPT_TABS = [
   { key: "foryou" as const, label: "For you", icon: "sparkles" },
@@ -17,6 +18,7 @@ interface Props {
   prompts: CategorizedPrompts | null;
   onSuggestionClick: (text: string) => void;
   onRefresh: () => void;
+  onShuffle?: () => void;
   isRefreshing?: boolean;
   lastRefreshed?: number | null;
 }
@@ -119,10 +121,12 @@ function UpdateSetRow({ us, onSuggestionClick }: { us: UpdateSetSummary; onSugge
   );
 }
 
-export default function SuggestionPanel({ prompts, onSuggestionClick, onRefresh, isRefreshing, lastRefreshed }: Props) {
+export default function SuggestionPanel({ prompts, onSuggestionClick, onRefresh, onShuffle, isRefreshing, lastRefreshed }: Props) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("foryou");
   const [displayedTime, setDisplayedTime] = useState("");
+  const [fadeKey, setFadeKey] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevPromptsRef = useRef(prompts);
 
   useEffect(() => {
     if (!lastRefreshed) return;
@@ -132,8 +136,17 @@ export default function SuggestionPanel({ prompts, onSuggestionClick, onRefresh,
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [lastRefreshed]);
 
+  useEffect(() => {
+    if (prompts !== prevPromptsRef.current) {
+      setFadeKey((k) => k + 1);
+      prevPromptsRef.current = prompts;
+    }
+  }, [prompts]);
+
   const isUpdatesTab = activeTab === "updates";
-  const currentList: ExamplePrompt[] = !isUpdatesTab ? (prompts?.[activeTab] ?? []) : [];
+  const dynamicList: ExamplePrompt[] = !isUpdatesTab ? (prompts?.[activeTab] ?? []) : [];
+  const fallbackList: ExamplePrompt[] = !isUpdatesTab ? (SUGGESTION_FALLBACK[activeTab] ?? []) : [];
+  const currentList = dynamicList.length > 0 ? dynamicList : fallbackList;
   const updatesList: UpdateSetSummary[] = prompts?.updates ?? [];
   const hasData = isUpdatesTab ? updatesList.length > 0 : currentList.length > 0;
 
@@ -142,21 +155,34 @@ export default function SuggestionPanel({ prompts, onSuggestionClick, onRefresh,
       {/* Header */}
       <div className="sp-header">
         <span className="sp-title">Suggestions</span>
-        <button
-          onClick={onRefresh}
-          disabled={isRefreshing}
-          className="sp-refresh-btn"
-          title="Refresh suggestions"
-        >
-          <svg
-            className={`w-3.5 h-3.5 ${isRefreshing ? "sp-spin" : ""}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        <div className="flex items-center gap-0.5">
+          {onShuffle && (
+            <button
+              onClick={onShuffle}
+              className="sp-shuffle-btn"
+              title="Shuffle suggestions"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.678 48.678 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3l-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3l-3 3" />
+              </svg>
+            </button>
+          )}
+          <button
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            className="sp-refresh-btn"
+            title="Refresh suggestions (fetch new data)"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-        </button>
+            <svg
+              className={`w-3.5 h-3.5 ${isRefreshing ? "sp-spin" : ""}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Tab bar */}
@@ -184,7 +210,7 @@ export default function SuggestionPanel({ prompts, onSuggestionClick, onRefresh,
       </div>
 
       {/* Content */}
-      <div className="sp-items">
+      <div key={fadeKey} className="sp-items sp-items-fade-enter">
         {isUpdatesTab ? (
           hasData ? (
             updatesList.map((us, i) => (
