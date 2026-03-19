@@ -1514,6 +1514,14 @@ body {
   .landing-header {
     padding: 0 16px;
   }
+  .landing-header-right {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .landing-header-signin,
+  .landing-header-cta {
+    flex-shrink: 0;
+  }
   .landing-header-name {
     font-size: 13px;
     max-width: 120px;

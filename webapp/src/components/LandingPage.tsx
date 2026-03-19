@@ -123,8 +123,12 @@ export default function LandingPage() {
         </div>
         <div className="landing-header-right">
           <ThemeToggle />
-          <button onClick={openModal} className="landing-header-signin">Sign In</button>
-          <button onClick={openModal} className="landing-header-cta">Get Started</button>
+          <button type="button" onClick={openModal} className="landing-header-signin" aria-label="Sign in">
+            Sign In
+          </button>
+          <button type="button" onClick={openModal} className="landing-header-cta" aria-label="Get started">
+            Get Started
+          </button>
         </div>
       </header>
 
