@@ -9,6 +9,7 @@ import InfoModal from "@/components/InfoModal";
 import WelcomeModal from "@/components/WelcomeModal";
 import SignupGateModal from "@/components/SignupGateModal";
 import APIKeyGateModal from "@/components/APIKeyGateModal";
+import ConnectModal from "@/components/ConnectModal";
 import ThemeToggle from "@/components/ThemeToggle";
 import SuggestionPanel from "@/components/SuggestionPanel";
 import type { ChatMessage, ConnectionResult, UsageInfo, TrialStatus, SDLCPhase, LiveStatus, AIProvider, ModelOption, FileAttachment, CategorizedPrompts } from "@/lib/types";
@@ -157,6 +158,8 @@ export default function Home() {
   // Profile dropdown
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
+  // Sign-in modal (when user is not authenticated)
+  const [showSignInModal, setShowSignInModal] = useState(false);
   // Persistent session ID for logging — survives refresh via sessionStorage
   const [clientSessionId, setClientSessionId] = useState(() => {
     if (typeof window !== "undefined") {
@@ -1461,7 +1464,20 @@ export default function Home() {
                 <Menu className="w-5 h-5" strokeWidth={1.5} />
               </button>
             )}
-            {/* Profile avatar + dropdown */}
+            {/* Sign In when not authenticated; otherwise profile avatar + dropdown */}
+            {!appUser ? (
+              <button
+                type="button"
+                onClick={() => setShowSignInModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium rounded-md transition-colors"
+                style={{ color: "var(--text-primary)", background: "var(--surface-secondary)", border: "1px solid var(--border-default)" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-elevated)"; e.currentTarget.style.borderColor = "var(--border-emphasis)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "var(--surface-secondary)"; e.currentTarget.style.borderColor = "var(--border-default)"; }}
+                aria-label="Sign in"
+              >
+                Sign In
+              </button>
+            ) : (
             <div ref={profileRef} className="relative">
               <button
                 onClick={() => setProfileOpen(!profileOpen)}
@@ -1523,6 +1539,7 @@ export default function Home() {
                 </div>
               )}
             </div>
+            )}
           </div>
         </header>
 
@@ -1647,6 +1664,18 @@ export default function Home() {
       {/* Info modal */}
       <InfoModal open={showInfo} onClose={() => setShowInfo(false)} onTryPrompt={(text) => { setShowInfo(false); setTimeout(() => handleSendRef.current(text), 100); }} />
       <WelcomeModal open={showWelcome} onClose={dismissWelcome} />
+
+      {/* Sign-in modal (when user is not authenticated) */}
+      <ConnectModal
+        open={showSignInModal}
+        onClose={() => {
+          setShowSignInModal(false);
+          fetch("/api/auth/me")
+            .then((r) => (r.ok ? r.json() : null))
+            .then((data) => setAppUser(data && data.email ? data : null))
+            .catch(() => setAppUser(null));
+        }}
+      />
 
       {/* Gate modals (3-tier access) */}
       <SignupGateModal
