@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SN AI Agent — Sequence & Data Flow</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;1,9..40,400&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --surface-2: #1a2236;
+    --border: #1e293b;
+    --border-accent: #2563eb33;
+    --text: #e2e8f0;
+    --text-muted: #94a3b8;
+    --text-dim: #64748b;
+    --accent: #3b82f6;
+    --accent-glow: #3b82f644;
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --rose: #f43f5e;
+    --purple: #a855f7;
+    --cyan: #06b6d4;
+    --teal: #14b8a6;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  .page-header {
+    padding: 48px 40px 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .page-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, var(--accent), var(--cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 6px;
+  }
+
+  .page-header p {
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  .tab-bar {
+    display: flex;
+    gap: 2px;
+    padding: 0 40px;
+    max-width: 1400px;
+    margin: 24px auto 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tab {
+    padding: 10px 20px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    user-select: none;
+  }
+
+  .tab:hover { color: var(--text-muted); }
+
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .tab-content {
+    display: none;
+    padding: 32px 40px 60px;
+    max-width: 1400px;
+    margin: 0 auto;
+    animation: fadeIn 0.3s ease;
+  }
+
+  .tab-content.active { display: block; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .diagram-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    margin-bottom: 32px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .diagram-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-glow), transparent);
+  }
+
+  .diagram-card h2 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    color: var(--text);
+  }
+
+  .diagram-card .subtitle {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 24px;
+    font-family: 'Fira Code', monospace;
+  }
+
+  .mermaid {
+    display: flex;
+    justify-content: center;
+    overflow-x: auto;
+    padding: 16px 0;
+  }
+
+  .mermaid svg {
+    max-width: 100%;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .flow-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+
+  @media (max-width: 900px) {
+    .flow-grid { grid-template-columns: 1fr; }
+    .page-header, .tab-bar, .tab-content { padding-left: 20px; padding-right: 20px; }
+  }
+
+  .stat-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  .stat-chip {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 120px;
+  }
+
+  .stat-chip .val {
+    font-size: 22px;
+    font-weight: 700;
+    font-family: 'Fira Code', monospace;
+  }
+
+  .stat-chip .label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .val-blue { color: var(--accent); }
+  .val-green { color: var(--green); }
+  .val-amber { color: var(--amber); }
+  .val-purple { color: var(--purple); }
+  .val-cyan { color: var(--cyan); }
+  .val-rose { color: var(--rose); }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>SN AI Agent Architecture Diagrams</h1>
+  <p>Sequence flows, data flows, and component interactions</p>
+</div>
+
+<div class="tab-bar">
+  <div class="tab active" data-tab="seq-chat">Chat Sequence</div>
+  <div class="tab" data-tab="seq-auth">Auth Sequence</div>
+  <div class="tab" data-tab="data-flow">Data Flow</div>
+  <div class="tab" data-tab="component">Component Map</div>
+  <div class="tab" data-tab="tool-flow">Tool Execution</div>
+</div>
+
+<!-- ═══════════════ TAB 1: CHAT SEQUENCE ═══════════════ -->
+<div class="tab-content active" id="seq-chat">
+  <div class="stat-row">
+    <div class="stat-chip"><span class="val val-blue">6</span><span class="label">Participants</span></div>
+    <div class="stat-chip"><span class="val val-green">30</span><span class="label">Max Tool Rounds</span></div>
+    <div class="stat-chip"><span class="val val-amber">SSE</span><span class="label">Stream Protocol</span></div>
+    <div class="stat-chip"><span class="val val-purple">80+</span><span class="label">Available Tools</span></div>
+  </div>
+
+  <div class="diagram-card">
+    <h2>Chat Request Sequence</h2>
+    <div class="subtitle">POST /api/chat-stream &rarr; SSE event stream</div>
+    <div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant U as Browser<br/>(ChatWindow)
+    participant MW as Middleware<br/>(Auth Gate)
+    participant API as /api/chat-stream<br/>(Route Handler)
+    participant ENG as sn-engine.ts<br/>(Orchestrator)
+    participant AI as Anthropic / OpenRouter<br/>(LLM API)
+    participant SN as ServiceNow<br/>(REST API)
+
+    U->>MW: POST /api/chat-stream<br/>{credentials, messages, model, phase}
+    MW->>MW: Validate session cookie
+    MW->>MW: Attach x-user-id, x-user-role headers
+    MW->>API: Forward (authenticated)
+
+    API->>API: Resolve API key<br/>(server-side or BYOK)
+    API->>API: checkAccess()<br/>(3-tier: anon/auth/byok)
+
+    alt Access Denied
+        API-->>U: 429 {gate: "signup" | "apikey"}
+    end
+
+    API->>ENG: chatStream(credentials, messages, model, phase)
+
+    ENG->>ENG: Create per-request ServiceNowClient
+    ENG->>ENG: Get phase-filtered tool definitions
+    ENG->>ENG: Build system prompt + dynamic context
+
+    Note over ENG: Task Planner Check
+    ENG->>ENG: shouldPlan(messages, phase)?
+
+    alt Plan Generated
+        ENG->>AI: Generate execution plan
+        AI-->>ENG: JSON plan {tasks, dependencies}
+        ENG-->>U: SSE: {type: "plan", tasks: [...]}
+
+        loop For each planned task
+            ENG->>SN: Execute tool call(s)
+            SN-->>ENG: Tool result
+            ENG-->>U: SSE: {type: "tool_result"}
+        end
+        ENG->>ENG: Format gathered data into context
+    end
+
+    Note over ENG,AI: Agentic Loop (max 30 rounds)
+
+    loop Until end_turn or max rounds
+        ENG->>AI: messages + tools + system prompt
+        AI-->>ENG: Response (text / tool_use)
+        ENG-->>U: SSE: {type: "text_delta", content: "..."}
+
+        alt tool_use blocks returned
+            loop For each tool call
+                ENG-->>U: SSE: {type: "tool_start", toolName}
+                ENG->>SN: executeToolCall(name, args)
+                SN-->>ENG: Result JSON
+                ENG->>ENG: Cache result (if read-only)
+                ENG->>ENG: Log to session JSONL
+                ENG-->>U: SSE: {type: "tool_result", toolName, duration}
+            end
+            ENG->>ENG: Append tool results to messages
+        end
+    end
+
+    ENG-->>U: SSE: {type: "done", reply, toolExecutions}
+    U->>U: Render MessageBubble + update PhaseTracker
+    </div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Browser / UI</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Next.js Server</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>AI Provider</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div>ServiceNow</div>
+    </div>
+  </div>
+
+  <div class="diagram-card">
+    <h2>Connection & Session Start</h2>
+    <div class="subtitle">User connects to ServiceNow instance</div>
+    <div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant U as Browser<br/>(SettingsPanel)
+    participant API as Next.js API
+    participant ENG as sn-engine.ts
+    participant SN as ServiceNow
+    participant DB as Supabase
+
+    U->>API: POST /api/test-connection<br/>{instanceUrl, username, password}
+    API->>ENG: testConnection(credentials)
+    ENG->>ENG: Create ServiceNowClient
+    ENG->>SN: GET /api/now/table/sys_user?limit=1
+    SN-->>ENG: 200 OK (validates auth)
+
+    ENG->>SN: GET sys_user (lookup user by username)
+    SN-->>ENG: {sys_id, name, email}
+
+    ENG->>SN: GET sys_user_has_role (user roles)
+    SN-->>ENG: [admin, security_admin, ...]
+
+    ENG->>SN: GET sys_user_grmember (assignment groups)
+    SN-->>ENG: [{group: "Service Desk"}, ...]
+
+    ENG-->>API: {success, userInfo, roles, groups}
+    API-->>U: Connection result
+
+    U->>API: POST /api/session-start<br/>{sessionId, instanceUrl, model}
+    API->>API: Start telemetry stream (15s interval)
+    API->>DB: INSERT session_logs
+    API->>DB: UPSERT user_instances
+    API-->>U: 200 OK
+
+    U->>API: POST /api/instance-prompts<br/>{instanceUrl, username, password}
+    API->>ENG: fetchCategorizedPrompts()
+
+    par 13 Parallel Queries
+        ENG->>SN: Custom tables
+        ENG->>SN: Business rules
+        ENG->>SN: Catalog items
+        ENG->>SN: Update sets
+        ENG->>SN: Scheduled jobs
+        ENG->>SN: Knowledge bases
+        ENG->>SN: Workflows
+        ENG->>SN: Notifications
+        ENG->>SN: ACLs
+        ENG->>SN: My incidents
+        ENG->>SN: My changes
+        ENG->>SN: My approvals
+        ENG->>SN: Group unassigned
+    end
+
+    SN-->>ENG: Results (all 13)
+    ENG->>ENG: Score & categorize prompts<br/>(foryou, build, explore, quick)
+    ENG-->>API: CategorizedPrompts
+    API-->>U: {prompts: {foryou, build, explore, quick}}
+    U->>U: Render SuggestionPanel tabs
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ TAB 2: AUTH SEQUENCE ═══════════════ -->
+<div class="tab-content" id="seq-auth">
+  <div class="stat-row">
+    <div class="stat-chip"><span class="val val-blue">3</span><span class="label">Access Tiers</span></div>
+    <div class="stat-chip"><span class="val val-green">10</span><span class="label">Auth Routes</span></div>
+    <div class="stat-chip"><span class="val val-amber">OTP</span><span class="label">Verification</span></div>
+    <div class="stat-chip"><span class="val val-rose">bcrypt</span><span class="label">Password Hash</span></div>
+  </div>
+
+  <div class="diagram-card">
+    <h2>Authentication Flow (Email-First)</h2>
+    <div class="subtitle">ConnectModal state machine &rarr; session creation</div>
+    <div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant U as Browser<br/>(ConnectModal)
+    participant API as Auth API Routes
+    participant DB as Supabase
+    participant EM as ZeptoMail
+
+    Note over U: Step 1: Email Entry
+    U->>API: POST /api/auth/check-email<br/>{email}
+    API->>DB: SELECT from users WHERE email
+    API->>DB: SELECT from access_requests WHERE email
+
+    alt User exists with password
+        API-->>U: {step: "password"}
+        U->>API: POST /api/auth/login<br/>{email, password}
+        API->>DB: Verify bcrypt hash
+        API->>DB: INSERT sessions {token, user_id}
+        API-->>U: Set-Cookie: sn-ai-session
+        U->>U: Redirect to /app
+    else User exists, approved, no password
+        API-->>U: {step: "otp_verify"}
+        API->>DB: Create OTP token (6-digit, 10min expiry)
+        API->>EM: Send OTP email
+        U->>API: POST /api/auth/verify-otp<br/>{email, otp}
+        API->>DB: Validate OTP token
+        API->>DB: INSERT sessions (temporary)
+        API-->>U: Set-Cookie + redirect /auth/set-password
+        U->>API: POST /api/auth/set-password<br/>{password}
+        API->>DB: UPDATE users SET password_hash
+        API->>DB: Upgrade session (temporary → permanent)
+        API-->>U: Redirect to /app
+    else New user (not found)
+        API-->>U: {step: "request_access"}
+        U->>API: POST /api/auth/request-access<br/>{name, email, company, use_case}
+        API->>DB: INSERT access_requests (pending_verification)
+        API->>DB: Create OTP token
+        API->>EM: Send verification OTP
+        API-->>U: {requiresOTP: true}
+        U->>API: POST /api/auth/verify-otp<br/>{email, otp}
+        API->>DB: UPDATE access_requests SET email_verified
+        Note over API: If auto-approve enabled:
+        API->>DB: INSERT users + INSERT sessions
+        API-->>U: Set-Cookie + redirect
+    end
+    </div>
+  </div>
+
+  <div class="diagram-card">
+    <h2>3-Tier Access Control</h2>
+    <div class="subtitle">checkAccess() gate on every /api/chat* request</div>
+    <div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant REQ as Incoming Request
+    participant GATE as access-tier.ts<br/>checkAccess()
+    participant DB as Supabase
+
+    REQ->>GATE: checkAccess(ip, userId, isByok, instanceUrl)
+
+    alt Tier 3: BYOK (user API key)
+        GATE-->>REQ: ALLOW (unlimited)
+    else Tier 2: Authenticated User
+        GATE->>DB: SELECT request_log WHERE user_id, today
+        DB-->>GATE: authUsed count
+        GATE->>DB: SELECT anon_request_log WHERE ip, today
+        DB-->>GATE: anonUsed count
+        GATE->>GATE: combinedUsed = authUsed + anonUsed
+
+        alt combinedUsed < authDailyLimit
+            GATE->>DB: UPSERT request_log (increment)
+            GATE-->>REQ: ALLOW {tier: "authenticated", used, limit}
+        else
+            GATE-->>REQ: DENY {gate: "apikey"}<br/>Show APIKeyGateModal
+        end
+    else Tier 1: Anonymous
+        GATE->>DB: SELECT anon_request_log WHERE ip, today
+        DB-->>GATE: ipTotal
+        GATE->>DB: SELECT anon_request_log WHERE instance_url, today
+        DB-->>GATE: instanceTotal
+        GATE->>GATE: usage = max(ipTotal, instanceTotal)
+
+        alt usage < anonDailyLimit
+            GATE->>DB: UPSERT anon_request_log (increment)
+            GATE-->>REQ: ALLOW {tier: "anonymous", used, limit}
+        else
+            GATE-->>REQ: DENY {gate: "signup"}<br/>Show SignupGateModal
+        end
+    end
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ TAB 3: DATA FLOW ═══════════════ -->
+<div class="tab-content" id="data-flow">
+  <div class="stat-row">
+    <div class="stat-chip"><span class="val val-blue">39</span><span class="label">API Routes</span></div>
+    <div class="stat-chip"><span class="val val-green">20</span><span class="label">Lib Modules</span></div>
+    <div class="stat-chip"><span class="val val-purple">35</span><span class="label">Tool Modules</span></div>
+    <div class="stat-chip"><span class="val val-cyan">5</span><span class="label">External Services</span></div>
+  </div>
+
+  <div class="diagram-card">
+    <h2>System Data Flow</h2>
+    <div class="subtitle">How data moves between all layers</div>
+    <div class="mermaid">
+flowchart TB
+    subgraph BROWSER["BROWSER (React Client)"]
+        direction TB
+        LP["LandingPage<br/><i>Public marketing</i>"]
+        CM["ConnectModal<br/><i>Auth state machine</i>"]
+        APP["app/page.tsx<br/><i>State owner</i>"]
+        SP["SettingsPanel<br/><i>Credentials, model, usage</i>"]
+        CW["ChatWindow<br/><i>Messages, input, prompts</i>"]
+        MB["MessageBubble<br/><i>Markdown, tool cards</i>"]
+        PT["PhaseTracker<br/><i>SDLC pipeline</i>"]
+        SGP["SuggestionPanel<br/><i>4-tab prompts</i>"]
+    end
+
+    subgraph NEXTJS["NEXT.JS SERVER"]
+        direction TB
+        MID["middleware.ts<br/><i>Auth gate, session validation</i>"]
+
+        subgraph AUTH_API["Auth Routes"]
+            CHK["/api/auth/check-email"]
+            LGN["/api/auth/login"]
+            OTP["/api/auth/verify-otp"]
+            REG["/api/auth/request-access"]
+            PWD["/api/auth/set-password"]
+        end
+
+        subgraph CHAT_API["Chat Routes"]
+            CS["/api/chat-stream<br/><i>SSE streaming</i>"]
+            CH["/api/chat<br/><i>Non-streaming</i>"]
+            TC["/api/test-connection"]
+            IP["/api/instance-prompts"]
+            EP["/api/enhance-prompt"]
+        end
+
+        subgraph ADMIN_API["Admin Routes"]
+            AU["/api/admin/users"]
+            AR["/api/admin/requests"]
+            AT["/api/admin/access-tiers"]
+            AB["/api/admin/banners"]
+            AS["/api/admin/session-logs"]
+        end
+
+        subgraph LIBS["Server Libraries"]
+            ENG["sn-engine.ts<br/><i>Orchestrator</i>"]
+            SYS["system-prompt.ts<br/><i>SDLC prompt builder</i>"]
+            TP["task-planner.ts<br/><i>Execution plans</i>"]
+            SC["session-cache.ts<br/><i>LRU tool cache</i>"]
+            OR["openrouter.ts<br/><i>Multi-model client</i>"]
+            FP["file-parser.ts<br/><i>PDF/Word/Excel</i>"]
+            AC["access-tier.ts<br/><i>3-tier gate</i>"]
+            LG["logger.ts<br/><i>JSONL logging</i>"]
+            TG["telemetry-generator.ts<br/><i>Live dashboards</i>"]
+            AU2["auth.ts<br/><i>Sessions, bcrypt</i>"]
+            EM["email.ts<br/><i>ZeptoMail</i>"]
+        end
+    end
+
+    subgraph MCP["MCP TOOL ENGINE (mcp-servicenow/)"]
+        direction TB
+        TR["tool-registry.ts<br/><i>Dispatch table</i>"]
+        TD["tool-definitions.ts<br/><i>80+ tool schemas</i>"]
+        SNC["sn-client.ts<br/><i>REST client + cookie jar</i>"]
+        DEP["deployer/<br/><i>Update set helpers</i>"]
+
+        subgraph TOOLS["35 Tool Modules"]
+            T1["connection"]
+            T2["records"]
+            T3["scripts"]
+            T4["update-sets"]
+            T5["ui-policies"]
+            T6["notifications"]
+            T7["acls / catalog"]
+            T8["instance-analyzer"]
+            T9["flow-designer"]
+            T10["promotion-workflow"]
+        end
+    end
+
+    subgraph EXTERNAL["EXTERNAL SERVICES"]
+        SN[("ServiceNow<br/>REST API")]
+        ANTH[("Anthropic<br/>Claude API")]
+        ORA[("OpenRouter<br/>Multi-model")]
+        SUP[("Supabase<br/>Postgres")]
+        ZM[("ZeptoMail<br/>Email")]
+    end
+
+    LP --> CM
+    CM -->|auth requests| MID
+    APP --> SP & CW & PT
+    CW --> MB & SGP
+
+    MID -->|validate session| AUTH_API
+    MID -->|forward authed| CHAT_API
+    MID -->|role check| ADMIN_API
+
+    AUTH_API --> AU2 --> SUP
+    AUTH_API --> EM --> ZM
+    CHAT_API --> ENG
+    CHAT_API --> AC --> SUP
+    ADMIN_API --> SUP
+
+    CS --> ENG
+    TC --> ENG
+    IP --> ENG
+    EP -->|direct| ANTH
+
+    ENG --> SYS
+    ENG --> TP
+    ENG --> SC
+    ENG --> OR --> ORA
+    ENG --> FP
+    ENG -->|Anthropic| ANTH
+    ENG --> LG --> TG
+    ENG --> TR
+
+    TR --> TD
+    TR --> SNC
+    SNC --> DEP
+    SNC --> SN
+    TR --> TOOLS
+    TOOLS --> SNC
+    </div>
+  </div>
+
+  <div class="diagram-card">
+    <h2>Database Schema (Supabase)</h2>
+    <div class="subtitle">Tables used by the application</div>
+    <div class="mermaid">
+erDiagram
+    users {
+        uuid id PK
+        string email UK
+        string name
+        string password_hash
+        string role
+        string status
+        boolean must_set_password
+        timestamp created_at
+        timestamp last_login
+    }
+
+    sessions {
+        uuid id PK
+        uuid user_id FK
+        string token UK
+        boolean is_temporary
+        timestamp expires_at
+        string ip_address
+        string user_agent
+    }
+
+    access_requests {
+        uuid id PK
+        string email
+        string name
+        string company
+        string use_case
+        string status
+        boolean email_verified
+        timestamp created_at
+        string reviewed_by
+    }
+
+    request_log {
+        uuid id PK
+        uuid user_id FK
+        date request_date
+        int request_count
+    }
+
+    anon_request_log {
+        uuid id PK
+        string ip_address
+        string instance_url
+        date request_date
+        int request_count
+    }
+
+    session_logs {
+        uuid id PK
+        string session_id UK
+        uuid user_id FK
+        string instance_url
+        string model
+        string ai_provider
+        jsonb metadata
+        timestamp created_at
+    }
+
+    user_instances {
+        uuid id PK
+        uuid user_id FK
+        string instance_url
+        string instance_name
+        string sn_username
+        timestamp last_connected_at
+    }
+
+    banners {
+        uuid id PK
+        string title
+        text content_html
+        string bg_color
+        string text_color
+        jsonb pages
+        timestamp start_at
+        timestamp end_at
+        uuid created_by FK
+    }
+
+    invite_codes {
+        uuid id PK
+        string code UK
+        string label
+        int max_uses
+        int times_used
+        timestamp expires_at
+        boolean is_active
+        uuid created_by FK
+    }
+
+    access_tier_config {
+        uuid id PK
+        string scope
+        int anon_daily_limit
+        int auth_daily_limit
+    }
+
+    users ||--o{ sessions : "has"
+    users ||--o{ request_log : "tracks"
+    users ||--o{ session_logs : "generates"
+    users ||--o{ user_instances : "connects to"
+    users ||--o{ invite_codes : "creates"
+    users ||--o{ banners : "creates"
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ TAB 4: COMPONENT MAP ═══════════════ -->
+<div class="tab-content" id="component">
+  <div class="stat-row">
+    <div class="stat-chip"><span class="val val-blue">16</span><span class="label">Components</span></div>
+    <div class="stat-chip"><span class="val val-green">4</span><span class="label">Pages</span></div>
+    <div class="stat-chip"><span class="val val-amber">20</span><span class="label">Lib Modules</span></div>
+    <div class="stat-chip"><span class="val val-cyan">1</span><span class="label">Middleware</span></div>
+  </div>
+
+  <div class="diagram-card">
+    <h2>React Component Hierarchy</h2>
+    <div class="subtitle">How components compose in the UI</div>
+    <div class="mermaid">
+flowchart TB
+    subgraph ROOT["RootLayout (layout.tsx)"]
+        direction TB
+        TP2["ThemeProvider<br/><i>Dark/light context</i>"]
+        BD["BannerDisplay<br/><i>Admin banners</i>"]
+        FAB["FeedbackFAB<br/><i>Floating feedback btn</i>"]
+
+        subgraph ROUTES["Page Routes"]
+            direction TB
+            LANDING["/ &rarr; LandingPage"]
+            MAIN["/app &rarr; app/page.tsx"]
+            ADMIN["/admin &rarr; admin/page.tsx"]
+            LOGIN["/login &rarr; login page"]
+        end
+    end
+
+    subgraph LANDING_COMP["LandingPage"]
+        direction LR
+        HERO["Hero Section<br/><i>Tagline, video, CTA</i>"]
+        FEAT["Features Grid"]
+        STEPS["How It Works"]
+        CTA["CTA Section"]
+        FT["Footer"]
+        TT["ThemeToggle"]
+        CM2["ConnectModal<br/><i>Auth state machine</i>"]
+    end
+
+    subgraph MAIN_COMP["Main App (/app page.tsx = State Owner)"]
+        direction TB
+        HEADER["Header Bar"]
+
+        subgraph HEADER_ITEMS["Header Components"]
+            direction LR
+            MENU["Menu Toggle"]
+            LOGO["App Logo + Name"]
+            PHASE["PhaseTracker<br/><i>SDLC stepper</i>"]
+            CONN_BADGE["Connection Badge"]
+            THEME["ThemeToggle"]
+            NEWCHAT["New Chat Btn"]
+        end
+
+        SIDEBAR["SettingsPanel (Left Sidebar)"]
+        subgraph SIDEBAR_ITEMS["Settings Components"]
+            direction TB
+            SN_CREDS["SN Credentials<br/><i>URL, user, pass</i>"]
+            AI_TOGGLE["AI Provider Toggle<br/><i>Anthropic / OpenRouter</i>"]
+            MODEL_SEL["Model Selector"]
+            API_KEY["API Key Input"]
+            USAGE["Usage Meter<br/><i>used/limit bar</i>"]
+            CONN_INFO["Connection Info<br/><i>User, roles, instance</i>"]
+        end
+
+        CHAT["ChatWindow (Center)"]
+        subgraph CHAT_ITEMS["Chat Components"]
+            direction TB
+            WELCOME["Welcome State<br/><i>Hero + suggestion tabs</i>"]
+            SUGGEST["SuggestionPanel<br/><i>For You / Build / Explore / Quick</i>"]
+            MSGS["Message List"]
+            BUBBLE["MessageBubble<br/><i>Markdown, tool cards, approve btns</i>"]
+            ACTIVITY["InlineAgentActivity<br/><i>Tool execution timeline</i>"]
+            INPUT["Input Area<br/><i>Text + voice + file attach</i>"]
+        end
+    end
+
+    subgraph MODALS["Modal Components"]
+        direction LR
+        WM["WelcomeModal"]
+        IM["InfoModal"]
+        SGM["SignupGateModal<br/><i>Anon limit hit</i>"]
+        AKM["APIKeyGateModal<br/><i>Auth limit hit</i>"]
+    end
+
+    LANDING --> LANDING_COMP
+    MAIN --> MAIN_COMP
+    MAIN_COMP --> MODALS
+
+    HEADER --> HEADER_ITEMS
+    SIDEBAR --> SIDEBAR_ITEMS
+    CHAT --> CHAT_ITEMS
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ TAB 5: TOOL EXECUTION ═══════════════ -->
+<div class="tab-content" id="tool-flow">
+  <div class="stat-row">
+    <div class="stat-chip"><span class="val val-blue">80+</span><span class="label">MCP Tools</span></div>
+    <div class="stat-chip"><span class="val val-green">35</span><span class="label">Tool Modules</span></div>
+    <div class="stat-chip"><span class="val val-amber">3</span><span class="label">Defense Layers</span></div>
+    <div class="stat-chip"><span class="val val-purple">6</span><span class="label">SDLC Phases</span></div>
+  </div>
+
+  <div class="diagram-card">
+    <h2>MCP Tool Execution Pipeline</h2>
+    <div class="subtitle">sn-engine &rarr; tool-registry &rarr; sn-client &rarr; ServiceNow</div>
+    <div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant ENG as sn-engine.ts
+    participant CACHE as SessionCache<br/>(LRU, 50 entries)
+    participant REG as tool-registry.ts<br/>(dispatch table)
+    participant MOD as Tool Module<br/>(e.g. scripts.ts)
+    participant SNC as sn-client.ts<br/>(axios + cookie jar)
+    participant SN as ServiceNow<br/>REST API
+
+    ENG->>CACHE: Check cache(toolName, args)
+
+    alt Cache HIT (read-only tool)
+        CACHE-->>ENG: Cached result
+        Note over ENG: Skip API call
+    else Cache MISS
+        ENG->>REG: executeToolCall(name, args, snClient)
+        REG->>REG: Lookup handler in TOOL_HANDLERS map
+        REG->>MOD: handler(snClient, parsedArgs)
+        Note over MOD: Zod schema validation<br/>(with AI type coercion)
+
+        MOD->>SNC: snClient.getRecords() / createRecord() / etc.
+        SNC->>SN: GET/POST /api/now/table/{table}
+        SN-->>SNC: JSON response
+
+        alt Write operation (create/update)
+            Note over SNC: Update Set Capture
+            SNC->>SNC: Layer 1: Session-based<br/>(cookie jar persists GlideUpdateSet)
+            SNC->>SN: Layer 2: Move sys_update_xml<br/>(retry with backoff)
+            SNC->>SN: Layer 3: GlideUpdateManager2<br/>(AddToUpdateSetHelper API)
+        end
+
+        SNC-->>MOD: Processed result
+        MOD-->>REG: Tool output
+        REG-->>ENG: Result JSON
+
+        ENG->>CACHE: Store result (if read-only)
+        ENG->>ENG: Log: toolName, duration, success
+    end
+
+    ENG->>ENG: truncateToolResult(output)<br/>(if > token limit)
+    </div>
+  </div>
+
+  <div class="diagram-card">
+    <h2>SDLC Phase Gate Flow</h2>
+    <div class="subtitle">Spec-driven methodology with human approval gates</div>
+    <div class="mermaid">
+flowchart LR
+    subgraph SPEC["Phase 1: Spec"]
+        S1["Create 1-spec.md<br/>using template"]
+    end
+
+    subgraph DESIGN["Phase 2: Design"]
+        D1["Create 2-design.md<br/>Query existing artifacts"]
+    end
+
+    subgraph SCOPE["Phase 3: Scope Selection"]
+        SC1["Select app scope<br/>Query scoped apps"]
+    end
+
+    subgraph IMPL["Phase 4: Implementation"]
+        I1["Create update set"]
+        I2["Generate artifacts"]
+        I3["Deploy to instance"]
+    end
+
+    subgraph TEST["Phase 5: Testing"]
+        T1["Run ATF tests"]
+        T2["Capture results"]
+    end
+
+    subgraph DEPLOY["Phase 6: Deployment"]
+        DP1["Create 5-deployment.md"]
+        DP2["Update manifest.json"]
+    end
+
+    S1 -->|"STOP<br/>User approves"| D1
+    D1 -->|"STOP<br/>User approves"| SC1
+    SC1 -->|"Auto-proceed"| I1
+    I1 --> I2 --> I3
+    I3 -->|"Auto-proceed"| T1
+    T1 --> T2
+    T2 -->|"Auto-proceed"| DP1
+    DP1 --> DP2
+
+    style S1 fill:#1e3a5f,stroke:#3b82f6,color:#e2e8f0
+    style D1 fill:#1e3a5f,stroke:#3b82f6,color:#e2e8f0
+    style SC1 fill:#1a2e1a,stroke:#22c55e,color:#e2e8f0
+    style I1 fill:#3b1f1f,stroke:#f59e0b,color:#e2e8f0
+    style I2 fill:#3b1f1f,stroke:#f59e0b,color:#e2e8f0
+    style I3 fill:#3b1f1f,stroke:#f59e0b,color:#e2e8f0
+    style T1 fill:#2d1f3b,stroke:#a855f7,color:#e2e8f0
+    style T2 fill:#2d1f3b,stroke:#a855f7,color:#e2e8f0
+    style DP1 fill:#1a2e2e,stroke:#14b8a6,color:#e2e8f0
+    style DP2 fill:#1a2e2e,stroke:#14b8a6,color:#e2e8f0
+    </div>
+  </div>
+
+  <div class="diagram-card">
+    <h2>Update Set Capture — Three-Layer Defense</h2>
+    <div class="subtitle">Ensuring all artifacts land in the correct update set</div>
+    <div class="mermaid">
+flowchart TB
+    START["Artifact Created via REST API"]
+
+    subgraph L1["Layer 1: Session-Based Capture"]
+        L1A["Cookie-jar session persistence"]
+        L1B["callSetCurrentUpdateSetApi()"]
+        L1C["Server: GlideUpdateSet().set()"]
+    end
+
+    subgraph L2["Layer 2: Post-Creation Move"]
+        L2A["Query sys_update_xml"]
+        L2B["Multi-strategy search<br/>(exact → LIKE → broad)"]
+        L2C["Retry with backoff<br/>(up to 3 attempts)"]
+        L2D["Move record to target update set"]
+    end
+
+    subgraph L3["Layer 3: GlideUpdateManager2"]
+        L3A["callAddToUpdateSetApi()"]
+        L3B["Server: GlideUpdateManager2()<br/>.saveRecord(gr)"]
+        L3C["Creates sys_update_xml entry<br/>for ANY table type"]
+    end
+
+    VERIFY["sn_verify_update_set_capture<br/>Verify ALL artifacts captured"]
+
+    START --> L1A --> L1B --> L1C
+    L1C -->|"Artifact may still land<br/>in Default set"| L2A
+    L2A --> L2B --> L2C --> L2D
+    L2D -->|"Some tables don't generate<br/>sys_update_xml reliably"| L3A
+    L3A --> L3B --> L3C
+    L3C --> VERIFY
+
+    style L1 fill:#0f1f3a,stroke:#3b82f6,color:#e2e8f0
+    style L2 fill:#1f2a0f,stroke:#22c55e,color:#e2e8f0
+    style L3 fill:#2a1f0f,stroke:#f59e0b,color:#e2e8f0
+    style VERIFY fill:#1f0f2a,stroke:#a855f7,color:#e2e8f0
+    </div>
+  </div>
+</div>
+
+<script>
+  // Tab switching
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.tab).classList.add('active');
+    });
+  });
+
+  // Mermaid init with dark theme
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      darkMode: true,
+      background: '#111827',
+      primaryColor: '#1e3a5f',
+      primaryTextColor: '#e2e8f0',
+      primaryBorderColor: '#3b82f6',
+      secondaryColor: '#1a2236',
+      secondaryTextColor: '#94a3b8',
+      secondaryBorderColor: '#334155',
+      tertiaryColor: '#1e293b',
+      lineColor: '#475569',
+      textColor: '#e2e8f0',
+      mainBkg: '#1e3a5f',
+      nodeBorder: '#3b82f6',
+      clusterBkg: '#111827',
+      clusterBorder: '#1e293b',
+      titleColor: '#e2e8f0',
+      edgeLabelBackground: '#111827',
+      nodeTextColor: '#e2e8f0',
+      actorBkg: '#1e3a5f',
+      actorBorder: '#3b82f6',
+      actorTextColor: '#e2e8f0',
+      actorLineColor: '#475569',
+      signalColor: '#94a3b8',
+      signalTextColor: '#e2e8f0',
+      labelBoxBkgColor: '#1e3a5f',
+      labelBoxBorderColor: '#3b82f6',
+      labelTextColor: '#e2e8f0',
+      loopTextColor: '#94a3b8',
+      noteBkgColor: '#1a2236',
+      noteTextColor: '#e2e8f0',
+      noteBorderColor: '#334155',
+      activationBkgColor: '#1e3a5f',
+      activationBorderColor: '#3b82f6',
+      sequenceNumberColor: '#0a0e17',
+      sectionBkgColor: '#111827',
+      altSectionBkgColor: '#0f172a',
+      sectionBkgColor2: '#1a2236',
+      entityBorder: '#3b82f6',
+      entityBkg: '#1e3a5f',
+      entityTextColor: '#e2e8f0',
+      attributeBackgroundColorOdd: '#111827',
+      attributeBackgroundColorEven: '#1a2236',
+    },
+    sequence: {
+      diagramMarginX: 20,
+      diagramMarginY: 20,
+      actorMargin: 60,
+      width: 200,
+      height: 50,
+      boxMargin: 8,
+      boxTextMargin: 5,
+      noteMargin: 10,
+      messageMargin: 40,
+      mirrorActors: false,
+      useMaxWidth: true,
+      wrap: true,
+      wrapPadding: 10,
+    },
+    flowchart: {
+      useMaxWidth: true,
+      htmlLabels: true,
+      curve: 'basis',
+      padding: 15,
+      nodeSpacing: 30,
+      rankSpacing: 50,
+    },
+    er: {
+      useMaxWidth: true,
+      entityPadding: 15,
+      fontSize: 12,
+    },
+  });
+</script>
+</body>
+</html>
