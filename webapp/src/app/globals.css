@@ -537,23 +537,6 @@ body {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
-.sp-shuffle-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: var(--text-disabled);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-.sp-shuffle-btn:hover {
-  background: var(--surface-secondary);
-  color: var(--text-primary);
-}
 .sp-items-fade-enter {
   animation: spCrossfade 0.3s ease-out;
 }

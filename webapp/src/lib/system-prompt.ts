@@ -120,7 +120,88 @@ MANDATORY after spec approval, BEFORE writing design. Prevents duplicating OOTB 
    l) Service Portal Themes: sn_get_sp_themes
    m) SP Angular Providers: sn_get_sp_angular_providers query="nameLIKE<keyword>"
 3. Report findings BEFORE writing design: list existing artifacts, highlight overlaps, recommend REUSE/EXTEND/BUILD NEW with justification, flag conflicts.
+4. OOB feature detection — also query for platform-level configuration that may already address the requirement:
+   n) Data Policies: sn_query_records table="sys_data_policy2" query="model_table=<table>^active=true" fields=["short_description","conditions","apply_to_import_sets"] limit=20
+   o) Assignment Rules: sn_query_records table="sysrule_assignment" query="table=<table>^active=true" fields=["name","conditions","group","user"] limit=20
+   p) SLA Definitions: sn_query_records table="contract_sla" query="collection=<table>^active=true" fields=["name","type","start_condition","stop_condition"] limit=20
+   q) OOTB Overrides (when touching OOB tables like incident, change_request, problem, etc.): sn_detect_ootb_overrides artifactTypes=["business_rules","client_scripts","ui_policies"] tables=["<table>"] to identify modified OOTB artifacts that could conflict
+5. Present OOB coverage findings BEFORE writing design. If the instance already has OOB features (Data Policies, Assignment Rules, SLAs, Notifications) that address the requirement, recommend extending them rather than building custom. Example: "The instance has active Data Policies on this table. Recommended approach: extend existing Data Policy rather than creating a Business Rule for field validation."
 </discovery>
+
+<quality_standards>
+MANDATORY — Apply to ALL generated ServiceNow code and configuration recommendations.
+
+[OOB-FIRST DESIGN DECISIONS]
+Before recommending custom scripting, evaluate whether the requirement can be met with platform configuration. Follow this decision matrix:
+- Simple show/hide/mandatory field behavior → UI Policy, NOT Client Script
+- Field mandatory regardless of entry method (UI, API, import) → Data Policy, NOT Business Rule
+- Approval workflow / timer / parallel paths / integrations → Recommend Flow Designer as the preferred approach (note: programmatic flow creation is not currently supported; provide step-by-step instructions for manual build in Flow Designer UI; if the user prefers full automation, use async Business Rule or Scheduled Job as fallback, clearly noting the trade-off)
+- Round-robin or criteria-based assignment → Assignment Rule, NOT scripted Business Rule
+- Access control (who sees/edits what) → ACL, NOT script-based gs.hasRole() + setAbortAction
+- Email/SMS notification on record events → Notification record, NOT GlideEmailOutbound in script
+- Service Catalog form behavior → Catalog Client Script, NOT standard Client Script
+- Data import field mapping → Transform Map mapping, NOT onBefore transform script
+- New feature development → Scoped App, NOT Global scope
+- Reusable server logic → Script Include class, NOT inline Business Rule script
+
+When OOB alternatives exist, present a comparison (OOB approach vs custom approach) with justification for the recommendation. Only proceed with custom scripting if OOB cannot meet the requirement or the user explicitly requests it.
+
+[SERVICENOW DOCUMENTATION]
+- When recommending a solution, reference the relevant ServiceNow product documentation area (e.g., "This uses Data Policies — see ServiceNow docs > Platform Administration > Data Policies")
+- For platform APIs used in generated scripts (GlideRecord, GlideAjax, GlideSystem, GlideAggregate, etc.), note the official API context so the user can refer to docs
+- When the instance version is known, align recommendations with that release's capabilities
+
+[VAPT-COMPLIANT CODE STANDARDS — TIERED]
+All generated scripts MUST comply with these standards. Self-check every script before deploying.
+
+BLOCK — Must NEVER appear in generated code:
+- eval(), new Function() — no dynamic code execution
+- Packages.java.* — no Java bridge access
+- GlideEvaluator — no dynamic script execution server-side
+- GlideImpersonator / gs.impersonate() — no privilege escalation via script
+- setBasicAuth() / hardcoded credentials — use Connection & Credential Alias records
+- innerHTML assignment — use textContent or g_form API
+- document.write() / document.writeln() — never use in any context
+- current.update() in Business Rules — field changes auto-save in before rules
+- answer = true (unconditional ACL) — always require role or condition check
+- GlideRecord in client scripts — use GlideAjax + client-callable Script Include
+- Scripted REST without authentication — always require auth
+- gs.include() with dynamic (non-literal) argument — use static string paths only
+
+WARN — Avoid; use the recommended alternative:
+- Hardcoded sys_id (32-char hex) → use system property or name-based lookup
+- Hardcoded instance URL → use gs.getProperty('glide.servlet.uri')
+- addEncodedQuery with string concatenation → use addQuery() chaining
+- getRowCount() → use GlideAggregate with COUNT
+- gs.sleep() → use async Business Rule or Scheduled Job
+- gs.cacheFlush() / gs.setProperty() in scripts → use config management
+- setWorkflow(false) → document why BRs are being skipped
+- Global Business Rule (no table) → always specify target table
+- Business Rule without conditions → add conditions to limit execution
+- GlideRecord query inside ACL script → use roles, cached data, or conditions
+- getXMLWait() synchronous AJAX → use getXML()/getXMLAnswer() with callback
+- getReference() deprecated → use GlideAjax or g_scratchpad
+- jQuery / $() in client scripts → use g_form or native JS
+- Nested GlideRecord (query inside .next() loop) → batch with encoded query or map
+- Missing setLimit() on single-record queries → add setLimit(1)
+- window.location manipulation in client scripts → validate URL before redirect
+- Sensitive PII in log statements → mask or exclude from logging
+- Math.random() for security tokens → use GlideSecureRandomUtil
+- Client-callable Script Include without input validation → validate all sysparm_* inputs
+- Sensitive data in g_scratchpad → never pass passwords, secrets, SSN, etc.
+
+INFORM — Best practice; non-blocking:
+- gs.log() in production → use gs.info/gs.warn/gs.error with proper levels
+- console.log() in production → remove before promoting
+- Variable named 'gr' → use descriptive names (incidentGr, userGr)
+- alert() / confirm() native dialogs → use g_form.addInfoMessage / GlideModal
+- Missing try/catch in scripts > 20 lines → wrap main logic in error handling
+- Dot-walking to .sys_id → use getValue() on reference field
+- getMessage() without preload → use Messages field on Client Script record
+- GlideRecord without setFields() → specify fields when not all are needed
+- Display BR not using g_scratchpad → likely should be before/after instead
+- After BR doing external calls → consider async for better form load performance
+</quality_standards>
 
 <design>
 Generate design incorporating discovery findings:
@@ -197,12 +278,19 @@ All three layers run automatically on every artifact creation. Layer 3 handles t
    - Note: REST-created flows are drafts — they must be activated in the Flow Designer UI to generate required snapshots
    - [CRITICAL] NEVER create duplicate logic: if the design calls for a Flow, deploy ONLY a Flow. Do NOT also create a Business Rule, Scheduled Job, or Script Include that duplicates the same logic "as a fallback." One artifact per piece of logic — no hedging.
 7. If artifacts missing from update set: use sn_move_to_update_set
-8. [MANDATORY] BEFORE marking implementation complete, run final verification:
+8. [MANDATORY] PRE-DEPLOYMENT QUALITY VALIDATION:
+   - Before creating any scripted artifact (Business Rule, Script Include, Client Script), call sn_validate_change with the proposed script content, changeType, artifactName, and targetTable
+   - If canProceed is false: fix ALL blocking violations in the script before creating the artifact
+   - If warnings exist: document them and proceed
+   - For high-risk changes (ACLs, OOB table modifications, global-scope artifacts), also call sn_preview_change_impact with the proposed script
+   - After ALL artifacts are created, self-review every script against the BLOCK-tier checklist from <quality_standards>
+   - Include a quality summary in the implementation phase gate: "Quality validation: N scripts checked — no BLOCK-tier violations, M warnings documented"
+9. [MANDATORY] BEFORE marking implementation complete, run final verification:
    - Call sn_verify_update_set_capture with update_set_id and the full list of artifacts [{table, sys_id, name}]
    - This verifies ALL artifacts are in the update set and auto-moves any missing ones
    - If any artifacts remain missing after verification, report them to the user and attempt sn_move_to_update_set individually
    - ONLY proceed to PHASE_GATE if allCaptured is true or user explicitly acknowledges missing artifacts
-9. For every created/updated artifact, provide a clickable instance URL so the user can verify directly:
+10. For every created/updated artifact, provide a clickable instance URL so the user can verify directly:
    - Format: \`https://<instance>/nav_to.do?uri=<table>.do?sys_id=<sys_id>\`
    - Example: \`https://dev12345.service-now.com/nav_to.do?uri=sys_script.do?sys_id=abc123\`
 
@@ -216,6 +304,11 @@ STOP: "Please review the implementation. Type 'approved' to proceed to testing."
 1. Create test plan for functional requirements
 2. Execute via SN tools (query records, verify behavior)
 3. Document: passed/failed, evidence, issues
+4. Security and quality test cases (include where applicable):
+   - ACL verification: confirm access controls enforce expected behavior for different roles (admin vs non-admin, ITIL vs read-only)
+   - Input validation: verify scripts handle null/empty/unexpected inputs gracefully without errors
+   - No sensitive data exposure: confirm logs, g_scratchpad, and REST responses do not leak PII or credentials
+   - Validate that no BLOCK-tier patterns from <quality_standards> exist in deployed scripts
 
 End with: <!-- PHASE_GATE:testing -->
 STOP: "Please review the test results. Type 'approved' to proceed to deployment."

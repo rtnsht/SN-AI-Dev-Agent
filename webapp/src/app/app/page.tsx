@@ -16,8 +16,7 @@ import type { ChatMessage, ConnectionResult, UsageInfo, TrialStatus, SDLCPhase, 
 import { parsePhaseGate, parseUserChoices, ANTHROPIC_MODELS, SDLC_PHASES } from "@/lib/types";
 import { APP_NAME, APP_LOGO, SHOW_INFO_BUTTON, CREATOR_NAME, CREATOR_LINKEDIN, FOOTER_TAGLINE, FOOTER_COPYRIGHT } from "@/lib/branding";
 import { User, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from "lucide-react";
-import { selectPrompts, DEFAULT_CONFIG } from "@/lib/suggestion-engine";
-import type { PromptPoolMap, ScoredPrompt } from "@/lib/suggestion-engine";
+
 
 /* ── Session persistence keys (sessionStorage) ──────────────── */
 const SK = {
@@ -155,7 +154,6 @@ export default function Home() {
   const [categorizedPrompts, setCategorizedPrompts] = useState<CategorizedPrompts | null>(null);
   const [promptsRefreshing, setPromptsRefreshing] = useState(false);
   const [promptsLastRefreshed, setPromptsLastRefreshed] = useState<number | null>(null);
-  const [promptPools, setPromptPools] = useState<PromptPoolMap | null>(null);
   const [seenSuggestionHashes, setSeenSuggestionHashes] = useState<string[]>([]);
   // Mobile two-step flow: 'hero' = landing page, 'connect' = full-screen connection panel
   const [mobileStep, setMobileStep] = useState<"hero" | "connect">("hero");
@@ -1253,7 +1251,6 @@ export default function Home() {
           if (d.prompts && typeof d.prompts === "object" && d.prompts.foryou) {
             setCategorizedPrompts(d.prompts);
             setPromptsLastRefreshed(Date.now());
-            if (d._pools) setPromptPools(d._pools);
             if (d.promptHashes) {
               setSeenSuggestionHashes((prev) => {
                 const merged = [...prev, ...d.promptHashes.filter((h: string) => !prev.includes(h))];
@@ -1292,25 +1289,6 @@ export default function Home() {
     fetchCategorizedPromptsFromApi(credentials, userCtx);
   }, [connected, connInfo, credentials, fetchCategorizedPromptsFromApi]);
 
-  /** Client-side shuffle: re-select from cached pools without API call */
-  const handleShufflePrompts = useCallback(() => {
-    if (!promptPools) return;
-    try {
-      const n = DEFAULT_CONFIG.promptsPerCategory;
-      const seenSet = new Set(seenSuggestionHashes);
-      const currentUpdates = categorizedPrompts?.updates ?? [];
-      setCategorizedPrompts({
-        foryou: selectPrompts(promptPools.foryou as ScoredPrompt[], n, seenSet),
-        build: selectPrompts(promptPools.build as ScoredPrompt[], n, seenSet),
-        explore: selectPrompts(promptPools.explore as ScoredPrompt[], n, seenSet),
-        quick: selectPrompts(promptPools.quick as ScoredPrompt[], n, seenSet),
-        updates: currentUpdates,
-      });
-    } catch (e) {
-      console.warn("Shuffle failed:", e);
-    }
-  }, [promptPools, seenSuggestionHashes, categorizedPrompts?.updates]);
-
   /** Click a sidebar suggestion -> populate chat input (user sends manually) */
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const handlePopulateInput = useCallback((prompt: string) => {
@@ -1327,7 +1305,6 @@ export default function Home() {
     setModelLocked(false);
     setCategorizedPrompts(null);
     setPromptsLastRefreshed(null);
-    setPromptPools(null);
     setSeenSuggestionHashes([]);
     try { sessionStorage.removeItem(SK.SEEN_SUGGESTIONS); sessionStorage.removeItem(SK.CATEGORIZED_PROMPTS); } catch { /* ok */ }
   }, []);
@@ -1666,7 +1643,6 @@ export default function Home() {
               prompts={categorizedPrompts}
               onSuggestionClick={handlePopulateInput}
               onRefresh={handleRefreshPrompts}
-              onShuffle={promptPools ? handleShufflePrompts : undefined}
               isRefreshing={promptsRefreshing}
               lastRefreshed={promptsLastRefreshed}
             />
