@@ -29,6 +29,7 @@ const PUBLIC_PATHS = [
   "/auth/set-password",
   "/api/auth/",           // includes /api/auth/check-email
   "/api/config",
+  "/api/enhance-prompt",
   "/api/instance-prompts",
   "/api/openrouter-models",
   "/api/feedback",

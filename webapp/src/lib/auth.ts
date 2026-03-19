@@ -51,6 +51,24 @@ export function generateOTP(): string {
   return String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
 }
 
+function isMissingOtpCodeColumnError(message?: string): boolean {
+  const lower = (message || "").toLowerCase();
+  return lower.includes("otp_code") && (
+    lower.includes("does not exist") ||
+    lower.includes("could not find") ||
+    lower.includes("schema cache")
+  );
+}
+
+function buildLegacyOtpTokenPrefix(email: string, otp: string): string {
+  const emailHash = crypto.createHash("sha256").update(email).digest("hex");
+  return `otp:${emailHash}:${otp}:`;
+}
+
+function buildLegacyOtpToken(email: string, otp: string): string {
+  return `${buildLegacyOtpTokenPrefix(email, otp)}${generateToken()}`;
+}
+
 // ── Session management ──────────────────────────────────────────
 
 export interface SessionUser {
@@ -209,14 +227,18 @@ export async function createOTPToken(
   const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
   const normalizedEmail = email.toLowerCase().trim();
 
-  // Invalidate any previous unused OTP tokens for this email
-  await db
+  // OTPs are the only active email_verify tokens in the current auth flow, so
+  // we can safely retire any earlier unused attempts before minting a new code.
+  const { error: invalidateError } = await db
     .from("auth_tokens")
     .update({ used_at: new Date().toISOString() })
     .eq("email", normalizedEmail)
     .eq("type", "email_verify")
-    .is("used_at", null)
-    .not("otp_code", "is", null);
+    .is("used_at", null);
+
+  if (invalidateError) {
+    throw new Error(`Failed to invalidate previous OTP tokens: ${invalidateError.message}`);
+  }
 
   const { error } = await db.from("auth_tokens").insert({
     email: normalizedEmail,
@@ -226,7 +248,25 @@ export async function createOTPToken(
     expires_at: expiresAt.toISOString(),
   });
 
-  if (error) throw new Error(`Failed to create OTP token: ${error.message}`);
+  if (!error) return { otp, expiresAt };
+
+  if (!isMissingOtpCodeColumnError(error.message)) {
+    throw new Error(`Failed to create OTP token: ${error.message}`);
+  }
+
+  const legacyToken = buildLegacyOtpToken(normalizedEmail, otp);
+  const { error: legacyError } = await db.from("auth_tokens").insert({
+    email: normalizedEmail,
+    token: legacyToken,
+    type: "email_verify",
+    expires_at: expiresAt.toISOString(),
+  });
+
+  if (legacyError) {
+    throw new Error(`Failed to create OTP token: ${legacyError.message}`);
+  }
+
+  console.warn("[auth] auth_tokens.otp_code column missing; using legacy OTP token fallback");
   return { otp, expiresAt };
 }
 
@@ -236,6 +276,7 @@ export async function consumeOTPToken(
 ): Promise<{ email: string } | null> {
   const db = getSupabase();
   const normalizedEmail = email.toLowerCase().trim();
+  const nowIso = new Date().toISOString();
 
   const { data, error } = await db
     .from("auth_tokens")
@@ -244,17 +285,42 @@ export async function consumeOTPToken(
     .eq("otp_code", otp)
     .eq("type", "email_verify")
     .is("used_at", null)
-    .gt("expires_at", new Date().toISOString())
+    .gt("expires_at", nowIso)
     .single();
 
-  if (error || !data) return null;
+  if (data) {
+    await db
+      .from("auth_tokens")
+      .update({ used_at: new Date().toISOString() })
+      .eq("id", data.id);
+
+    return { email: data.email };
+  }
+
+  if (error && !isMissingOtpCodeColumnError(error.message)) {
+    // No matching otp_code record is a normal invalid/expired-code path. In that
+    // case we still check the legacy fallback format for compatibility.
+  }
+
+  const legacyPrefix = `${buildLegacyOtpTokenPrefix(normalizedEmail, otp)}%`;
+  const { data: legacyData, error: legacyError } = await db
+    .from("auth_tokens")
+    .select("id, email")
+    .eq("email", normalizedEmail)
+    .eq("type", "email_verify")
+    .is("used_at", null)
+    .gt("expires_at", nowIso)
+    .like("token", legacyPrefix)
+    .single();
+
+  if (legacyError || !legacyData) return null;
 
   await db
     .from("auth_tokens")
     .update({ used_at: new Date().toISOString() })
-    .eq("id", data.id);
+    .eq("id", legacyData.id);
 
-  return { email: data.email };
+  return { email: legacyData.email };
 }
 
 // ── Session cookie helpers ──────────────────────────────────────

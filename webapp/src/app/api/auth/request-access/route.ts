@@ -68,12 +68,17 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true, requiresOTP: true });
       }
       // Update existing request with latest info
-      await db.from("access_requests").update({
+      const { error: updateError } = await db.from("access_requests").update({
         name: name.trim(),
         company: company?.trim() || null,
-        use_case: use_case?.trim() || null,
+        use_case: use_case?.trim() || "Self-service signup",
         status: "pending_verification",
       }).eq("id", existing.id);
+
+      if (updateError) {
+        console.error("[auth/request-access] Update error:", updateError.message);
+        return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
+      }
     } else {
       const { error } = await db.from("access_requests").insert({
         email: normalizedEmail,
