@@ -9,7 +9,6 @@ const ZEPTOMAIL_API_URL = process.env.ZEPTOMAIL_API_URL || "https://api.zeptomai
 const ZEPTOMAIL_API_KEY = process.env.ZEPTOMAIL_API_KEY || "";
 const FROM_EMAIL = process.env.ZEPTOMAIL_FROM_EMAIL || "";
 const FROM_NAME = process.env.ZEPTOMAIL_FROM_NAME || "SN AI Agent";
-const BOUNCE_ADDRESS = process.env.ZEPTOMAIL_BOUNCE_ADDRESS || "";
 const APP_URL = process.env.APP_URL || "http://localhost:3000";
 const FETCH_TIMEOUT_MS = 15_000;
 
@@ -34,24 +33,21 @@ export async function sendEmail(opts: SendEmailOpts): Promise<{ success: boolean
       textbody: opts.body,
     };
 
-    if (BOUNCE_ADDRESS) {
-      payload.bounce_address = BOUNCE_ADDRESS;
-    }
-
     const res = await fetchWithTimeout(ZEPTOMAIL_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Zoho-enczapikey ${ZEPTOMAIL_API_KEY}`,
+        Authorization: ZEPTOMAIL_API_KEY,
       },
       body: JSON.stringify(payload),
       timeoutMs: FETCH_TIMEOUT_MS,
     });
 
+    const responseText = res.ok ? "" : await res.text();
+
     if (!res.ok) {
-      const text = await res.text();
-      console.error("[email] ZeptoMail error:", res.status, text);
-      return { success: false, error: `ZeptoMail ${res.status}: ${text}` };
+      console.error("[email] ZeptoMail error:", res.status, responseText);
+      return { success: false, error: `ZeptoMail ${res.status}: ${responseText}` };
     }
 
     return { success: true };
