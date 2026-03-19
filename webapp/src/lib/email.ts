@@ -27,19 +27,24 @@ export async function sendEmail(opts: SendEmailOpts): Promise<{ success: boolean
   }
 
   try {
+    const payload: Record<string, unknown> = {
+      from: { address: FROM_EMAIL, name: FROM_NAME },
+      to: [{ email_address: { address: opts.to, name: opts.toName || opts.to } }],
+      subject: opts.subject,
+      textbody: opts.body,
+    };
+
+    if (BOUNCE_ADDRESS) {
+      payload.bounce_address = BOUNCE_ADDRESS;
+    }
+
     const res = await fetchWithTimeout(ZEPTOMAIL_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Zoho-enczapikey ${ZEPTOMAIL_API_KEY}`,
       },
-      body: JSON.stringify({
-        bounce_address: BOUNCE_ADDRESS,
-        from: { address: FROM_EMAIL, name: FROM_NAME },
-        to: [{ email_address: { address: opts.to, name: opts.toName || opts.to } }],
-        subject: opts.subject,
-        textbody: opts.body,
-      }),
+      body: JSON.stringify(payload),
       timeoutMs: FETCH_TIMEOUT_MS,
     });
 
