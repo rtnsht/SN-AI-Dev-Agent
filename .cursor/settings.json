@@ -1,0 +1,10 @@
+{
+  "plugins": {
+    "render": {
+      "enabled": true
+    },
+    "postman": {
+      "enabled": true
+    }
+  }
+}
