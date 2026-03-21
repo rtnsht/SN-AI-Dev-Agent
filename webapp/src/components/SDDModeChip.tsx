@@ -55,9 +55,9 @@ export default function SDDModeChip({
         onClick={() => setDropdownOpen(!dropdownOpen)}
         className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer"
         style={{
-          background: "var(--color-primary, #3b82f6)15",
+          background: "color-mix(in srgb, var(--color-primary, #3b82f6) 15%, transparent)",
           color: "var(--color-primary, #3b82f6)",
-          border: "1px solid var(--color-primary, #3b82f6)30",
+          border: "1px solid color-mix(in srgb, var(--color-primary, #3b82f6) 30%, transparent)",
         }}
       >
         <Shield size={12} />

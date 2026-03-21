@@ -9,7 +9,7 @@ export const APP_NAME        = process.env.NEXT_PUBLIC_APP_NAME        || "";
 export const APP_TAGLINE     = process.env.NEXT_PUBLIC_APP_TAGLINE     || "";
 export const APP_SUBTITLE    = process.env.NEXT_PUBLIC_APP_SUBTITLE    || "";
 export const APP_DESCRIPTION = process.env.NEXT_PUBLIC_APP_DESCRIPTION || "";
-export const APP_LOGO        = process.env.NEXT_PUBLIC_APP_LOGO        || "";
+export const APP_LOGO        = process.env.NEXT_PUBLIC_APP_LOGO        || "/logo-r-v10.svg";
 export const APP_HERO_TAGLINE = process.env.NEXT_PUBLIC_HERO_TAGLINE   || "";
 export const HERO_VIDEO_URL   = process.env.NEXT_PUBLIC_HERO_VIDEO_URL  || "";
 /** Welcome modal pill badge (e.g. "Spec-driven · Human-approved · AI-powered") */
@@ -21,6 +21,8 @@ export const WELCOME_FOOTER  = process.env.NEXT_PUBLIC_WELCOME_FOOTER  || "This 
 export const CREATOR_NAME     = process.env.NEXT_PUBLIC_CREATOR_NAME     || "Ratnesh";
 export const CREATOR_LINKEDIN = process.env.NEXT_PUBLIC_CREATOR_LINKEDIN || "https://www.linkedin.com/in/ratnesh-tiwari";
 export const SHOW_INFO_BUTTON = process.env.NEXT_PUBLIC_SHOW_INFO_BUTTON !== "false"; // default: true
+/** External changelog URL (GitHub Releases, GitBook, etc.) — shown in the Release dropdown */
+export const CHANGELOG_URL    = process.env.NEXT_PUBLIC_CHANGELOG_URL    || "";
 /** Footer tagline — shown above creator attribution in the sidebar and landing page footer */
 export const FOOTER_TAGLINE   = process.env.NEXT_PUBLIC_FOOTER_TAGLINE   || "For the ServiceNow community";
 /** Full copyright text shown after the year (e.g. "SN AI Agent. All rights reserved.") */

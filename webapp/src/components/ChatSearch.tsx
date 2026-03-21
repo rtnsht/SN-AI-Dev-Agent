@@ -183,7 +183,7 @@ export default function ChatSearch({ messages, isOpen, onClose }: Props) {
                 onMouseEnter={e => { if (i !== activeIdx) e.currentTarget.style.background = "var(--surface-secondary)"; }}
                 onMouseLeave={e => { if (i !== activeIdx) e.currentTarget.style.background = "transparent"; }}
               >
-                <span className="text-[9px] mt-0.5 flex-shrink-0 w-5" style={{ color: r.role === "user" ? "var(--text-disabled)" : "var(--color-info)" }}>
+                <span className="text-[9px] mt-0.5 flex-shrink-0 w-5" style={{ color: r.role === "user" ? "var(--text-disabled)" : "var(--color-primary)" }}>
                   {r.role === "user" ? "You" : r.role === "system" ? "Sys" : "AI"}
                 </span>
                 <span className="truncate">{r.snippet}</span>

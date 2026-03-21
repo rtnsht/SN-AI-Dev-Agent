@@ -2,22 +2,23 @@
 
 /* ═══════════════════════════════════════════════════════════════════════════
    DESIGN SYSTEM — Dark-first, Linear-inspired
+   4% HSL lightness steps · Blue undertone (hsl 222) · WCAG AA compliant
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  /* ── Backgrounds (dark, not pure black) ── */
-  --background:          #0A0A0B;
-  --foreground:          #F5F5F7;
-  --surface-app:         #0A0A0B;
-  --surface-primary:     #111113;
-  --surface-secondary:   #17181B;
-  --surface-elevated:    #1F2024;
-  --surface-sidebar:     #0C0C0E;
+  /* ── Surface hierarchy (4% lightness steps, blue undertone) ── */
+  --background:          #0B0D12;
+  --foreground:          #E6EDF3;
+  --surface-app:         #0B0D12;
+  --surface-sidebar:     #111318;
+  --surface-primary:     #161A22;
+  --surface-secondary:   #1C2029;
+  --surface-elevated:    #232833;
 
-  /* ── Text hierarchy ── */
-  --text-primary:        #F5F5F7;
-  --text-secondary:      #A1A1AA;
-  --text-disabled:       #6B6B72;
+  /* ── Text hierarchy (WCAG AA compliant) ── */
+  --text-primary:        #E6EDF3;
+  --text-secondary:      #8B949E;
+  --text-disabled:       #848D97;
 
   /* ── Semantic accents (desaturated for dark mode) ── */
   --color-info:          #4C7DFF;
@@ -32,12 +33,12 @@
   --status-failed:       #F97373;
 
   /* ── Chip / badge ── */
-  --chip-bg:             #222227;
+  --chip-bg:             #232833;
 
-  /* ── Borders (surface variants, not heavy borders) ── */
-  --border-subtle:       rgba(255,255,255,0.04);
-  --border-default:      rgba(255,255,255,0.08);
-  --border-emphasis:     rgba(255,255,255,0.12);
+  /* ── Borders (improved visibility) ── */
+  --border-subtle:       rgba(255,255,255,0.05);
+  --border-default:      rgba(255,255,255,0.10);
+  --border-emphasis:     rgba(255,255,255,0.16);
 
   /* ── Branding (overridable via env vars → inline style on <html>) ── */
   --color-primary:       #4C7DFF;
@@ -46,14 +47,47 @@
   --color-accent-to:     #4C7DFF;
 
   /* ── Radius ── */
-  --radius-sm:           2px;
-  --radius-md:           4px;
-  --radius-lg:           6px;
-  --radius-xl:           8px;
+  --radius-sm:           0.125rem;
+  --radius-md:           0.25rem;
+  --radius-lg:           0.375rem;
+  --radius-xl:           0.5rem;
+
+  /* ── Spacing scale (4px base) ── */
+  --space-0:  0;
+  --space-1:  0.25rem;
+  --space-2:  0.5rem;
+  --space-3:  0.75rem;
+  --space-4:  1rem;
+  --space-5:  1.25rem;
+  --space-6:  1.5rem;
+  --space-8:  2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+
+  /* ── Elevation shadows ── */
+  --shadow-xs:  0 1px 2px rgba(0,0,0,0.3);
+  --shadow-sm:  0 2px 4px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-md:  0 4px 12px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.2);
+  --shadow-lg:  0 8px 24px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.2);
+  --shadow-xl:  0 16px 48px rgba(0,0,0,0.6), 0 8px 16px rgba(0,0,0,0.3);
+  --shadow-glow: 0 0 24px color-mix(in srgb, var(--color-primary) 15%, transparent);
+
+  /* ── Z-index scale ── */
+  --z-base:    0;
+  --z-sticky:  10;
+  --z-sidebar: 30;
+  --z-state:   40;
+  --z-banner:  45;
+  --z-modal:   50;
+  --z-toast:   60;
+  --z-overlay: 100;
 
   /* ── Transitions ── */
   --transition-fast:     150ms ease;
   --transition-normal:   200ms ease;
+  --transition-slow:     300ms ease;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -61,16 +95,16 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 [data-theme="light"] {
   --background:          #FFFFFF;
-  --foreground:          #111113;
-  --surface-app:         #F8F8FA;
+  --foreground:          #1A1A2E;
+  --surface-app:         #F5F6F8;
+  --surface-sidebar:     #EEEEF2;
   --surface-primary:     #FFFFFF;
-  --surface-secondary:   #F1F1F4;
-  --surface-elevated:    #E8E8ED;
-  --surface-sidebar:     #F4F4F7;
+  --surface-secondary:   #F0F0F4;
+  --surface-elevated:    #E6E6EC;
 
-  --text-primary:        #111113;
+  --text-primary:        #1A1A2E;
   --text-secondary:      #5C5C66;
-  --text-disabled:       #9C9CA5;
+  --text-disabled:       #71717A;
 
   --color-info:          #2E5FE0;
   --color-success:       #1A9B50;
@@ -82,16 +116,23 @@
   --status-success:      #1A9B50;
   --status-failed:       #D93636;
 
-  --chip-bg:             #E8E8ED;
+  --chip-bg:             #E6E6EC;
 
   --border-subtle:       rgba(0,0,0,0.04);
-  --border-default:      rgba(0,0,0,0.08);
-  --border-emphasis:     rgba(0,0,0,0.14);
+  --border-default:      rgba(0,0,0,0.10);
+  --border-emphasis:     rgba(0,0,0,0.16);
 
   --color-primary:       #2E5FE0;
   --color-primary-hover: #4A78F0;
   --color-accent-from:   #9333ea;
   --color-accent-to:     #2E5FE0;
+
+  --shadow-xs:  0 1px 2px rgba(0,0,0,0.06);
+  --shadow-sm:  0 2px 4px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:  0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-lg:  0 8px 24px rgba(0,0,0,0.10), 0 4px 8px rgba(0,0,0,0.06);
+  --shadow-xl:  0 16px 48px rgba(0,0,0,0.12), 0 8px 16px rgba(0,0,0,0.06);
+  --shadow-glow: 0 0 24px color-mix(in srgb, var(--color-primary) 10%, transparent);
 }
 
 /* Light-mode scrollbar */
@@ -107,29 +148,40 @@
   --color-primary-hover: var(--color-primary-hover);
   --color-accent-from: var(--color-accent-from);
   --color-accent-to: var(--color-accent-to);
+  --color-surface-app: var(--surface-app);
+  --color-surface-sidebar: var(--surface-sidebar);
+  --color-surface-primary: var(--surface-primary);
+  --color-surface-secondary: var(--surface-secondary);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-info: var(--color-info);
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-danger: var(--color-danger);
 }
 
 body {
   background: var(--surface-app);
   color: var(--text-primary);
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Typography scale ── */
-.text-display { font-size: 32px; font-weight: 600; line-height: 1.2; letter-spacing: -0.02em; }
-.text-heading { font-size: 20px; font-weight: 500; line-height: 1.3; letter-spacing: -0.01em; }
-.text-body    { font-size: 14px; font-weight: 400; line-height: 1.5; }
-.text-small   { font-size: 13px; font-weight: 400; line-height: 1.5; }
-.text-caption { font-size: 12px; font-weight: 400; line-height: 1.4; }
-.text-micro   { font-size: 11px; font-weight: 400; line-height: 1.3; }
+/* ── Typography scale (rem-based for browser accessibility) ── */
+.text-display { font-size: 2rem;    font-weight: 600; line-height: 1.2; letter-spacing: -0.02em; }
+.text-title   { font-size: 1.5rem;  font-weight: 600; line-height: 1.25; letter-spacing: -0.015em; }
+.text-heading { font-size: 1.25rem; font-weight: 500; line-height: 1.3; letter-spacing: -0.01em; }
+.text-large   { font-size: 1rem;    font-weight: 400; line-height: 1.5; }
+.text-body    { font-size: 0.875rem; font-weight: 400; line-height: 1.5; }
+.text-small   { font-size: 0.8125rem; font-weight: 400; line-height: 1.5; }
+.text-caption { font-size: 0.75rem; font-weight: 400; line-height: 1.4; }
+.text-micro   { font-size: 0.6875rem; font-weight: 400; line-height: 1.3; }
 
 /* ── Palantir-style section label (e.g. "/0.1 SPEC") ── */
 .phase-label {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -142,11 +194,318 @@ body {
   outline-offset: 2px;
 }
 
+/* ── Light-mode logo treatment: dark backdrop for orbital logo on light surfaces ── */
+[data-theme="light"] img[alt="App Logo"],
+[data-theme="light"] img[alt*="Logo"][class*="rounded-full"] {
+  background: #0e1018;
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* ── Scrollbar styling (subtle) ── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
+
+/* ── Banner: full-width notice strip above header (theme-aware highlight) ── */
+.app-banner {
+  flex-shrink: 0;
+  width: 100%;
+  border-bottom: 1px solid var(--border-default);
+}
+.app-banner-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 1rem 0.5rem 1.25rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.app-banner-icon {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+}
+.app-banner-text {
+  flex: 1;
+  color: var(--text-primary);
+  min-width: 0;
+}
+.app-banner-text a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.app-banner-dismiss {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-md);
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
+}
+.app-banner-dismiss:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+  color: var(--text-primary);
+}
+
+/* Banner variants: bold highlighted strip — dark (high chroma vs surrounding UI) */
+.app-banner-info {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-info) 48%, var(--surface-elevated)) 0%,
+    color-mix(in srgb, var(--color-info) 26%, var(--surface-secondary)) 100%
+  );
+  border-bottom: 1px solid color-mix(in srgb, var(--color-info) 58%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-info) 45%, transparent),
+    0 1px 0 color-mix(in srgb, var(--color-info) 12%, transparent);
+}
+.app-banner-info .app-banner-icon { color: var(--color-info); }
+
+.app-banner-success {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-success) 44%, var(--surface-elevated)) 0%,
+    color-mix(in srgb, var(--color-success) 24%, var(--surface-secondary)) 100%
+  );
+  border-bottom: 1px solid color-mix(in srgb, var(--color-success) 54%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-success) 40%, transparent),
+    0 1px 0 color-mix(in srgb, var(--color-success) 12%, transparent);
+}
+.app-banner-success .app-banner-icon { color: var(--color-success); }
+
+.app-banner-warning {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-warning) 42%, var(--surface-elevated)) 0%,
+    color-mix(in srgb, var(--color-warning) 22%, var(--surface-secondary)) 100%
+  );
+  border-bottom: 1px solid color-mix(in srgb, var(--color-warning) 52%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-warning) 38%, transparent),
+    0 1px 0 color-mix(in srgb, var(--color-warning) 12%, transparent);
+}
+.app-banner-warning .app-banner-icon { color: var(--color-warning); }
+
+.app-banner-critical {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-danger) 50%, var(--surface-elevated)) 0%,
+    color-mix(in srgb, var(--color-danger) 28%, var(--surface-secondary)) 100%
+  );
+  border-bottom: 1px solid color-mix(in srgb, var(--color-danger) 60%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-danger) 46%, transparent),
+    0 1px 0 color-mix(in srgb, var(--color-danger) 14%, transparent);
+}
+.app-banner-critical .app-banner-icon { color: var(--color-danger); }
+
+/*
+ * Light theme: flat “alert strip” — cool neutrals (not pure white), strong left accent,
+ * no vertical gradient (avoids muddy / washed look next to #fff panels).
+ */
+[data-theme="light"] .app-banner-info {
+  /* Blue-gray canvas + stronger semantic wash */
+  background: color-mix(in srgb, var(--color-info) 28%, #e2e9f4);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-info) 52%, transparent);
+  box-shadow:
+    inset 5px 0 0 var(--color-info),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+[data-theme="light"] .app-banner-info .app-banner-icon { color: var(--color-info); }
+
+[data-theme="light"] .app-banner-success {
+  background: color-mix(in srgb, var(--color-success) 26%, #e2efe8);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-success) 48%, transparent);
+  box-shadow:
+    inset 5px 0 0 var(--color-success),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+[data-theme="light"] .app-banner-success .app-banner-icon { color: var(--color-success); }
+
+[data-theme="light"] .app-banner-warning {
+  background: color-mix(in srgb, var(--color-warning) 30%, #f3ead8);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-warning) 50%, transparent);
+  box-shadow:
+    inset 5px 0 0 var(--color-warning),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+[data-theme="light"] .app-banner-warning .app-banner-icon { color: var(--color-warning); }
+
+[data-theme="light"] .app-banner-critical {
+  background: color-mix(in srgb, var(--color-danger) 24%, #f3e4e4);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-danger) 52%, transparent);
+  box-shadow:
+    inset 5px 0 0 var(--color-danger),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+[data-theme="light"] .app-banner-critical .app-banner-icon { color: var(--color-danger); }
+
+[data-theme="light"] .app-banner-inner {
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+  padding-left: 1.125rem;
+}
+
+[data-theme="light"] .app-banner .app-banner-dismiss {
+  opacity: 0.72;
+  color: var(--text-secondary);
+}
+[data-theme="light"] .app-banner .app-banner-dismiss:hover {
+  background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+}
+
+/* ── System state pills (connection, phase, error) ── */
+.state-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 100px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+.state-pill-connected  { background: color-mix(in srgb, var(--color-success) 10%, transparent); color: var(--color-success); border: 1px solid color-mix(in srgb, var(--color-success) 20%, transparent); }
+.state-pill-connecting { background: color-mix(in srgb, var(--color-warning) 10%, transparent); color: var(--color-warning); border: 1px solid color-mix(in srgb, var(--color-warning) 20%, transparent); }
+.state-pill-error      { background: color-mix(in srgb, var(--color-danger) 10%, transparent); color: var(--color-danger); border: 1px solid color-mix(in srgb, var(--color-danger) 20%, transparent); }
+.state-pill-info       { background: color-mix(in srgb, var(--color-info) 10%, transparent); color: var(--color-info); border: 1px solid color-mix(in srgb, var(--color-info) 20%, transparent); }
+.state-pill-dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.state-pill-dot-pulse { animation: statusPulse 2s ease-in-out infinite; }
+
+/* ── Phase-gate in-thread prompt ── */
+.phase-gate-prompt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-info) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-info) 16%, transparent);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.phase-gate-prompt-action {
+  flex-shrink: 0;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+.phase-gate-prompt-action:hover { opacity: 0.9; }
+
+/* ── Interactive header controls (CSS hover instead of JS) ── */
+.header-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.header-btn:hover {
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+}
+
+/* ── Text + icon header nav buttons ── */
+.header-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  white-space: nowrap;
+}
+.header-nav-btn:hover {
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+}
+
+/* ── App header structure ── */
+.app-header {
+  flex-shrink: 0;
+  z-index: var(--z-sticky, 10);
+}
+.app-subheader {
+  flex-shrink: 0;
+  z-index: calc(var(--z-sticky, 10) - 1);
+}
+
+/* ── Header dropdown items (profile, release) ── */
+.header-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.375rem 0.875rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  text-align: left;
+  text-decoration: none;
+}
+.header-dropdown-item:hover {
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+
+/* ── Release dropdown ── */
+.release-dropdown {
+  animation: slideDown 0.15s ease-out;
+}
+
+/* ── Banner toast slide-in ── */
+@keyframes slideDown {
+  from { opacity: 0; transform: translateX(-50%) translateY(-1rem); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
 
 /* ── Voice input waveform animation ── */
 @keyframes voiceBar {
@@ -218,6 +577,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: clamp(72px, 8vw, 120px);
+  height: clamp(72px, 8vw, 120px);
   border-radius: 50%;
   overflow: hidden;
   transition: box-shadow var(--transition-normal), filter var(--transition-normal);
@@ -229,17 +590,59 @@ body {
                          0 0 96px color-mix(in srgb, var(--color-primary) 8%, transparent); }
 }
 [data-theme="light"] .hero-logo-container {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.04);
-  filter: brightness(1.05) contrast(1.02);
+  background: #0e1018;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06),
+              0 0 40px color-mix(in srgb, var(--color-primary) 8%, transparent);
+  filter: none;
   animation: logoBreathLight 3s ease-in-out infinite;
 }
 @keyframes logoBreathLight {
-  0%, 100% { box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.04); }
-  50%      { box-shadow: 0 4px 32px rgba(0, 0, 0, 0.15), 0 0 24px color-mix(in srgb, var(--color-primary) 12%, transparent); }
+  0%, 100% { box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06),
+                         0 0 40px color-mix(in srgb, var(--color-primary) 8%, transparent); }
+  50%      { box-shadow: 0 4px 32px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.08),
+                         0 0 56px color-mix(in srgb, var(--color-primary) 14%, transparent); }
 }
 .hero-logo {
   object-fit: contain;
   filter: drop-shadow(0 0 12px color-mix(in srgb, var(--color-primary) 20%, transparent));
+}
+[data-theme="light"] .hero-logo {
+  filter: none;
+}
+
+/* ── App logo (inline SVG) — subtle orbital drift; transform-only for QHD/GPU safety ── */
+.app-logo-svg .app-logo-orbit-a {
+  transform-origin: 256px 256px;
+  animation: app-logo-spin-a 90s ease-in-out infinite;
+}
+.app-logo-svg .app-logo-orbit-b {
+  transform-origin: 256px 256px;
+  animation: app-logo-spin-b 120s ease-in-out infinite reverse;
+}
+@keyframes app-logo-spin-a {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes app-logo-spin-b {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.app-logo-svg .app-logo-inner-ring {
+  animation: app-logo-inner-pulse 5s ease-in-out infinite;
+}
+@keyframes app-logo-inner-pulse {
+  0%, 100% { opacity: 0.50; }
+  50%      { opacity: 0.68; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-logo-svg .app-logo-orbit-a,
+  .app-logo-svg .app-logo-orbit-b {
+    animation: none !important;
+  }
+  .app-logo-svg .app-logo-inner-ring {
+    animation: none !important;
+    opacity: 0.6;
+  }
 }
 
 /* ── Hero rotating text ── */
@@ -967,6 +1370,11 @@ body {
   height: 32px;
   border-radius: 50%;
   object-fit: contain;
+}
+[data-theme="light"] .landing-header-logo,
+[data-theme="light"] .site-footer-logo {
+  background: #0e1018;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
 }
 .landing-header-name {
   font-size: 15px;
@@ -2045,4 +2453,85 @@ textarea.auth-input {
   .sidebar-resize-handle {
     width: 8px;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ACCESSIBILITY & LONG-SESSION UX
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Screen-reader-only helper */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Live region for streaming status (polite by default) */
+.live-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+/* Light mode: code block, overlay, and card elevation polish */
+[data-theme="light"] .connect-modal {
+  box-shadow: var(--shadow-xl);
+}
+[data-theme="light"] .attach-dropdown {
+  box-shadow: var(--shadow-lg);
+}
+[data-theme="light"] .landing-feature-card:hover {
+  box-shadow: var(--shadow-md);
+}
+[data-theme="light"] .landing-video-wrapper {
+  box-shadow: var(--shadow-lg);
+}
+
+/* Code blocks inside chat — ensure contrast in light mode */
+[data-theme="light"] pre,
+[data-theme="light"] code {
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-default);
+}
+
+/* Selection color */
+::selection {
+  background: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  color: var(--text-primary);
+}
+
+/* Focus Mode indicator when sidebars are hidden */
+.focus-mode-exit {
+  position: fixed;
+  bottom: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-toast);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: 100px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-emphasis);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(12px);
+  transition: all var(--transition-fast);
+  animation: slideUp 0.25s ease-out;
+}
+.focus-mode-exit:hover {
+  color: var(--text-primary);
+  border-color: var(--color-primary);
 }

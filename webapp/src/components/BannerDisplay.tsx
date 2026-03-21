@@ -3,19 +3,51 @@
 import { useState, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import DOMPurify from "isomorphic-dompurify";
+import { Info, CheckCircle, AlertTriangle, XOctagon, X } from "lucide-react";
+
+type BannerVariant = "info" | "success" | "warning" | "critical";
 
 interface BannerData {
   id: string;
   content_html: string;
   pages: string[];
-  bg_color: string;
-  text_color: string;
+  variant?: BannerVariant;
+  bg_color?: string;
+  text_color?: string;
+}
+
+const VARIANT_ICON: Record<BannerVariant, typeof Info> = {
+  info: Info,
+  success: CheckCircle,
+  warning: AlertTriangle,
+  critical: XOctagon,
+};
+
+const DISMISSED_KEY = "dismissed-banners";
+
+function loadDismissed(): Set<string> {
+  try {
+    const raw = localStorage.getItem(DISMISSED_KEY);
+    if (raw) return new Set(JSON.parse(raw));
+  } catch { /* ignore */ }
+  return new Set();
+}
+
+function saveDismissed(ids: Set<string>) {
+  try { localStorage.setItem(DISMISSED_KEY, JSON.stringify([...ids])); } catch { /* ignore */ }
+}
+
+function resolveVariant(banner: BannerData): BannerVariant {
+  if (banner.variant && VARIANT_ICON[banner.variant]) return banner.variant;
+  return "info";
 }
 
 export default function BannerDisplay() {
   const pathname = usePathname();
   const [banners, setBanners] = useState<BannerData[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+
+  useEffect(() => { setDismissed(loadDismissed()); }, []);
 
   const fetchBanners = useCallback(async () => {
     try {
@@ -24,65 +56,56 @@ export default function BannerDisplay() {
         const data = await res.json();
         setBanners(data.banners || []);
       }
-    } catch {
-      // Silently fail — banners are non-critical
-    }
+    } catch { /* non-critical */ }
   }, []);
 
   useEffect(() => {
     fetchBanners();
-    // Refresh every 5 minutes to pick up changes
     const interval = setInterval(fetchBanners, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [fetchBanners]);
 
-  // Filter banners relevant to the current page
   const visibleBanners = banners.filter((b) => {
     if (dismissed.has(b.id)) return false;
     if (b.pages.includes("all")) return true;
     return b.pages.some((p) => pathname === p || pathname.startsWith(p + "/"));
   });
 
-  if (visibleBanners.length === 0) return null;
+  const topBanner = visibleBanners[0];
+  if (!topBanner) return null;
+
+  const variant = resolveVariant(topBanner);
+  const Icon = VARIANT_ICON[variant];
+  const isCritical = variant === "critical";
+
+  const dismiss = () => {
+    const next = new Set(dismissed).add(topBanner.id);
+    setDismissed(next);
+    saveDismissed(next);
+  };
 
   return (
-    <div style={{ position: "relative", zIndex: 45 }}>
-      {visibleBanners.map((banner) => (
-        <div
-          key={banner.id}
-          style={{
-            background: banner.bg_color,
-            color: banner.text_color,
-            padding: "8px 40px 8px 16px",
-            fontSize: "13px",
-            textAlign: "center",
-            lineHeight: 1.5,
-            position: "relative",
+    <div className={`app-banner app-banner-${variant}`}>
+      <div className="app-banner-inner">
+        <Icon size={16} className="app-banner-icon" />
+        <span
+          className="app-banner-text"
+          dangerouslySetInnerHTML={{
+            __html: DOMPurify.sanitize(topBanner.content_html || "", {
+              ALLOWED_TAGS: ["b", "i", "u", "em", "strong", "a", "br", "span"],
+            }),
           }}
-        >
-          <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(banner.content_html || "", { ALLOWED_TAGS: ["b", "i", "u", "em", "strong", "a", "br", "p", "span"] }) }} />
+        />
+        {!isCritical && (
           <button
-            onClick={() => setDismissed((prev) => new Set(prev).add(banner.id))}
+            onClick={dismiss}
             aria-label="Dismiss banner"
-            style={{
-              position: "absolute",
-              right: "12px",
-              top: "50%",
-              transform: "translateY(-50%)",
-              background: "none",
-              border: "none",
-              color: "inherit",
-              cursor: "pointer",
-              opacity: 0.7,
-              fontSize: "16px",
-              padding: "2px 6px",
-              lineHeight: 1,
-            }}
+            className="app-banner-dismiss"
           >
-            &times;
+            <X size={14} />
           </button>
-        </div>
-      ))}
+        )}
+      </div>
     </div>
   );
 }

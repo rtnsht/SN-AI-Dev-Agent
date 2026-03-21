@@ -116,11 +116,11 @@ function InteractiveChoices({
           onClick={() => !answered && onSelect(choice.key)}
           className="text-left px-3 py-2 rounded-md text-sm transition-all"
           style={{
-            background: answered ? "var(--surface-secondary)" : idx === focusIdx ? "rgba(76,125,255,0.12)" : "var(--surface-secondary)",
-            border: `1px solid ${answered ? "var(--border-default)" : idx === focusIdx ? "rgba(76,125,255,0.4)" : "var(--border-emphasis)"}`,
-            color: answered ? "var(--text-disabled)" : idx === focusIdx ? "var(--color-info)" : "var(--text-primary)",
+            background: answered ? "var(--surface-secondary)" : idx === focusIdx ? "color-mix(in srgb, var(--color-primary) 12%, transparent)" : "var(--surface-secondary)",
+            border: `1px solid ${answered ? "var(--border-default)" : idx === focusIdx ? "color-mix(in srgb, var(--color-primary) 40%, transparent)" : "var(--border-emphasis)"}`,
+            color: answered ? "var(--text-disabled)" : idx === focusIdx ? "var(--color-primary)" : "var(--text-primary)",
             opacity: answered ? 0.5 : 1,
-            ...(idx === focusIdx && !answered ? { boxShadow: "0 0 0 1px rgba(76,125,255,0.2)" } : {}),
+            ...(idx === focusIdx && !answered ? { boxShadow: "0 0 0 1px color-mix(in srgb, var(--color-primary) 20%, transparent)" } : {}),
           }}
           role="option"
           aria-selected={idx === focusIdx}
@@ -428,15 +428,15 @@ const MD_COMPONENTS: Record<string, any> = {
     if (isBlock) {
       return <code className="block p-3 my-2 rounded-md text-[12px] font-mono overflow-x-auto" style={{ background: "var(--surface-app)", color: "var(--text-secondary)" }}>{children}</code>;
     }
-    return <code className="px-1.5 py-0.5 rounded text-[12px] font-mono" style={{ background: "var(--surface-elevated)", color: "var(--color-info)" }}>{children}</code>;
+    return <code className="px-1.5 py-0.5 rounded text-[12px] font-mono" style={{ background: "var(--surface-elevated)", color: "var(--color-primary)" }}>{children}</code>;
   },
   pre: ({ children }: any) => <pre className="my-2">{children}</pre>,
   table: ({ children }: any) => <div className="overflow-x-auto my-2"><table className="min-w-full text-xs border-collapse">{children}</table></div>,
   thead: ({ children }: any) => <thead style={{ background: "var(--surface-secondary)" }}>{children}</thead>,
   th: ({ children }: any) => <th className="px-3 py-1.5 text-left font-medium" style={{ color: "var(--text-secondary)", borderBottom: "1px solid var(--border-emphasis)" }}>{children}</th>,
   td: ({ children }: any) => <td className="px-3 py-1.5" style={{ borderBottom: "1px solid var(--border-subtle)", color: "var(--text-secondary)" }}>{children}</td>,
-  blockquote: ({ children }: any) => <blockquote className="pl-3 my-2 italic" style={{ borderLeft: "2px solid var(--color-info)", color: "var(--text-secondary)" }}>{children}</blockquote>,
-  a: ({ href, children }: any) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: "var(--color-info)" }}>{children}</a>,
+  blockquote: ({ children }: any) => <blockquote className="pl-3 my-2 italic" style={{ borderLeft: "2px solid var(--color-primary)", color: "var(--text-secondary)" }}>{children}</blockquote>,
+  a: ({ href, children }: any) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: "var(--color-primary)" }}>{children}</a>,
   hr: () => <hr className="my-3" style={{ borderColor: "var(--border-default)" }} />,
 };
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -504,7 +504,7 @@ export default function MessageBubble({ message, onApprove, onChoiceSelect, show
               <div className="flex items-center gap-2 mt-1.5">
                 <span
                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
-                  style={{ background: "rgba(76,125,255,0.1)", color: "var(--color-info)", border: "1px solid rgba(76,125,255,0.2)" }}
+                  style={{ background: "color-mix(in srgb, var(--color-primary) 10%, transparent)", color: "var(--color-primary)", border: "1px solid color-mix(in srgb, var(--color-primary) 20%, transparent)" }}
                 >
                   <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6l4 2" />
@@ -648,11 +648,11 @@ export default function MessageBubble({ message, onApprove, onChoiceSelect, show
         {/* Auto-approved badge */}
         {message.phaseGate && message.autoApproved && (
           <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--border-subtle)" }}>
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-md w-fit" style={{ background: "rgba(76,125,255,0.06)", border: "1px solid rgba(76,125,255,0.15)" }}>
-              <svg className="w-4 h-4" style={{ color: "var(--color-info)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-md w-fit" style={{ background: "color-mix(in srgb, var(--color-primary) 6%, transparent)", border: "1px solid color-mix(in srgb, var(--color-primary) 15%, transparent)" }}>
+              <svg className="w-4 h-4" style={{ color: "var(--color-primary)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              <span className="text-xs font-medium" style={{ color: "var(--color-info)" }}>⚡ {phaseLabel} Auto-approved</span>
+              <span className="text-xs font-medium" style={{ color: "var(--color-primary)" }}>⚡ {phaseLabel} Auto-approved</span>
               <span className="text-[10px]" style={{ color: "var(--text-disabled)" }}>(no sign-off required)</span>
             </div>
           </div>

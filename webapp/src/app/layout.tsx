@@ -3,8 +3,7 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { APP_NAME, APP_DESCRIPTION, CSS_VARS } from "@/lib/branding";
 import ThemeProvider from "@/components/ThemeProvider";
-import FeedbackFAB from "@/components/FeedbackFAB";
-import BannerDisplay from "@/components/BannerDisplay";
+
 
 const inter = Inter({
   variable: "--font-sans",
@@ -26,8 +25,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
 };
 
 export default function RootLayout({
@@ -36,14 +33,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" data-theme="dark" style={CSS_VARS as React.CSSProperties}>
+    <html lang="en" data-theme="dark" style={CSS_VARS as React.CSSProperties} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem("app-theme");if(t==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}})()` }} />
+      </head>
       <body
         className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}
       >
         <ThemeProvider>
-          <BannerDisplay />
           {children}
-          <FeedbackFAB />
         </ThemeProvider>
       </body>
     </html>

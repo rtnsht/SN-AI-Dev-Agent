@@ -14,14 +14,17 @@ import ThemeToggle from "@/components/ThemeToggle";
 import SuggestionPanel from "@/components/SuggestionPanel";
 import type { ChatMessage, ConnectionResult, UsageInfo, TrialStatus, SDLCPhase, LiveStatus, AIProvider, ModelOption, FileAttachment, CategorizedPrompts, Credentials, QueuedMessage } from "@/lib/types";
 import { parsePhaseGate, parseUserChoices, ANTHROPIC_MODELS, SDLC_PHASES } from "@/lib/types";
-import { APP_NAME, APP_LOGO, SHOW_INFO_BUTTON, CREATOR_NAME, CREATOR_LINKEDIN, FOOTER_TAGLINE, FOOTER_COPYRIGHT } from "@/lib/branding";
+import { APP_NAME, APP_LOGO, SHOW_INFO_BUTTON, CREATOR_NAME, CREATOR_LINKEDIN, FOOTER_TAGLINE, FOOTER_COPYRIGHT, CHANGELOG_URL } from "@/lib/branding";
 import { dispatch as dispatchSlashCommand, type CommandContext } from "@/lib/slash-commands";
 import {
   buildServiceNowAuthorizationUrl,
   createPkcePair,
   normalizeServiceNowAuthMethod,
 } from "@/lib/servicenow-auth";
-import { User, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from "lucide-react";
+import Link from "next/link";
+import { User, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Sparkles, MessageSquare, Info, Plus, RotateCcw } from "lucide-react";
+import FeedbackFAB from "@/components/FeedbackFAB";
+import BannerDisplay from "@/components/BannerDisplay";
 
 
 /* ── Session persistence keys (sessionStorage) ──────────────── */
@@ -142,8 +145,13 @@ export default function Home() {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(true);
   const [showRightPanel, setShowRightPanel] = useState(true);
+  const [focusMode, setFocusMode] = useState(false);
   const [leftWidth, setLeftWidth] = useState(320);
-  const [rightWidth, setRightWidth] = useState(288);
+  const [rightWidth, setRightWidth] = useState(374);
+  const [showRelease, setShowRelease] = useState(false);
+  const releaseRef = useRef<HTMLDivElement>(null);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [changelogEntries, setChangelogEntries] = useState<{ id: string; title: string; status: string; created_at: string }[]>([]);
   const isResizingLeft = useRef(false);
   const isResizingRight = useRef(false);
   const rafRef = useRef<number | null>(null);
@@ -355,6 +363,21 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── Focus Mode: auto-collapse sidebars when deep in conversation ──
+  useEffect(() => {
+    if (focusMode) {
+      setShowSettings(false);
+      setShowRightPanel(false);
+    }
+  }, [focusMode]);
+
+  useEffect(() => {
+    const msgCount = messages.filter(m => m.role !== "system").length;
+    if (connected && msgCount >= 10 && !focusMode && currentPhase === "implementation") {
+      setFocusMode(true);
+    }
+  }, [messages, connected, currentPhase, focusMode]);
+
   // ── Welcome modal for first-time users ──
   useEffect(() => {
     if (!localStorage.getItem("sn-welcome-dismissed")) {
@@ -435,6 +458,20 @@ export default function Home() {
     document.addEventListener("keydown", handleKey);
     return () => { document.removeEventListener("mousedown", handleClick); document.removeEventListener("keydown", handleKey); };
   }, [profileOpen]);
+
+  useEffect(() => {
+    if (!showRelease) return;
+    fetch("/api/changelog").then(r => r.ok ? r.json() : { entries: [] }).then(d => {
+      if (d.entries?.length) setChangelogEntries(d.entries);
+    }).catch(() => {});
+    const handleClick = (e: MouseEvent) => {
+      if (releaseRef.current && !releaseRef.current.contains(e.target as Node)) setShowRelease(false);
+    };
+    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") setShowRelease(false); };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => { document.removeEventListener("mousedown", handleClick); document.removeEventListener("keydown", handleKey); };
+  }, [showRelease]);
 
   // Fetch server config on mount (API key + SN credentials)
   useEffect(() => {
@@ -1804,165 +1841,258 @@ export default function Home() {
 
       {/* ═══ Center Panel — Primary Context ═══ */}
       <main className="flex-1 flex flex-col min-w-0">
-        {/* Header bar */}
+        {/* ═══ Banner (above header, aligned with center content) ═══ */}
+        <BannerDisplay />
+
+        {/* ═══ Header Bar ═══ */}
         <header
-          className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-2.5 sm:py-3"
+          className="app-header flex items-center justify-between gap-2 px-4 sm:px-5 py-2 sm:py-2.5"
           style={{ background: "var(--surface-primary)", borderBottom: "1px solid var(--border-default)" }}
         >
+          {/* Left zone: sidebar toggle + logo (Home) + app name */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            {/* Sidebar toggle */}
             <button
               onClick={() => setShowSettings(!showSettings)}
-              className="p-2 rounded-md transition-colors flex-shrink-0"
-              style={{ color: "var(--text-secondary)" }}
-              onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-elevated)")}
-              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+              className="header-btn flex-shrink-0"
               title={showSettings ? "Collapse settings panel" : "Expand settings panel"}
             >
               {showSettings ? <PanelLeftClose className="w-5 h-5" strokeWidth={1.5} /> : <PanelLeftOpen className="w-5 h-5" strokeWidth={1.5} />}
             </button>
 
-            {/* App identity */}
-            <Image src={APP_LOGO} alt={APP_NAME} width={32} height={32} className="rounded-full flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8" unoptimized priority />
-            <div className="min-w-0">
-              <h1 className="text-sm sm:text-[15px] font-semibold truncate" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>{APP_NAME}</h1>
-            </div>
-
-            {/* Dark/Light mode toggle */}
-            <ThemeToggle />
-
-            {/* Connection badge */}
-            {connected && connInfo && (
-              <span
-                className="hidden sm:flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md"
-                style={{ background: "rgba(56,201,118,0.08)", color: "var(--color-success)" }}
-              >
-                <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--status-success)", animation: "statusPulse 2s ease-in-out infinite" }} />
-                {connInfo.userInfo?.name || credentials.username} @ {credentials.instanceUrl.replace(/https?:\/\//, "").replace(/\.service-now\.com\/?$/, "")}
-              </span>
-            )}
-            {connected && connInfo && (
-              <span className="sm:hidden w-2 h-2 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} title={`${connInfo.userInfo?.name || credentials.username} @ ${credentials.instanceUrl}`} />
-            )}
+            <Link href="/" className="flex items-center gap-2 sm:gap-2.5 min-w-0 hover:opacity-80 transition-opacity" title="Home">
+              {APP_LOGO && (
+                <Image src={APP_LOGO} alt={APP_NAME} width={32} height={32} className="rounded-full flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8" unoptimized priority />
+              )}
+              <h1 className="hidden sm:block text-sm sm:text-[15px] font-semibold truncate" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>{APP_NAME}</h1>
+            </Link>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Right zone: about + release + feedback + theme + new chat + profile + right-panel toggle */}
+          <div className="flex items-center gap-0.5 sm:gap-1">
+            {/* About / Info */}
             {SHOW_INFO_BUTTON && (
               <button
                 onClick={() => setShowInfo(true)}
-                className="flex items-center justify-center w-8 h-8 rounded-md transition-colors"
-                style={{ color: "var(--text-secondary)" }}
-                title="How SN AI Agent works"
-                onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-secondary)"; e.currentTarget.style.color = "var(--text-primary)"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+                className="header-nav-btn"
+                title="About"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <Info className="w-4 h-4" strokeWidth={1.5} />
+                <span className="hidden md:inline">About</span>
               </button>
             )}
-            <PhaseTracker currentPhase={currentPhase} completedPhases={completedPhases} reqId={activeReqId} onPhaseClick={handlePhaseClick} />
+
+            {/* Release / Changelog */}
+            <div ref={releaseRef} className="relative">
+              <button
+                onClick={() => setShowRelease(!showRelease)}
+                className="header-nav-btn"
+                title="What's new"
+              >
+                <Sparkles className="w-4 h-4" strokeWidth={1.5} />
+                <span className="hidden md:inline">Release</span>
+              </button>
+              {showRelease && (() => {
+                const released = changelogEntries.filter(e => e.status === "released");
+                const upcoming = changelogEntries.filter(e => e.status === "upcoming" || e.status === "planned");
+                const hasData = changelogEntries.length > 0;
+                const fallbackReleased = [
+                  "UI/UX elevation: new design tokens, QHD logo, semantic banners",
+                  "Header redesign: two-tier layout with subheader",
+                  "Focus Mode: auto-collapses sidebars during deep work",
+                ];
+                const fallbackUpcoming = [
+                  "Agent activity rollup for long conversations",
+                  "Contextual chat TOC for navigating SDLC phases",
+                ];
+                return (
+                  <div
+                    className="release-dropdown absolute right-0 mt-1.5 rounded-lg overflow-hidden"
+                    style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-default)", width: 300, zIndex: 50, boxShadow: "var(--shadow-lg)" }}
+                  >
+                    <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--border-default)" }}>
+                      <div className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>What&apos;s New</div>
+                      <div className="text-[10px] mt-0.5" style={{ color: "var(--text-disabled)" }}>Latest updates and upcoming features</div>
+                    </div>
+                    <div className="p-3 space-y-3 max-h-[320px] overflow-y-auto">
+                      <div className="space-y-2">
+                        <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-disabled)" }}>Recent</div>
+                        <div className="space-y-1.5">
+                          {(hasData ? released : fallbackReleased.map((t, i) => ({ id: `f-${i}`, title: t, status: "released", created_at: "" }))).map(entry => (
+                            <div key={entry.id} className="flex items-start gap-2 text-[12px]" style={{ color: "var(--text-secondary)" }}>
+                              <span className="w-1 h-1 rounded-full mt-1.5 flex-shrink-0" style={{ background: "var(--color-success)" }} />
+                              {entry.title}
+                            </div>
+                          ))}
+                          {hasData && released.length === 0 && <div className="text-[11px]" style={{ color: "var(--text-disabled)" }}>No recent releases</div>}
+                        </div>
+                      </div>
+                      {((hasData ? upcoming : fallbackUpcoming.map((t, i) => ({ id: `u-${i}`, title: t, status: "upcoming", created_at: "" }))).length > 0) && (
+                        <>
+                          <div style={{ borderTop: "1px solid var(--border-default)", margin: "0 -12px", padding: "0" }} />
+                          <div className="space-y-2">
+                            <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-disabled)" }}>Coming Soon</div>
+                            <div className="space-y-1.5">
+                              {(hasData ? upcoming : fallbackUpcoming.map((t, i) => ({ id: `u-${i}`, title: t, status: "upcoming", created_at: "" }))).map(entry => (
+                                <div key={entry.id} className="flex items-start gap-2 text-[12px]" style={{ color: "var(--text-disabled)" }}>
+                                  <span className="w-1 h-1 rounded-full mt-1.5 flex-shrink-0" style={{ background: "var(--status-progress)" }} />
+                                  {entry.title}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    {CHANGELOG_URL && (
+                      <div className="px-3 pb-3 pt-1">
+                        <a
+                          href={CHANGELOG_URL}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 text-[11px] font-medium transition-colors"
+                          style={{ color: "var(--color-primary)" }}
+                          onMouseEnter={e => { e.currentTarget.style.opacity = "0.8"; }}
+                          onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                          View full changelog
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Feedback */}
+            <button
+              onClick={() => setShowFeedback(true)}
+              className="header-nav-btn"
+              title="Send feedback"
+            >
+              <MessageSquare className="w-4 h-4" strokeWidth={1.5} />
+              <span className="hidden md:inline">Feedback</span>
+            </button>
+
+            {/* Clear Cache */}
+            <button
+              onClick={() => { window.location.href = "/clearcache"; }}
+              className="header-nav-btn"
+              title="Clear cache & refresh"
+            >
+              <RotateCcw className="w-4 h-4" strokeWidth={1.5} />
+              <span className="hidden md:inline">Clear Cache</span>
+            </button>
+
+            {/* Separator */}
+            <div className="hidden sm:block w-px h-5 mx-0.5" style={{ background: "var(--border-default)" }} />
+
+            {/* Theme toggle */}
+            <ThemeToggle />
+
+            {/* New Chat */}
             {messages.length > 0 && (
-                <button
-                  onClick={handleNewChat}
-                  className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-[11px] font-medium rounded-md transition-colors"
-                  style={{ background: "var(--surface-secondary)", color: "var(--text-secondary)" }}
-                  onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-elevated)"; e.currentTarget.style.color = "var(--text-primary)"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = "var(--surface-secondary)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                  <span className="hidden sm:inline">New Chat</span>
-                </button>
+              <button
+                onClick={handleNewChat}
+                className="header-nav-btn flex-shrink-0"
+                title="New Chat"
+              >
+                <Plus className="w-4 h-4" strokeWidth={1.5} />
+                <span className="hidden md:inline">New</span>
+              </button>
             )}
-            {/* Sign In when not authenticated; otherwise profile avatar + dropdown */}
+
+            {/* Profile / Sign In */}
             {!appUser ? (
               <button
                 type="button"
                 onClick={() => setShowSignInModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium rounded-md transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium rounded-md transition-colors"
                 style={{ color: "var(--text-primary)", background: "var(--surface-secondary)", border: "1px solid var(--border-default)" }}
                 onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-elevated)"; e.currentTarget.style.borderColor = "var(--border-emphasis)"; }}
                 onMouseLeave={e => { e.currentTarget.style.background = "var(--surface-secondary)"; e.currentTarget.style.borderColor = "var(--border-default)"; }}
                 aria-label="Sign in"
               >
-                Sign In
+                <User className="w-4 h-4" strokeWidth={1.5} />
+                <span className="hidden sm:inline">Sign In</span>
               </button>
             ) : (
-            <div ref={profileRef} className="relative">
-              <button
-                onClick={() => setProfileOpen(!profileOpen)}
-                className="flex items-center justify-center rounded-full transition-opacity hover:opacity-80"
-                style={{ width: 30, height: 30, background: "var(--color-primary)", color: "#fff", fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em" }}
-                title={appUser?.name || "Profile"}
-              >
-                {appUser?.name ? appUser.name.charAt(0).toUpperCase() : (
-                  <User className="w-4 h-4" strokeWidth={2} />
-                )}
-              </button>
-              {profileOpen && (
-                <div
-                  className="absolute right-0 mt-1.5 rounded-lg overflow-hidden shadow-lg"
-                  style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-default)", minWidth: 210, zIndex: 50 }}
+              <div ref={profileRef} className="relative">
+                <button
+                  onClick={() => setProfileOpen(!profileOpen)}
+                  className="flex items-center justify-center rounded-full transition-opacity hover:opacity-80"
+                  style={{ width: 28, height: 28, background: "var(--color-primary)", color: "#fff", fontSize: 12, fontWeight: 600, letterSpacing: "-0.01em" }}
+                  title={appUser?.name || "Profile"}
                 >
-                  {/* User info */}
-                  {appUser && (
-                    <div className="px-3.5 py-3" style={{ borderBottom: "1px solid var(--border-default)" }}>
-                      <div className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{appUser.name}</div>
-                      <div className="text-[11px] mt-0.5" style={{ color: "var(--text-disabled)" }}>{appUser.email}</div>
-                    </div>
+                  {appUser?.name ? appUser.name.charAt(0).toUpperCase() : (
+                    <User className="w-3.5 h-3.5" strokeWidth={2} />
                   )}
-                  {/* Menu items */}
-                  <div className="py-1">
-                    {appUser?.role === "admin" && (
-                      <a
-                        href="/admin"
-                        className="flex items-center gap-2.5 px-3.5 py-2 text-[12px] transition-colors"
-                        style={{ color: "var(--text-secondary)" }}
-                        onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-secondary)"; e.currentTarget.style.color = "var(--text-primary)"; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-secondary)"; }}
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                        Admin Dashboard
-                      </a>
+                </button>
+                {profileOpen && (
+                  <div
+                    className="absolute right-0 mt-1.5 rounded-lg overflow-hidden"
+                    style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-default)", minWidth: 200, zIndex: 50, boxShadow: "var(--shadow-lg)" }}
+                  >
+                    {appUser && (
+                      <div className="px-3.5 py-2.5" style={{ borderBottom: "1px solid var(--border-default)" }}>
+                        <div className="text-[12px] font-semibold" style={{ color: "var(--text-primary)" }}>{appUser.name}</div>
+                        <div className="text-[10px] mt-0.5" style={{ color: "var(--text-disabled)" }}>{appUser.email}</div>
+                      </div>
                     )}
-                    <button
-                      onClick={() => { setProfileOpen(false); window.location.href = "/clearcache"; }}
-                      className="flex items-center gap-2.5 px-3.5 py-2 text-[12px] w-full transition-colors"
-                      style={{ color: "var(--text-secondary)" }}
-                      onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-secondary)"; e.currentTarget.style.color = "var(--text-primary)"; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-secondary)"; }}
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                      Clear cache & refresh
-                    </button>
-                    <button
-                      onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/"; }}
-                      className="flex items-center gap-2.5 px-3.5 py-2 text-[12px] w-full transition-colors"
-                      style={{ color: "var(--text-secondary)" }}
-                      onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-secondary)"; e.currentTarget.style.color = "var(--text-primary)"; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-secondary)"; }}
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-                      Sign Out
-                    </button>
+                    <div className="py-1">
+                      {appUser?.role === "admin" && (
+                        <a href="/admin" className="header-dropdown-item">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                          Admin Dashboard
+                        </a>
+                      )}
+                      <button onClick={() => { setProfileOpen(false); window.location.href = "/clearcache"; }} className="header-dropdown-item w-full">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                        Clear cache
+                      </button>
+                      <div style={{ borderTop: "1px solid var(--border-subtle)", margin: "2px 0" }} />
+                      <button onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/"; }} className="header-dropdown-item w-full">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                        Sign Out
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
             )}
+
             {/* Right panel toggle */}
-            {connected && (
-              <button
-                onClick={() => setShowRightPanel(!showRightPanel)}
-                className="p-2 rounded-md transition-colors flex-shrink-0"
-                style={{ color: "var(--text-secondary)" }}
-                onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-elevated)")}
-                onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-                title={showRightPanel ? "Collapse suggestions panel" : "Expand suggestions panel"}
-              >
-                {showRightPanel ? <PanelRightClose className="w-5 h-5" strokeWidth={1.5} /> : <PanelRightOpen className="w-5 h-5" strokeWidth={1.5} />}
-              </button>
-            )}
+            <button
+              onClick={() => setShowRightPanel(!showRightPanel)}
+              className="header-btn flex-shrink-0"
+              title={showRightPanel ? "Collapse right panel" : "Expand right panel"}
+            >
+              {showRightPanel ? <PanelRightClose className="w-5 h-5" strokeWidth={1.5} /> : <PanelRightOpen className="w-5 h-5" strokeWidth={1.5} />}
+            </button>
           </div>
         </header>
+
+        {/* ═══ Subheader: PhaseTracker + connection indicator (only when SDD active) ═══ */}
+        {activeReqId && currentPhase && (
+          <div
+            className="app-subheader flex items-center justify-between gap-2 px-4 sm:px-5 py-1.5"
+            style={{ background: "var(--surface-secondary)", borderBottom: "1px solid var(--border-default)" }}
+          >
+            <PhaseTracker currentPhase={currentPhase} completedPhases={completedPhases} reqId={activeReqId} onPhaseClick={handlePhaseClick} />
+            {connected && connInfo && (
+              <span
+                className="hidden sm:flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded-full flex-shrink-0"
+                style={{
+                  background: "color-mix(in srgb, var(--color-success) 8%, transparent)",
+                  color: "var(--color-success)",
+                }}
+              >
+                <span className="w-1 h-1 rounded-full" style={{ background: "var(--status-success)" }} />
+                {credentials.instanceUrl.replace(/https?:\/\//, "").replace(/\.service-now\.com\/?$/, "")}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* ═══ Chat / Center content ═══ */}
         <ChatWindow
@@ -2094,9 +2224,28 @@ export default function Home() {
         </aside>
       )}
 
+      {/* Aria live region for streaming status */}
+      <div aria-live="polite" aria-atomic="true" className="live-status">
+        {isLoading ? "AI is responding..." : ""}
+      </div>
+
+      {/* Focus Mode exit button */}
+      {focusMode && !showSettings && !showRightPanel && (
+        <button
+          className="focus-mode-exit"
+          onClick={() => { setFocusMode(false); setShowSettings(true); setShowRightPanel(true); }}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+          Exit Focus Mode
+        </button>
+      )}
+
       {/* Info modal */}
       <InfoModal open={showInfo} onClose={() => setShowInfo(false)} onTryPrompt={(text) => { setShowInfo(false); setTimeout(() => handleSendRef.current(text), 100); }} />
       <WelcomeModal open={showWelcome} onClose={dismissWelcome} />
+
+      {/* Feedback (header-triggered, no floating button) */}
+      <FeedbackFAB hideButton externalOpen={showFeedback} onExternalClose={() => setShowFeedback(false)} />
 
       {/* Sign-in modal (when user is not authenticated) */}
       <ConnectModal
