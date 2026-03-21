@@ -297,13 +297,14 @@ const VIEW_OPTIONS: { key: DiagramView; label: string }[] = [
   { key: "code", label: "Code" },
 ];
 
+let mermaidInitialized = false;
+
 /** Mermaid diagram renderer with three view modes: visual SVG, ASCII text, raw code */
 function MermaidDiagram({ code }: { code: string }) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [view, setView] = useState<DiagramView>("diagram");
-  const idRef = useRef(`mermaid-${Math.random().toString(36).slice(2, 10)}`);
+  const idRef = useRef(`mermaid-${crypto.randomUUID()}`);
   const asciiRef = useRef<string>("");
 
   useEffect(() => {
@@ -315,17 +316,21 @@ function MermaidDiagram({ code }: { code: string }) {
     (async () => {
       try {
         const mermaid = (await import("mermaid")).default;
-        mermaid.initialize({
-          startOnLoad: false,
-          theme: document.documentElement.getAttribute("data-theme") === "light" ? "default" : "dark",
-          securityLevel: "loose",
-          fontFamily: "ui-sans-serif, system-ui, sans-serif",
-        });
+        if (!mermaidInitialized) {
+          mermaid.initialize({
+            startOnLoad: false,
+            theme: document.documentElement.getAttribute("data-theme") === "light" ? "default" : "dark",
+            securityLevel: "strict",
+            fontFamily: "ui-sans-serif, system-ui, sans-serif",
+          });
+          mermaidInitialized = true;
+        }
         const { svg: rendered } = await mermaid.render(idRef.current, code.trim());
         if (!cancelled) setSvg(rendered);
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (!cancelled) {
-          setError(e?.message || "Failed to render diagram");
+          const msg = e instanceof Error ? e.message : "Failed to render diagram";
+          setError(msg);
           setView("text");
         }
       }
@@ -375,7 +380,6 @@ function MermaidDiagram({ code }: { code: string }) {
       </div>
       {view === "diagram" && svg && (
         <div
-          ref={containerRef}
           className="p-4 overflow-x-auto flex justify-center"
           style={{ background: "var(--surface-app)" }}
           dangerouslySetInnerHTML={{ __html: svg }}
@@ -452,14 +456,12 @@ export default function MessageBubble({ message, onApprove, onChoiceSelect, show
     : null;
 
   useEffect(() => {
-    if (!isUser && contentRef.current) {
-      const height = contentRef.current.scrollHeight;
-      if (height > 500) {
-        setIsLong(true);
-        setMsgExpanded(false);
-      }
+    if (isLong || isUser) return;
+    if (contentRef.current && contentRef.current.scrollHeight > 500) {
+      setIsLong(true);
+      setMsgExpanded(false);
     }
-  }, [isUser, displayContent]);
+  }, [isUser, isLong, displayContent]);
 
   return (
     <div className={`group/msg flex items-start gap-3 ${isUser ? "ml-auto flex-row-reverse" : ""}`}>

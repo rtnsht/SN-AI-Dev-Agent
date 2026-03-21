@@ -115,7 +115,14 @@ export default function ChatTOC({ messages, isOpen, onClose }: Props) {
 
   return (
     <>
-      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div
+        className="fixed inset-0 z-40"
+        onClick={onClose}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " " || e.key === "Escape") { e.preventDefault(); onClose(); } }}
+        role="button"
+        tabIndex={0}
+        aria-label="Close navigation"
+      />
       <div
         className="fixed right-4 top-16 z-50 w-72 max-h-[70vh] rounded-lg shadow-2xl overflow-hidden flex flex-col"
         style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-default)" }}

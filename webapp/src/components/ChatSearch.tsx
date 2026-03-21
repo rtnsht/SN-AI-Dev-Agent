@@ -67,12 +67,14 @@ export default function ChatSearch({ messages, isOpen, onClose }: Props) {
     const el = document.getElementById(result.messageId);
     if (el) {
       el.scrollIntoView({ behavior: "smooth", block: "center" });
+      const origRadius = el.style.borderRadius;
       el.style.outline = "2px solid var(--color-primary)";
       el.style.outlineOffset = "4px";
       el.style.borderRadius = "8px";
       setTimeout(() => {
         el.style.outline = "none";
         el.style.outlineOffset = "0";
+        el.style.borderRadius = origRadius;
       }, 2000);
     }
   }, []);
@@ -87,9 +89,9 @@ export default function ChatSearch({ messages, isOpen, onClose }: Props) {
           setActiveIdx(prev);
           jumpTo(results[prev]);
         } else {
-          jumpTo(results[activeIdx]);
           const next = (activeIdx + 1) % results.length;
           setActiveIdx(next);
+          jumpTo(results[next]);
         }
       }
     } else if (e.key === "ArrowDown") {

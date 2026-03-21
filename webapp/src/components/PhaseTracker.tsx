@@ -56,10 +56,11 @@ export default function PhaseTracker({ currentPhase, completedPhases, reqId, onP
                 style={{ background: isCompleted ? "var(--status-success)" : "var(--border-default)" }}
               />
             )}
-            <div
-              className={`flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded transition-all ${
+            <button
+              type="button"
+              className={`flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded transition-all border-none outline-none ${
                 isCurrent ? "ring-1 ring-[rgba(76,125,255,0.3)]" : ""
-              } ${(isCompleted || isCurrent) && onPhaseClick ? "cursor-pointer hover:opacity-80" : ""}`}
+              } ${(isCompleted || isCurrent) && onPhaseClick ? "cursor-pointer hover:opacity-80" : "cursor-default"}`}
               style={{
                 background: isCurrent ? "rgba(76,125,255,0.12)" : isCompleted ? "rgba(56,201,118,0.06)" : "transparent",
               }}
@@ -67,14 +68,8 @@ export default function PhaseTracker({ currentPhase, completedPhases, reqId, onP
               onClick={() => {
                 if ((isCompleted || isCurrent) && onPhaseClick) onPhaseClick(phase.key);
               }}
-              role={(isCompleted || isCurrent) && onPhaseClick ? "button" : undefined}
-              tabIndex={(isCompleted || isCurrent) && onPhaseClick ? 0 : undefined}
-              onKeyDown={(e) => {
-                if ((e.key === "Enter" || e.key === " ") && (isCompleted || isCurrent) && onPhaseClick) {
-                  e.preventDefault();
-                  onPhaseClick(phase.key);
-                }
-              }}
+              tabIndex={(isCompleted || isCurrent) && onPhaseClick ? 0 : -1}
+              disabled={isFuture}
             >
               {/* Status dot */}
               <span
@@ -113,7 +108,7 @@ export default function PhaseTracker({ currentPhase, completedPhases, reqId, onP
                   {phase.requiresApproval ? "🔒" : "⚡"}
                 </span>
               )}
-            </div>
+            </button>
           </div>
         );
       })}
