@@ -90,6 +90,8 @@ export interface FileAttachment {
 }
 
 export interface ChatMessage {
+  /** Stable unique identifier for this message */
+  id?: string;
   role: "user" | "assistant" | "system";
   content: string;
   /** ISO 8601 timestamp when this message was created */
@@ -110,6 +112,17 @@ export interface ChatMessage {
   choicesAnswered?: boolean;
   /** If true, message is sent to API but hidden from the chat UI (e.g., auto-resume messages) */
   hidden?: boolean;
+  /** If true, message is queued and waiting to be sent (user typed while AI was processing) */
+  queued?: boolean;
+}
+
+/** A message waiting in the queue to be sent after the current AI response completes */
+export interface QueuedMessage {
+  id: string;
+  text: string;
+  images?: string[];
+  files?: FileAttachment[];
+  timestamp: string;
 }
 
 /** Interactive choice option presented to user */
@@ -179,12 +192,36 @@ export interface ToolExecution {
   durationMs: number;
 }
 
+export type ServiceNowAuthMethod =
+  | "basic"
+  | "oauth_client_credentials"
+  | "oauth_authorization_code"
+  | "session";
+
+export interface BrowserSessionCookie {
+  name: string;
+  value: string;
+  domain: string;
+  path?: string;
+  expires?: number;
+  httpOnly?: boolean;
+  secure?: boolean;
+  sameSite?: "Strict" | "Lax" | "None";
+}
+
 export interface Credentials {
   instanceUrl: string;
   username: string;
   password: string;
   claudeApiKey: string;
   openRouterApiKey: string;
+  snAuthType?: ServiceNowAuthMethod;
+  clientId?: string;
+  clientSecret?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  sessionCookies?: BrowserSessionCookie[];
+  sessionToken?: string;
 }
 
 export interface HelperApiStatus {
@@ -206,6 +243,9 @@ export interface AssignmentGroup {
 export interface ConnectionResult {
   success: boolean;
   message: string;
+  authType?: ServiceNowAuthMethod;
+  failureCategory?: "sso_redirect" | "mfa_required" | "generic";
+  suggestedAuthMethods?: ServiceNowAuthMethod[];
   userInfo?: {
     name: string;
     username: string;

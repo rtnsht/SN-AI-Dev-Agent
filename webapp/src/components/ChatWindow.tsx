@@ -3,10 +3,16 @@
 import { useState, useRef, useEffect, useCallback, type RefObject } from "react";
 import { useRotatingText } from "@/hooks/useRotatingText";
 import type { ChatMessage, SDLCPhase, LiveStatus, FileAttachment, CategorizedPrompts, ExamplePrompt, UpdateSetSummary } from "@/lib/types";
+import { SDLC_PHASES } from "@/lib/types";
 import MessageBubble from "./MessageBubble";
 import Image from "next/image";
 import { APP_NAME, APP_LOGO, APP_HERO_TAGLINE, APP_SUBTITLE, APP_TAGLINE, HERO_FEATURES, WELCOME_BADGE } from "@/lib/branding";
 import { SUGGESTION_FALLBACK } from "@/lib/suggestion-engine";
+import CommandPalette from "./CommandPalette";
+import SDDModeChip from "./SDDModeChip";
+import ChatSearch from "./ChatSearch";
+import ChatTOC from "./ChatTOC";
+import { isSlashPrefix, type CommandContext } from "@/lib/slash-commands";
 
 /* ── Web Speech API type shim ── */
 interface SpeechRecognitionEvent extends Event {
@@ -367,6 +373,22 @@ interface Props {
   pendingPrompt?: string | null;
   /** Clear the pending prompt after it has been consumed */
   onPendingPromptConsumed?: () => void;
+  /** SDD mode state */
+  sddMode?: boolean;
+  /** Current SDLC phase */
+  currentPhase?: SDLCPhase | null;
+  /** Callback to change SDD mode */
+  onSddModeChange?: (active: boolean, phase: SDLCPhase | null) => void;
+  /** Active requirement ID */
+  activeReqId?: string | null;
+  /** Client session ID for command context */
+  clientSessionId?: string;
+  /** Number of messages waiting in the queue */
+  queueLength?: number;
+  /** Remove a queued message by ID */
+  onDequeue?: (id: string) => void;
+  /** Clear all queued messages */
+  onClearQueue?: () => void;
 }
 
 /** Deduplicate and clean activity log for display — merge status noise, keep tool entries */
@@ -499,6 +521,7 @@ function TimelineEntry({ entry, isLast, liveStatus }: { entry: ActivityLogEntry;
 /** Elegant inline agent activity — timeline-style with visual hierarchy */
 function InlineAgentActivity({ activityLog, liveStatus, onCancel }: { activityLog: ActivityLogEntry[]; liveStatus: LiveStatus | null; onCancel: () => void }) {
   const [expanded, setExpanded] = useState(true);
+  const [elapsed, setElapsed] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const startTime = useRef(Date.now());
 
@@ -509,10 +532,17 @@ function InlineAgentActivity({ activityLog, liveStatus, onCancel }: { activityLo
     }
   }, [activityLog, expanded]);
 
+  // Self-updating elapsed timer
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setElapsed(Math.round((Date.now() - startTime.current) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const processed = processActivityLog(activityLog);
   const toolCount = processed.filter(e => e.phase === "tool").length;
   const taskCount = processed.filter(e => e.phase === "task").length;
-  const elapsed = Math.round((Date.now() - startTime.current) / 1000);
 
   // Determine if we have task-grouped entries (planner was used)
   const hasTasks = taskCount > 0;
@@ -684,7 +714,7 @@ function InlineAgentActivity({ activityLog, liveStatus, onCancel }: { activityLo
   );
 }
 
-export default function ChatWindow({ messages, isLoading, onSend, onCancel, onApprove, onChoiceSelect, connected, inputRef, showToolDetails = true, liveStatus, userName, categorizedPrompts, activityLog = [], taskPlan, onGetStarted, pendingPrompt, onPendingPromptConsumed }: Props) {
+export default function ChatWindow({ messages, isLoading, onSend, onCancel, onApprove, onChoiceSelect, connected, inputRef, showToolDetails = true, liveStatus, userName, categorizedPrompts, activityLog = [], taskPlan, onGetStarted, pendingPrompt, onPendingPromptConsumed, sddMode = false, currentPhase = null, onSddModeChange, activeReqId, clientSessionId = "", queueLength = 0, onDequeue, onClearQueue }: Props) {
   const [input, setInput] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [files, setFiles] = useState<FileAttachment[]>([]);
@@ -692,7 +722,11 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
   const [activeTab, setActiveTab] = useState<TabKey>("foryou");
   const [expandedUpdates, setExpandedUpdates] = useState<Set<string>>(new Set());
   const [showAttachDropdown, setShowAttachDropdown] = useState(false);
+  const [showTOC, setShowTOC] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [isNearBottom, setIsNearBottom] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
   const attachDropdownRef = useRef<HTMLDivElement>(null);
@@ -770,6 +804,20 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
     return () => document.removeEventListener("mousedown", handler);
   }, [showAttachDropdown]);
 
+  useEffect(() => {
+    const handleSearchKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "f") {
+        e.preventDefault();
+        setShowSearch(prev => !prev);
+      }
+      if (e.key === "Escape" && showSearch) {
+        setShowSearch(false);
+      }
+    };
+    window.addEventListener("keydown", handleSearchKey);
+    return () => window.removeEventListener("keydown", handleSearchKey);
+  }, [showSearch]);
+
   const stopRecording = useCallback(() => {
     recognitionRef.current?.stop();
     setIsRecording(false);
@@ -833,8 +881,22 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
   }, [isRecording, stopRecording, startRecording]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const handleScroll = () => {
+      const threshold = 150;
+      const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+      setIsNearBottom(nearBottom);
+    };
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    if (isNearBottom) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, isLoading, isNearBottom]);
 
   // Auto-grow textarea
   useEffect(() => {
@@ -847,8 +909,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
   }, [input, inputRef]);
 
   const handleSubmit = useCallback(() => {
-    if ((!input.trim() && images.length === 0 && files.length === 0) || isLoading) return;
-    // Auto-stop recording when user sends a message
+    if (!input.trim() && images.length === 0 && files.length === 0) return;
     if (isRecording) stopRecording();
     onSend(
       input.trim(),
@@ -858,7 +919,6 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
     setInput("");
     setImages([]);
     setFiles([]);
-    // Reset textarea height after sending
     if (inputRef.current) inputRef.current.style.height = "auto";
   }, [input, images, files, isLoading, isRecording, stopRecording, onSend, inputRef]);
 
@@ -1082,6 +1142,28 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
       ) : (
         /* ════ NORMAL INPUT MODE ════ */
         <>
+          {/* SDD Mode chip + Command palette */}
+          <div className="flex items-center gap-2 relative">
+            <SDDModeChip
+              active={sddMode}
+              currentPhase={currentPhase ?? null}
+              onSwitchToFreeform={() => onSddModeChange?.(false, null)}
+              onShowStatus={() => onSend("/status")}
+            />
+            <CommandPalette
+              inputText={input}
+              ctx={{
+                currentPhase: currentPhase ?? null,
+                sddMode,
+                connected,
+                sessionId: clientSessionId,
+                activeReqId: activeReqId ?? null,
+              }}
+              visible={isSlashPrefix(input)}
+              onSelect={(cmd) => { setInput(""); onSend(cmd); }}
+              onDismiss={() => inputRef.current?.focus()}
+            />
+          </div>
           {/* Textarea row */}
           <textarea
             ref={inputRef}
@@ -1089,8 +1171,8 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            placeholder={connected ? "What should we work on next?" : "Connect your instance first →"}
-            disabled={!connected || isLoading}
+            placeholder={!connected ? "Connect your instance first →" : isLoading ? "Type to queue a follow-up message..." : "What should we work on next?"}
+            disabled={!connected}
             rows={1}
             className="w-full bg-transparent text-sm focus:outline-none disabled:opacity-50 resize-none overflow-y-auto"
             style={{ color: "var(--text-primary)", maxHeight: inHero ? "120px" : "50vh" }}
@@ -1101,7 +1183,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
             <div className="relative" ref={attachDropdownRef}>
               <button
                 onClick={() => setShowAttachDropdown((v) => !v)}
-                disabled={!connected || isLoading}
+                disabled={!connected}
                 className="w-8 h-8 rounded-full flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 style={{ border: "1px solid var(--border-emphasis)", color: "var(--text-secondary)" }}
                 title="Attach file"
@@ -1175,7 +1257,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
             {speechSupported && (
               <button
                 onClick={toggleRecording}
-                disabled={!connected || isLoading}
+                disabled={!connected}
                 className="w-8 h-8 rounded-full flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                 style={{ color: "var(--text-disabled)" }}
                 title="Voice input"
@@ -1186,25 +1268,43 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
               </button>
             )}
 
-            {/* Send / Stop */}
-            {isLoading ? (
-              <button onClick={onCancel} className="w-8 h-8 rounded-full flex items-center justify-center transition-colors" style={{ background: "var(--color-danger)", color: "white" }} title="Cancel">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
-              </button>
-            ) : (
-              <button
-                onClick={handleSubmit}
-                disabled={!connected || (!input.trim() && images.length === 0 && files.length === 0)}
-                className="w-8 h-8 rounded-full flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                style={{
-                  background: (connected && (input.trim() || images.length > 0 || files.length > 0)) ? "var(--text-primary)" : "var(--surface-elevated)",
-                  color: (connected && (input.trim() || images.length > 0 || files.length > 0)) ? "var(--surface-app)" : "var(--text-disabled)",
-                }}
-                title="Send (Enter)"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" /></svg>
-              </button>
-            )}
+            {/* Send / Queue + Stop */}
+            <div className="flex items-center gap-1">
+              {isLoading && (
+                <button onClick={onCancel} className="w-8 h-8 rounded-full flex items-center justify-center transition-colors" style={{ background: "var(--color-danger)", color: "white" }} title="Stop generating">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+                </button>
+              )}
+              <div className="relative">
+                <button
+                  onClick={handleSubmit}
+                  disabled={!connected || (!input.trim() && images.length === 0 && files.length === 0)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  style={{
+                    background: (connected && (input.trim() || images.length > 0 || files.length > 0)) ? "var(--text-primary)" : "var(--surface-elevated)",
+                    color: (connected && (input.trim() || images.length > 0 || files.length > 0)) ? "var(--surface-app)" : "var(--text-disabled)",
+                  }}
+                  title={isLoading ? "Queue message" : "Send (Enter)"}
+                >
+                  {isLoading ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6l4 2" />
+                      <circle cx="12" cy="12" r="9" strokeWidth={2} fill="none" stroke="currentColor" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" /></svg>
+                  )}
+                </button>
+                {queueLength > 0 && (
+                  <span
+                    className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[9px] font-bold px-1"
+                    style={{ background: "var(--color-primary)", color: "#fff" }}
+                  >
+                    {queueLength}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
         </>
       )}
@@ -1437,20 +1537,37 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
         </div>
       ) : (
         /* ════ CHAT MODE ════ */
-        <>
+        <div className="flex flex-col flex-1 relative overflow-hidden">
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-2 sm:px-6 py-4 sm:py-6">
+          <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-2 sm:px-6 py-4 sm:py-6">
             <div className="max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto space-y-4 sm:space-y-5">
-              {messages.filter((msg) => !msg.hidden).map((msg, i) => (
-                <MessageBubble
-                  key={i}
-                  message={msg}
-                  onApprove={onApprove}
-                  onChoiceSelect={onChoiceSelect}
-                  showToolDetails={showToolDetails}
-                  userName={userName}
-                />
-              ))}
+              {messages.filter((msg) => !msg.hidden).map((msg, i, filtered) => {
+                const prevMsg = i > 0 ? filtered[i - 1] : null;
+                const showPhaseDivider = msg.phaseGate && msg.phaseGate !== prevMsg?.phaseGate;
+                const phaseInfo = showPhaseDivider ? SDLC_PHASES.find(p => p.key === msg.phaseGate) : null;
+
+                return (
+                  <div key={msg.id || `msg-${i}`} id={msg.id || `msg-${i}`} data-message-id={msg.id || `msg-${i}`} data-phase={msg.phaseGate || undefined}>
+                    {showPhaseDivider && phaseInfo && (
+                      <div className="flex items-center gap-3 my-4 first:mt-0" data-phase-divider={msg.phaseGate}>
+                        <div className="flex-1 h-px" style={{ background: "var(--border-default)" }} />
+                        <span className="text-[10px] font-medium tracking-wider uppercase px-2" style={{ color: "var(--text-disabled)" }}>
+                          {phaseInfo.label} Phase
+                        </span>
+                        <div className="flex-1 h-px" style={{ background: "var(--border-default)" }} />
+                      </div>
+                    )}
+                    <MessageBubble
+                      message={msg}
+                      onApprove={onApprove}
+                      onChoiceSelect={onChoiceSelect}
+                      showToolDetails={showToolDetails}
+                      userName={userName}
+                      onDequeue={onDequeue}
+                    />
+                  </div>
+                );
+              })}
               {isLoading && (
                 <InlineAgentActivity
                   activityLog={activityLog}
@@ -1462,13 +1579,60 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
             </div>
           </div>
 
+          {/* TOC toggle */}
+          {messages.length > 3 && (
+            <div className="absolute top-3 right-3 z-10">
+              <button
+                onClick={() => setShowTOC(!showTOC)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-all shadow-sm"
+                style={{
+                  background: showTOC ? "var(--color-primary)" : "var(--surface-elevated)",
+                  color: showTOC ? "#fff" : "var(--text-secondary)",
+                  border: `1px solid ${showTOC ? "var(--color-primary)" : "var(--border-default)"}`,
+                }}
+                onMouseEnter={e => { if (!showTOC) { e.currentTarget.style.background = "var(--surface-secondary)"; e.currentTarget.style.color = "var(--text-primary)"; }}}
+                onMouseLeave={e => { if (!showTOC) { e.currentTarget.style.background = "var(--surface-elevated)"; e.currentTarget.style.color = "var(--text-secondary)"; }}}
+                title="Chat navigation"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
+                <span className="hidden sm:inline">Navigate</span>
+              </button>
+            </div>
+          )}
+          <ChatTOC messages={messages} isOpen={showTOC} onClose={() => setShowTOC(false)} />
+
+          {/* Scroll-to-bottom FAB */}
+          {!isNearBottom && messages.length > 0 && (
+            <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10">
+              <button
+                onClick={() => bottomRef.current?.scrollIntoView({ behavior: "smooth" })}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full shadow-lg text-xs font-medium transition-all hover:scale-105"
+                style={{
+                  background: "var(--surface-elevated)",
+                  color: "var(--text-primary)",
+                  border: "1px solid var(--border-default)",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                }}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+                Scroll to bottom
+              </button>
+            </div>
+          )}
+
+          <ChatSearch messages={messages} isOpen={showSearch} onClose={() => setShowSearch(false)} />
+
           {/* Bottom input bar */}
           <div className="p-2 sm:p-4" style={{ borderTop: "1px solid var(--border-default)", background: "var(--surface-primary)" }}>
             <div className="max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto">
               {renderInputBar(false)}
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

@@ -4,7 +4,7 @@
 # ============================================================================
 
 # ── Stage 1: Build mcp-servicenow ──────────────────────────────────────────
-FROM node:20-alpine AS mcp-build
+FROM node:24-alpine AS mcp-build
 
 WORKDIR /app/mcp-servicenow
 COPY mcp-servicenow/package.json mcp-servicenow/package-lock.json ./
@@ -16,7 +16,7 @@ COPY mcp-servicenow/deploy/ ./deploy/
 RUN npx tsc
 
 # ── Stage 2: Install webapp dependencies ───────────────────────────────────
-FROM node:20-alpine AS deps
+FROM node:24-alpine AS deps
 
 WORKDIR /app
 
@@ -31,7 +31,7 @@ COPY webapp/package.json webapp/package-lock.json ./
 RUN npm ci
 
 # ── Stage 3: Build Next.js ─────────────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
@@ -118,7 +118,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 # ── Stage 4: Production runner ─────────────────────────────────────────────
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 
 WORKDIR /app
 

@@ -49,6 +49,14 @@
 > - ⬜ **Extend Existing** - Modify: [list artifacts]
 > - ⬜ **Build New** - Reason OOTB doesn't work: [explanation]
 
+### 1.5 Documentation References
+
+| # | Platform Feature | Documentation Path | Table(s) | Plugin Dependency |
+|---|------------------|--------------------|----------|-------------------|
+| 1 | | | | |
+
+> **Note:** All platform features used in this design have been validated against official ServiceNow documentation.
+
 ---
 
 ## 2. Solution Overview
@@ -67,20 +75,61 @@
 
 ## 3. Architecture
 
+> Diagrams are auto-generated from the artifacts table (Section 4.2), data model (Section 5),
+> and integration points (Section 6). Use `node scripts/enhance-design.cjs --req REQ-XXX`
+> to regenerate after editing those sections.
+
 ### 3.1 System Context Diagram
-```
-[ASCII or reference to diagram in evidence folder]
+
+<!-- AUTO_DIAGRAM:system_context -->
+
+```mermaid
+flowchart TD
+    subgraph SN [ServiceNow Platform]
+        artifact1["Artifact Name"]
+    end
+    User(("User")) --> SN
 ```
 
 ### 3.2 Component Diagram
-```
-[Show how components interact]
+
+<!-- AUTO_DIAGRAM:component -->
+
+```mermaid
+flowchart LR
+    subgraph businessLogic ["Business Logic"]
+        SI["Script Include"]
+        BR["Business Rule"]
+    end
+    subgraph presentation ["Presentation"]
+        CS["Client Script"]
+    end
+    presentation --> businessLogic
 ```
 
 ### 3.3 Sequence Diagram
+
+<!-- AUTO_DIAGRAM:sequence -->
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant SN as ServiceNow
+    User->>+SN: Submit record
+    SN-->>-User: Response
 ```
-[Show key flows]
-```
+
+### 3.4 Entity-Relationship Diagram (if new tables)
+
+<!-- AUTO_DIAGRAM:er -->
+
+_Generated when data model defines new tables in Section 5._
+
+### 3.5 Data Flow Diagram (if integrations)
+
+<!-- AUTO_DIAGRAM:data_flow -->
+
+_Generated when integration points are defined in Section 6._
 
 ---
 

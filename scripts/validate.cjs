@@ -162,7 +162,7 @@ function checkSignOff(filePath) {
     const content = fs.readFileSync(filePath, 'utf8');
     const hasSignOffSection = content.includes('## Sign-Off') || content.includes('## Sign-off');
     const isApproved = content.includes('✅ Approved') || content.includes('[x] Approved') ||
-                       content.includes('Approved') && content.includes('☑');
+                       /☑[^\n]*Approved|Approved[^\n]*☑/.test(content);
 
     return { exists: true, signedOff: isApproved, hasSection: hasSignOffSection };
 }
@@ -243,6 +243,98 @@ function validateRequirement(reqId, config, report) {
         const evidencePath = path.join(testPath, 'evidence');
         if (!fs.existsSync(evidencePath)) {
             report.addWarning(reqId, 'Testing', 'Missing evidence folder');
+        }
+    }
+
+    // Check design diagrams
+    const designPath2 = path.join(reqPath, '2-design.md');
+    if (fs.existsSync(designPath2)) {
+        const designContent = fs.readFileSync(designPath2, 'utf-8');
+        
+        // Check for mermaid diagrams
+        const mermaidBlocks = (designContent.match(/```mermaid/g) || []).length;
+        const autoMarkers = (designContent.match(/<!-- AUTO_DIAGRAM:/g) || []).length;
+        
+        if (mermaidBlocks >= 3) {
+            report.addPassed(reqId, 'Design Diagrams', `Found ${mermaidBlocks} Mermaid diagram(s)`);
+        } else if (mermaidBlocks > 0) {
+            report.addWarning(reqId, 'Design Diagrams', `Only ${mermaidBlocks} Mermaid diagram(s) found (recommend at least 3: system context, component, sequence)`);
+        } else if (autoMarkers > 0) {
+            report.addWarning(reqId, 'Design Diagrams', `Found ${autoMarkers} AUTO_DIAGRAM marker(s) but no generated diagrams. Run: node scripts/enhance-design.cjs --req ${reqId}`);
+        } else {
+            report.addWarning(reqId, 'Design Diagrams', 'No Mermaid diagrams or AUTO_DIAGRAM markers found in design document');
+        }
+
+        // Check for required diagram types
+        const hasSystemContext = designContent.includes('System Context') || designContent.includes('system_context');
+        const hasComponent = designContent.includes('Component') || designContent.includes('component');
+        const hasSequence = designContent.includes('Sequence') || designContent.includes('sequenceDiagram');
+        
+        const diagramTypes = [hasSystemContext, hasComponent, hasSequence].filter(Boolean).length;
+        if (diagramTypes >= 3) {
+            report.addPassed(reqId, 'Design Diagrams', 'All 3 required diagram types present (system context, component, sequence)');
+        } else {
+            const missing = [];
+            if (!hasSystemContext) missing.push('system context');
+            if (!hasComponent) missing.push('component');
+            if (!hasSequence) missing.push('sequence');
+            report.addWarning(reqId, 'Design Diagrams', `Missing diagram type(s): ${missing.join(', ')}`);
+        }
+    }
+
+    // Check test case content quality
+    const testPlanPath = path.join(reqPath, '4-testing', 'test-plan.md');
+    if (fs.existsSync(testPlanPath)) {
+        const testContent = fs.readFileSync(testPlanPath, 'utf-8');
+        
+        // Count test cases
+        const tcMatches = testContent.match(/TC-[A-Z]?\d{3}/g) || [];
+        const uniqueTCs = [...new Set(tcMatches)];
+        
+        if (uniqueTCs.length >= 5) {
+            report.addPassed(reqId, 'Test Cases', `Found ${uniqueTCs.length} test case(s)`);
+        } else if (uniqueTCs.length > 0) {
+            report.addWarning(reqId, 'Test Cases', `Only ${uniqueTCs.length} test case(s) found (recommend minimum 5 per requirement)`);
+        } else {
+            report.addWarning(reqId, 'Test Cases', 'No test cases (TC-XXX) found in test plan');
+        }
+        
+        // Check negative ratio
+        const negativeTCs = testContent.match(/TC-N\d{3}/g) || [];
+        const positiveTCs = testContent.match(/TC-P\d{3}/g) || [];
+        const totalTCs = uniqueTCs.length;
+        
+        if (totalTCs > 0) {
+            const negativeUnique = [...new Set(negativeTCs)].length;
+            const negativeRatio = Math.round((negativeUnique / totalTCs) * 100);
+            
+            if (negativeRatio >= 40) {
+                report.addPassed(reqId, 'Test Cases', `Negative test ratio: ${negativeRatio}% (meets 40% threshold)`);
+            } else {
+                report.addWarning(reqId, 'Test Cases', `Negative test ratio: ${negativeRatio}% (below 40% threshold)`);
+            }
+        }
+        
+        // Check for required sections
+        const hasPreconditions = testContent.includes('Preconditions') || testContent.includes('preconditions');
+        const hasSteps = testContent.includes('Test Steps') || testContent.includes('Action');
+        const hasExpected = testContent.includes('Expected Result') || testContent.includes('expected');
+        
+        if (hasPreconditions && hasSteps && hasExpected) {
+            report.addPassed(reqId, 'Test Cases', 'Test cases include preconditions, steps, and expected results');
+        } else {
+            const missing = [];
+            if (!hasPreconditions) missing.push('preconditions');
+            if (!hasSteps) missing.push('test steps');
+            if (!hasExpected) missing.push('expected results');
+            report.addWarning(reqId, 'Test Cases', `Test cases missing: ${missing.join(', ')}`);
+        }
+        
+        // Check coverage matrix
+        if (testContent.includes('Coverage Matrix') || testContent.includes('coverage')) {
+            report.addPassed(reqId, 'Test Cases', 'Coverage matrix present');
+        } else {
+            report.addWarning(reqId, 'Test Cases', 'No coverage matrix found in test plan');
         }
     }
 

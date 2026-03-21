@@ -218,7 +218,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 20px;
+  border-radius: 50%;
+  overflow: hidden;
   transition: box-shadow var(--transition-normal), filter var(--transition-normal);
   animation: logoBreath 3s ease-in-out infinite;
 }
@@ -964,7 +965,7 @@ body {
 .landing-header-logo {
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: 50%;
   object-fit: contain;
 }
 .landing-header-name {
@@ -1459,7 +1460,7 @@ body {
 .site-footer-logo {
   width: 36px;
   height: 36px;
-  border-radius: 10px;
+  border-radius: 50%;
   object-fit: contain;
   margin: 0 auto 10px;
 }

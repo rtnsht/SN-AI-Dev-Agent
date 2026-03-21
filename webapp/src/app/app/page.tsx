@@ -12,9 +12,15 @@ import APIKeyGateModal from "@/components/APIKeyGateModal";
 import ConnectModal from "@/components/ConnectModal";
 import ThemeToggle from "@/components/ThemeToggle";
 import SuggestionPanel from "@/components/SuggestionPanel";
-import type { ChatMessage, ConnectionResult, UsageInfo, TrialStatus, SDLCPhase, LiveStatus, AIProvider, ModelOption, FileAttachment, CategorizedPrompts } from "@/lib/types";
+import type { ChatMessage, ConnectionResult, UsageInfo, TrialStatus, SDLCPhase, LiveStatus, AIProvider, ModelOption, FileAttachment, CategorizedPrompts, Credentials, QueuedMessage } from "@/lib/types";
 import { parsePhaseGate, parseUserChoices, ANTHROPIC_MODELS, SDLC_PHASES } from "@/lib/types";
 import { APP_NAME, APP_LOGO, SHOW_INFO_BUTTON, CREATOR_NAME, CREATOR_LINKEDIN, FOOTER_TAGLINE, FOOTER_COPYRIGHT } from "@/lib/branding";
+import { dispatch as dispatchSlashCommand, type CommandContext } from "@/lib/slash-commands";
+import {
+  buildServiceNowAuthorizationUrl,
+  createPkcePair,
+  normalizeServiceNowAuthMethod,
+} from "@/lib/servicenow-auth";
 import { User, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from "lucide-react";
 
 
@@ -32,9 +38,15 @@ const SK = {
   SESSION_ID: "ai-session-id",
   CATEGORIZED_PROMPTS: "ai-categorized-prompts",
   SEEN_SUGGESTIONS: "ai-seen-suggestions",
+  SDD_MODE: "ai-sdd-mode",
 } as const;
 
 const ALL_SESSION_KEYS = Object.values(SK);
+
+/** Generate a stable unique message ID */
+function genMsgId(): string {
+  return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 /** Strip heavy base64 data from messages before storing (images + file data) */
 function stripHeavyData(messages: ChatMessage[]): ChatMessage[] {
@@ -50,6 +62,8 @@ function stripHeavyData(messages: ChatMessage[]): ChatMessage[] {
 /** Map raw connection errors to user-friendly messages */
 function getFriendlyErrorMessage(raw: string): string {
   const lower = raw.toLowerCase();
+  if (lower.includes("oauth") || lower.includes("browser-assisted") || lower.includes("browser session") || lower.includes("popup"))
+    return raw;
   if (lower.includes("enotfound"))
     return "Instance not found. Please check that the URL is correct (e.g., https://your-instance.service-now.com) and try again.";
   if (lower.includes("econnrefused"))
@@ -58,8 +72,10 @@ function getFriendlyErrorMessage(raw: string): string {
     return "Connection timed out. The instance may be hibernating or unreachable. Try opening it in your browser first, then reconnect.";
   if (lower.includes("econnreset") || lower.includes("socket hang up"))
     return "Connection was reset unexpectedly. Please try again.";
+  if (lower.includes("sso") || lower.includes("mfa"))
+    return raw;
   if (lower.includes("login page") || lower.includes("redirect"))
-    return "Authentication failed. The server redirected to a login page instead of responding to the API request. Please check your username and password, then reconnect.";
+    return "Authentication failed. The instance redirected to a login page instead of responding to the API request. If this instance uses SSO or MFA, switch the auth method to OAuth Authorization Code or Browser Session and try again.";
   if (lower.includes("user") && lower.includes("not found"))
     return "The username was not found on this instance. Please check the username and reconnect with valid credentials.";
   if (lower.includes("401") || lower.includes("unauthorized") || lower.includes("invalid user") || lower.includes("invalid password"))
@@ -88,19 +104,41 @@ function getFriendlyErrorMessage(raw: string): string {
   return "Connection failed. Please verify your settings and try again.";
 }
 
+function getPostBrowserSessionValidationMessage(raw: string): string {
+  const friendly = getFriendlyErrorMessage(raw);
+  const lower = friendly.toLowerCase();
+
+  if (
+    lower.includes("no roles") ||
+    lower.includes("does not have any roles") ||
+    (lower.includes("user") && lower.includes("not found"))
+  ) {
+    return friendly;
+  }
+
+  return `Browser sign-in completed, but the captured ServiceNow session could not be validated for API access. This instance may require OAuth Sign-In for REST API calls.\n\n${friendly}`;
+}
+
 export default function Home() {
-  const [credentials, setCredentials] = useState({
+  const [credentials, setCredentials] = useState<Credentials>({
     instanceUrl: "",
     username: "",
     password: "",
     claudeApiKey: "",
     openRouterApiKey: "",
+    snAuthType: "basic",
+    clientId: "",
+    clientSecret: "",
+    accessToken: "",
+    refreshToken: "",
+    sessionCookies: [],
   });
   const [connected, setConnected] = useState(false);
   const [connInfo, setConnInfo] = useState<ConnectionResult | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [connectingLabel, setConnectingLabel] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(true);
   const [showRightPanel, setShowRightPanel] = useState(true);
@@ -117,6 +155,8 @@ export default function Home() {
   const [trialStatus, setTrialStatus] = useState<TrialStatus | null>(null);
   // Pending retry — stores the failed message so it can be auto-retried after user provides an API key
   const [pendingRetry, setPendingRetry] = useState<{ text: string; images?: string[]; files?: FileAttachment[] } | null>(null);
+  // Message queue — stores messages typed while AI is processing, drained sequentially when AI finishes
+  const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([]);
   // AI Provider selection
   const [aiProvider, setAiProvider] = useState<AIProvider>("anthropic");
   // Model selection — locked after first message sent
@@ -129,6 +169,8 @@ export default function Home() {
   const [activeReqId, setActiveReqId] = useState<string | null>(null);
   const [currentPhase, setCurrentPhase] = useState<SDLCPhase | null>(null);
   const [completedPhases, setCompletedPhases] = useState<SDLCPhase[]>([]);
+  // SDD (Spec-Driven Development) mode — when active, enforces phase gates
+  const [sddMode, setSddMode] = useState(false);
   // Tool execution detail visibility (from env via /api/config)
   const [showToolDetails, setShowToolDetails] = useState(true);
   // Whether users are allowed to provide their own Claude API key
@@ -189,7 +231,14 @@ export default function Home() {
   // Clear connection error when user edits credentials
   useEffect(() => {
     setConnectionError(null);
-  }, [credentials.instanceUrl, credentials.username, credentials.password]);
+  }, [
+    credentials.instanceUrl,
+    credentials.username,
+    credentials.password,
+    credentials.snAuthType,
+    credentials.clientId,
+    credentials.clientSecret,
+  ]);
 
   // Accumulate liveStatus changes into the activity log (skip tool events — handled directly in stream parser)
   useEffect(() => {
@@ -248,8 +297,14 @@ export default function Home() {
       // Restore credentials (instanceUrl + username only)
       const savedCreds = sessionStorage.getItem(SK.CREDS);
       if (savedCreds) {
-        const { instanceUrl, username } = JSON.parse(savedCreds);
-        setCredentials((prev) => ({ ...prev, instanceUrl: instanceUrl || prev.instanceUrl, username: username || prev.username }));
+        const { instanceUrl, username, snAuthType, clientId } = JSON.parse(savedCreds);
+        setCredentials((prev) => ({
+          ...prev,
+          instanceUrl: instanceUrl || prev.instanceUrl,
+          username: username || prev.username,
+          snAuthType: snAuthType || prev.snAuthType,
+          clientId: clientId || prev.clientId,
+        }));
       }
 
       // Restore model/provider
@@ -267,6 +322,8 @@ export default function Home() {
       if (savedPhase) setCurrentPhase(savedPhase as SDLCPhase);
       const savedCompleted = sessionStorage.getItem(SK.COMPLETED_PHASES);
       if (savedCompleted) setCompletedPhases(JSON.parse(savedCompleted));
+      const savedSddMode = sessionStorage.getItem(SK.SDD_MODE);
+      if (savedSddMode === "true") setSddMode(true);
 
       // Restore cached suggestions
       const savedPrompts = sessionStorage.getItem(SK.CATEGORIZED_PROMPTS);
@@ -284,6 +341,7 @@ export default function Home() {
 
       // Inject a restore notice
       const notice: ChatMessage = {
+        id: genMsgId(),
         role: "system",
         type: "info",
         content: "Previous session restored. Please reconnect to continue.",
@@ -309,6 +367,13 @@ export default function Home() {
     localStorage.setItem("sn-welcome-dismissed", "true");
   }, []);
 
+  const refreshAppUser = useCallback(() => {
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => setAppUser(data && data.email ? data : null))
+      .catch(() => setAppUser(null));
+  }, []);
+
   // ── Fetch trial status ──
   useEffect(() => {
     fetch("/api/trial-status")
@@ -317,13 +382,14 @@ export default function Home() {
       .catch(() => {});
   }, []);
 
-  // ── Fetch logged-in webapp user info ──
+  // ── Fetch logged-in webapp user info only for authenticated users ──
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => { if (data) setAppUser(data); })
-      .catch(() => {});
-  }, []);
+    if (!isAuthenticated) {
+      setAppUser(null);
+      return;
+    }
+    refreshAppUser();
+  }, [isAuthenticated, refreshAppUser]);
 
   // ── Persist state to sessionStorage on change ──
   useEffect(() => {
@@ -333,8 +399,15 @@ export default function Home() {
     try { if (connInfo) sessionStorage.setItem(SK.CONN_INFO, JSON.stringify(connInfo)); } catch { /* quota */ }
   }, [connInfo]);
   useEffect(() => {
-    try { sessionStorage.setItem(SK.CREDS, JSON.stringify({ instanceUrl: credentials.instanceUrl, username: credentials.username })); } catch { /* quota */ }
-  }, [credentials.instanceUrl, credentials.username]);
+    try {
+      sessionStorage.setItem(SK.CREDS, JSON.stringify({
+        instanceUrl: credentials.instanceUrl,
+        username: credentials.username,
+        snAuthType: credentials.snAuthType,
+        clientId: credentials.clientId,
+      }));
+    } catch { /* quota */ }
+  }, [credentials.instanceUrl, credentials.username, credentials.snAuthType, credentials.clientId]);
   useEffect(() => { try { sessionStorage.setItem(SK.PROVIDER, aiProvider); } catch { /* quota */ } }, [aiProvider]);
   useEffect(() => { try { sessionStorage.setItem(SK.MODEL, selectedModel); } catch { /* quota */ } }, [selectedModel]);
   useEffect(() => { try { sessionStorage.setItem(SK.MODEL_LOCKED, String(modelLocked)); } catch { /* quota */ } }, [modelLocked]);
@@ -347,6 +420,9 @@ export default function Home() {
   useEffect(() => {
     try { sessionStorage.setItem(SK.COMPLETED_PHASES, JSON.stringify(completedPhases)); } catch { /* quota */ }
   }, [completedPhases]);
+  useEffect(() => {
+    try { sessionStorage.setItem(SK.SDD_MODE, String(sddMode)); } catch { /* quota */ }
+  }, [sddMode]);
 
   // Close profile dropdown on outside click or Escape
   useEffect(() => {
@@ -517,11 +593,124 @@ export default function Home() {
     }
   }, [aiProvider, modelLocked, openRouterModels]);
 
-  const handleConnect = useCallback(async () => {
-    setIsConnecting(true);
-    setConnectionError(null);
+  const completeAuthorizationCodeSignIn = useCallback(async (): Promise<Credentials> => {
+    const instanceUrl = credentials.instanceUrl.trim();
+    const clientId = credentials.clientId?.trim() || "";
+
+    if (!instanceUrl || !clientId) {
+      throw new Error("OAuth Authorization Code requires the instance URL and client ID.");
+    }
+
+    const redirectUri = `${window.location.origin}/sn-oauth/callback`;
+    const { verifier, challenge } = await createPkcePair();
+    const state = `sn_oauth_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    const authUrl = buildServiceNowAuthorizationUrl({
+      instanceUrl,
+      clientId,
+      redirectUri,
+      state,
+      codeChallenge: challenge,
+    });
+
+    const popup = window.open(authUrl, "sn-oauth-login", "width=560,height=760,resizable,scrollbars");
+    if (!popup) {
+      throw new Error("The ServiceNow OAuth sign-in popup was blocked. Allow popups and try again.");
+    }
+
+    const authCode = await new Promise<string>((resolve, reject) => {
+      const timeout = window.setTimeout(() => {
+        cleanup();
+        reject(new Error("Timed out waiting for ServiceNow OAuth sign-in."));
+      }, 180000);
+
+      const closedCheck = window.setInterval(() => {
+        if (popup.closed) {
+          cleanup();
+          reject(new Error("The ServiceNow OAuth sign-in window was closed before completing sign-in."));
+        }
+      }, 500);
+
+      const onMessage = (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) {
+          return;
+        }
+
+        const data = event.data as {
+          type?: string;
+          state?: string | null;
+          code?: string | null;
+          error?: string | null;
+          errorDescription?: string | null;
+        };
+
+        if (data.type !== "sn-oauth-callback") {
+          return;
+        }
+
+        if (data.state !== state) {
+          cleanup();
+          reject(new Error("The ServiceNow OAuth callback state did not match the active sign-in attempt."));
+          return;
+        }
+
+        if (data.error) {
+          cleanup();
+          reject(new Error(data.errorDescription || data.error));
+          return;
+        }
+
+        if (!data.code) {
+          cleanup();
+          reject(new Error("ServiceNow OAuth sign-in completed without an authorization code."));
+          return;
+        }
+
+        cleanup();
+        resolve(data.code);
+      };
+
+      const cleanup = () => {
+        window.clearTimeout(timeout);
+        window.clearInterval(closedCheck);
+        window.removeEventListener("message", onMessage);
+        popup.close();
+      };
+
+      window.addEventListener("message", onMessage);
+    });
+
+    const exchangeResponse = await fetch("/api/sn-oauth/exchange", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        instanceUrl,
+        clientId,
+        clientSecret: credentials.clientSecret,
+        code: authCode,
+        codeVerifier: verifier,
+        redirectUri,
+      }),
+    });
+
+    const exchangeData = await exchangeResponse.json().catch(() => ({ success: false, message: "OAuth exchange failed." }));
+    if (!exchangeResponse.ok || !exchangeData.success || !exchangeData.accessToken) {
+      throw new Error(exchangeData.message || "ServiceNow OAuth exchange failed.");
+    }
+
+    const nextCredentials: Credentials = {
+      ...credentials,
+      snAuthType: "oauth_authorization_code",
+      accessToken: exchangeData.accessToken,
+      refreshToken: exchangeData.refreshToken || "",
+    };
+
+    setCredentials(nextCredentials);
+    return nextCredentials;
+  }, [credentials]);
+
+  const completeBrowserSessionSignIn = useCallback(async (): Promise<Credentials> => {
     try {
-      const res = await fetch("/api/test-connection", {
+      const response = await fetch("/api/browser-session-connect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -530,28 +719,108 @@ export default function Home() {
           password: credentials.password,
         }),
       });
-
-      // Handle HTTP-level errors (e.g., 400, 500) before parsing JSON
-      if (!res.ok) {
-        let errorData: { message?: string } | null = null;
-        try { errorData = await res.json(); } catch { /* response may not be JSON */ }
-        const rawMsg = errorData?.message || `Server returned status ${res.status}`;
-        const friendly = getFriendlyErrorMessage(rawMsg);
-        setConnectionError(friendly);
-        const errMsgs = [...messagesRef.current, { role: "system" as const, type: "error" as const, content: `Connection failed: ${friendly}`, timestamp: new Date().toISOString() }];
-        messagesRef.current = errMsgs;
-        setMessages(errMsgs);
-        setIsConnecting(false);
-        return;
+      const data = await response.json().catch(() => ({ success: false, message: "Browser-assisted sign-in failed." }));
+      if (!response.ok || !data.success || !Array.isArray(data.sessionCookies) || data.sessionCookies.length === 0) {
+        throw new Error(data.message || "Browser-assisted sign-in failed.");
       }
 
-      const data: ConnectionResult = await res.json();
+      const nextCredentials: Credentials = {
+        ...credentials,
+        snAuthType: "session",
+        sessionCookies: data.sessionCookies,
+        sessionToken: data.sessionToken || "",
+        accessToken: "",
+        refreshToken: "",
+      };
+
+      setCredentials(nextCredentials);
+
+      // Attach the browser-proxied validation result if the server ran it.
+      // This lets handleConnect skip the separate /api/test-connection call.
+      if (data.validationResult) {
+        (nextCredentials as Credentials & { _browserValidation?: unknown })._browserValidation = data.validationResult;
+      }
+
+      return nextCredentials;
+    } catch (error) {
+      throw error;
+    }
+  }, [credentials]);
+
+  const handleConnect = useCallback(async () => {
+    setIsConnecting(true);
+    setConnectingLabel("Connecting...");
+    setConnectionError(null);
+    let browserSessionBootstrapped = false;
+    try {
+      const authType = normalizeServiceNowAuthMethod(credentials.snAuthType);
+      let effectiveCredentials: Credentials = { ...credentials, snAuthType: authType };
+      browserSessionBootstrapped = authType === "session" && Array.isArray(effectiveCredentials.sessionCookies) && effectiveCredentials.sessionCookies.length > 0;
+
+      if (authType === "oauth_authorization_code" && !effectiveCredentials.accessToken) {
+        effectiveCredentials = await completeAuthorizationCodeSignIn();
+      } else if (authType === "session" && (!effectiveCredentials.sessionCookies || effectiveCredentials.sessionCookies.length === 0)) {
+        setConnectingLabel("Waiting for browser sign-in...");
+        effectiveCredentials = await completeBrowserSessionSignIn();
+        browserSessionBootstrapped = true;
+      }
+
+      setConnectingLabel(authType === "session" ? "Validating ServiceNow session..." : "Connecting...");
+
+      // If browser-proxied validation already ran inside the Playwright browser,
+      // use that result directly instead of calling /api/test-connection (which
+      // would fail because ServiceNow sessions are bound to the browser process).
+      const browserValidation = (effectiveCredentials as Credentials & { _browserValidation?: ConnectionResult })._browserValidation;
+      let data: ConnectionResult;
+
+      if (browserSessionBootstrapped && browserValidation && browserValidation.success) {
+        data = {
+          ...browserValidation,
+          message: browserValidation.message || `Connected to ${effectiveCredentials.instanceUrl}`,
+          authType: "session",
+        };
+      } else {
+        const res = await fetch("/api/test-connection", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            instanceUrl: effectiveCredentials.instanceUrl,
+            username: effectiveCredentials.username,
+            password: effectiveCredentials.password,
+            snAuthType: effectiveCredentials.snAuthType,
+            clientId: effectiveCredentials.clientId,
+            clientSecret: effectiveCredentials.clientSecret,
+            accessToken: effectiveCredentials.accessToken,
+            refreshToken: effectiveCredentials.refreshToken,
+            sessionCookies: effectiveCredentials.sessionCookies,
+            sessionToken: effectiveCredentials.sessionToken,
+          }),
+        });
+
+        // Handle HTTP-level errors (e.g., 400, 500) before parsing JSON
+        if (!res.ok) {
+          let errorData: { message?: string } | null = null;
+          try { errorData = await res.json(); } catch { /* response may not be JSON */ }
+          const rawMsg = errorData?.message || `Server returned status ${res.status}`;
+          const friendly = browserSessionBootstrapped
+            ? getPostBrowserSessionValidationMessage(rawMsg)
+            : getFriendlyErrorMessage(rawMsg);
+          setConnectionError(friendly);
+          const errMsgs = [...messagesRef.current, { id: genMsgId(), role: "system" as const, type: "error" as const, content: `Connection failed: ${friendly}`, timestamp: new Date().toISOString() }];
+          messagesRef.current = errMsgs;
+          setMessages(errMsgs);
+          setIsConnecting(false);
+          return;
+        }
+
+        data = await res.json();
+      }
 
       // Handle no-roles: block connection and show error with reconnect guidance
       if (data.success && data.noRoles) {
         const noRolesMsg = "This user does not have any roles assigned on this instance. Please assign the required roles (e.g., admin, itil) and reconnect.";
         setConnectionError(noRolesMsg);
-        const errMsgs = [...messagesRef.current, { role: "system" as const, type: "error" as const, content: `Connection failed: ${noRolesMsg}`, timestamp: new Date().toISOString() }];
+        const errMsgs = [...messagesRef.current, { id: genMsgId(), role: "system" as const, type: "error" as const, content: `Connection failed: ${noRolesMsg}`, timestamp: new Date().toISOString() }];
         messagesRef.current = errMsgs;
         setMessages(errMsgs);
         setIsConnecting(false);
@@ -559,6 +828,7 @@ export default function Home() {
       }
 
       if (data.success) {
+        setCredentials(effectiveCredentials);
         setConnected(true);
         setConnInfo(data);
         setShowSettings(false);
@@ -567,38 +837,43 @@ export default function Home() {
         // Inject system messages into chat
         const sysMsgs: ChatMessage[] = [];
 
-        const instanceShort = credentials.instanceUrl.replace(/https?:\/\//, "").replace(/\/$/, "");
+        const instanceShort = effectiveCredentials.instanceUrl.replace(/https?:\/\//, "").replace(/\/$/, "");
         sysMsgs.push({
+          id: genMsgId(),
           role: "system",
           type: "success",
-          content: `Connected to **${instanceShort}** as **${data.userInfo?.name || credentials.username}**`,
+          content: `Connected to **${instanceShort}** as **${data.userInfo?.name || effectiveCredentials.username || "authenticated user"}**`,
           timestamp: new Date().toISOString(),
         });
 
         // Role check
         if (!data.hasAdmin && !data.hasSecurityAdmin) {
           sysMsgs.push({
+            id: genMsgId(),
             role: "system",
             type: "warning",
-            content: `⚠️ **Limited Access** — User \`${credentials.username}\` does not have \`admin\` or \`security_admin\` roles. The agent will only be able to advise and operate based on the access this user has. Some operations (creating business rules, ACLs, modifying system tables) may fail due to insufficient permissions.`,
+            content: `⚠️ **Limited Access** — User \`${effectiveCredentials.username || "authenticated user"}\` does not have \`admin\` or \`security_admin\` roles. The agent will only be able to advise and operate based on the access this user has. Some operations (creating business rules, ACLs, modifying system tables) may fail due to insufficient permissions.`,
             timestamp: new Date().toISOString(),
           });
         } else if (!data.hasAdmin) {
           sysMsgs.push({
+            id: genMsgId(),
             role: "system",
             type: "warning",
-            content: `⚠️ **Partial Access** — User \`${credentials.username}\` has \`security_admin\` but not \`admin\` role. Some configuration operations may be restricted.`,
+            content: `⚠️ **Partial Access** — User \`${effectiveCredentials.username || "authenticated user"}\` has \`security_admin\` but not \`admin\` role. Some configuration operations may be restricted.`,
             timestamp: new Date().toISOString(),
           });
         } else if (!data.hasSecurityAdmin) {
           sysMsgs.push({
+            id: genMsgId(),
             role: "system",
             type: "info",
-            content: `ℹ️ User \`${credentials.username}\` has \`admin\` but not \`security_admin\` role. ACL and security policy modifications may require elevated privileges.`,
+            content: `ℹ️ User \`${effectiveCredentials.username || "authenticated user"}\` has \`admin\` but not \`security_admin\` role. ACL and security policy modifications may require elevated privileges.`,
             timestamp: new Date().toISOString(),
           });
         } else {
           sysMsgs.push({
+            id: genMsgId(),
             role: "system",
             type: "success",
             content: `✅ Full access — User has both \`admin\` and \`security_admin\` roles.`,
@@ -617,14 +892,15 @@ export default function Home() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             sessionId: clientSessionId,
-            instanceUrl: credentials.instanceUrl,
-            username: credentials.username,
+            instanceUrl: effectiveCredentials.instanceUrl,
+            username: effectiveCredentials.username,
             userFullName: data.userInfo?.name || "",
             model: (aiProvider === "openrouter" ? openRouterModels : ANTHROPIC_MODELS)
               .find((m) => m.key === selectedModel)?.modelId || selectedModel,
             aiProvider,
             hasAdmin: data.hasAdmin,
             hasSecurityAdmin: data.hasSecurityAdmin,
+            authType: effectiveCredentials.snAuthType,
           }),
         }).catch((err) => { console.warn("[session-start] failed:", err); });
 
@@ -636,36 +912,97 @@ export default function Home() {
               assignmentGroups: data.userInfo.assignmentGroups || [],
             }
           : undefined;
-        fetchCategorizedPromptsFromApi(credentials, userContext);
+        fetchCategorizedPromptsFromApi(effectiveCredentials, userContext);
       } else {
         const rawMsg = data.message || "Unknown error";
-        const friendly = getFriendlyErrorMessage(rawMsg);
+        const friendly = browserSessionBootstrapped
+          ? getPostBrowserSessionValidationMessage(rawMsg)
+          : getFriendlyErrorMessage(rawMsg);
         setConnectionError(friendly);
-        const errMsgs = [...messagesRef.current, { role: "system" as const, type: "error" as const, content: `Connection failed: ${friendly}`, timestamp: new Date().toISOString() }];
+        const errMsgs = [...messagesRef.current, { id: genMsgId(), role: "system" as const, type: "error" as const, content: `Connection failed: ${friendly}`, timestamp: new Date().toISOString() }];
         messagesRef.current = errMsgs;
         setMessages(errMsgs);
       }
     } catch (err) {
       const rawMsg = err instanceof Error ? err.message : String(err);
-      const friendly = getFriendlyErrorMessage(rawMsg);
+      const friendly = browserSessionBootstrapped
+        ? getPostBrowserSessionValidationMessage(rawMsg)
+        : getFriendlyErrorMessage(rawMsg);
       setConnectionError(friendly);
-      const errMsgs = [...messagesRef.current, { role: "system" as const, type: "error" as const, content: `Connection failed: ${friendly}`, timestamp: new Date().toISOString() }];
+      const errMsgs = [...messagesRef.current, { id: genMsgId(), role: "system" as const, type: "error" as const, content: `Connection failed: ${friendly}`, timestamp: new Date().toISOString() }];
       messagesRef.current = errMsgs;
       setMessages(errMsgs);
     } finally {
       setIsConnecting(false);
+      setConnectingLabel(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchCategorizedPromptsFromApi is stable ([] deps) but declared after this hook
-  }, [credentials, clientSessionId, aiProvider, openRouterModels, selectedModel]);
+  }, [credentials, clientSessionId, aiProvider, openRouterModels, selectedModel, completeAuthorizationCodeSignIn, completeBrowserSessionSignIn]);
 
   const handleSend = useCallback(
     async (text: string, images?: string[], files?: FileAttachment[], hidden?: boolean) => {
-      if ((!text.trim() && (!images || images.length === 0) && (!files || files.length === 0)) || isLoading) return;
+      if (!text.trim() && (!images || images.length === 0) && (!files || files.length === 0)) return;
+
+      // Queue message if AI is currently processing (unless it's an internal auto-resume)
+      if (isLoading && !hidden) {
+        const queuedMsg: QueuedMessage = { id: genMsgId(), text, images, files, timestamp: new Date().toISOString() };
+        setMessageQueue(prev => [...prev, queuedMsg]);
+        const displayMsg: ChatMessage = {
+          id: queuedMsg.id,
+          role: "user",
+          content: text,
+          queued: true,
+          timestamp: queuedMsg.timestamp,
+          ...(images?.length ? { images } : {}),
+          ...(files?.length ? { files } : {}),
+        };
+        const updated = [...messagesRef.current, displayMsg];
+        messagesRef.current = updated;
+        setMessages(updated);
+        return;
+      }
+
+      // Slash command dispatch — intercept before sending to API
+      if (text.trim().startsWith("/") && !hidden) {
+        const cmdCtx: CommandContext = {
+          currentPhase,
+          sddMode,
+          connected,
+          sessionId: clientSessionId,
+          activeReqId,
+        };
+        const result = dispatchSlashCommand(text.trim(), cmdCtx);
+        if (result.type === "state_update") {
+          const u = result.updates;
+          if (u.sddMode !== undefined) setSddMode(u.sddMode);
+          if (u.currentPhase !== undefined) setCurrentPhase(u.currentPhase);
+          if (u.completedPhases !== undefined) setCompletedPhases(u.completedPhases);
+          const label = u.sddMode ? "SDD mode activated. Phase gates are now enforced." : "Freeform mode. Phase gates disabled.";
+          const sysMsg: ChatMessage = { id: genMsgId(), role: "system", type: u.sddMode ? "success" : "info", content: label, timestamp: new Date().toISOString() };
+          const updated = [...messagesRef.current, sysMsg];
+          messagesRef.current = updated;
+          setMessages(updated);
+          return;
+        }
+        if (result.type === "system_message") {
+          const sysMsg: ChatMessage = { id: genMsgId(), role: "system", type: result.messageType === "warning" ? "warning" : result.messageType === "success" ? "success" : "info", content: result.content, timestamp: new Date().toISOString() };
+          const updated = [...messagesRef.current, sysMsg];
+          messagesRef.current = updated;
+          setMessages(updated);
+          return;
+        }
+        if (result.type === "action") {
+          if (result.action === "new_chat") handleNewChat();
+          return;
+        }
+        // "passthrough" — not a recognized command, send as normal message
+      }
 
       // Clear any pending retry — user is sending a new/retried message
       if (pendingRetry) setPendingRetry(null);
 
       const userMsg: ChatMessage = {
+        id: genMsgId(),
         role: "user",
         content: text,
         timestamp: new Date().toISOString(),
@@ -703,7 +1040,7 @@ export default function Home() {
         // Safety check: ensure we have messages to send
         if (apiMessages.length === 0) {
           console.error("[handleSend] No user/assistant messages to send. Messages:", newMessages);
-          setMessages((prev) => [...prev, { role: "system", type: "error", content: "Internal error: No messages to send. Please try again.", timestamp: new Date().toISOString() }]);
+          setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: "Internal error: No messages to send. Please try again.", timestamp: new Date().toISOString() }]);
           setIsLoading(false);
           return;
         }
@@ -723,7 +1060,7 @@ export default function Home() {
           const res = await fetch("/api/chat-stream", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ credentials, messages: apiMessages, model: modelId, aiProvider, sessionId: clientSessionId, phase: currentPhase }),
+            body: JSON.stringify({ credentials, messages: apiMessages, model: modelId, aiProvider, sessionId: clientSessionId, phase: currentPhase, sddMode }),
             signal: controller.signal,
           });
 
@@ -744,7 +1081,7 @@ export default function Home() {
                 setShowSignupGate(true);
                 setMessages((prev) => [
                   ...prev,
-                  { role: "system", type: "error", content: errorData.message || "Free request limit reached. Sign up to continue.", timestamp: new Date().toISOString() },
+                  { id: genMsgId(), role: "system", type: "error", content: errorData.message || "Free request limit reached. Sign up to continue.", timestamp: new Date().toISOString() },
                 ]);
               } else if (errorData.error === "apikey_required") {
                 // Authenticated user hit daily limit — show API key gate
@@ -757,7 +1094,7 @@ export default function Home() {
                 setShowApiKeyGate(true);
                 setMessages((prev) => [
                   ...prev,
-                  { role: "system", type: "error", content: errorData.message || "Daily limit reached. Add your API key to continue.", timestamp: new Date().toISOString() },
+                  { id: genMsgId(), role: "system", type: "error", content: errorData.message || "Daily limit reached. Add your API key to continue.", timestamp: new Date().toISOString() },
                 ]);
               } else if (errorData.error === "anthropic_rate_limit") {
                 if (allowUserApiKeys) {
@@ -767,6 +1104,7 @@ export default function Home() {
                 setMessages((prev) => [
                   ...prev,
                   {
+                    id: genMsgId(),
                     role: "system",
                     type: "error",
                     content: allowUserApiKeys
@@ -779,11 +1117,11 @@ export default function Home() {
                 // Generic rate limit
                 setMessages((prev) => [
                   ...prev,
-                  { role: "system", type: "error", content: errorData.message || "Rate limit reached. Please try again later.", timestamp: new Date().toISOString() },
+                  { id: genMsgId(), role: "system", type: "error", content: errorData.message || "Rate limit reached. Please try again later.", timestamp: new Date().toISOString() },
                 ]);
               }
             } else {
-              setMessages((prev) => [...prev, { role: "system", type: "error", content: `Error: ${errorData.error || errorData.message || "Request failed"}`, timestamp: new Date().toISOString() }]);
+              setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: `Error: ${errorData.error || errorData.message || "Request failed"}`, timestamp: new Date().toISOString() }]);
             }
 
             setIsLoading(false);
@@ -793,7 +1131,7 @@ export default function Home() {
           const reader = res.body?.getReader();
           if (!reader) {
             setLiveStatus(null);
-            setMessages((prev) => [...prev, { role: "system", type: "error", content: "Streaming not supported", timestamp: new Date().toISOString() }]);
+            setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: "Streaming not supported", timestamp: new Date().toISOString() }]);
             setIsLoading(false);
             return;
           }
@@ -879,6 +1217,7 @@ export default function Home() {
 
                       // Add partial reply as assistant msg
                       const partialMsg: ChatMessage = {
+                        id: genMsgId(),
                         role: "assistant",
                         content: event.reply,
                         toolExecutions: event.toolExecutions,
@@ -892,6 +1231,7 @@ export default function Home() {
                         // Don't auto-resume — show actionable error instead of cascading loops
                         setLiveStatus(null);
                         setMessages((prev) => [...prev, {
+                          id: genMsgId(),
                           role: "system",
                           type: "error",
                           content: `**Phase stalled**: The AI could not complete the \`${eventPhase}\` phase within the round limit. This usually means it needs guidance to proceed.\n\n**Try**: Tell the AI what to do next, e.g. "Emit the phase gate and proceed to implementation."`,
@@ -922,7 +1262,7 @@ export default function Home() {
                         const rateLimitedModel = parts[1] || "the selected model";
                         errorContent = `**Rate limited** -- The model \`${rateLimitedModel}\` is temporarily rate-limited by its upstream provider after multiple retry attempts.\n\n**What you can do:**\n- **Switch to a different model** from the model selector\n- **Wait a few minutes** and try again\n- **Add your own API key** on [OpenRouter](https://openrouter.ai/settings/integrations) for higher limits`;
                       }
-                      setMessages((prev) => [...prev, { role: "system", type: "error", content: errorContent, timestamp: new Date().toISOString() }]);
+                      setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: errorContent, timestamp: new Date().toISOString() }]);
                       setIsLoading(false);
                       return;
                     }
@@ -939,7 +1279,7 @@ export default function Home() {
           setLiveStatus(null);
 
           if (!finalData) {
-            setMessages((prev) => [...prev, { role: "system", type: "error", content: "No response received from streaming API", timestamp: new Date().toISOString() }]);
+            setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: "No response received from streaming API", timestamp: new Date().toISOString() }]);
             setIsLoading(false);
             return;
           }
@@ -970,6 +1310,7 @@ export default function Home() {
           }
 
           const assistantMsg: ChatMessage = {
+            id: genMsgId(),
             role: "assistant",
             content: data.reply,
             toolExecutions: data.toolExecutions,
@@ -995,7 +1336,7 @@ export default function Home() {
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ credentials, messages: apiMessages, model: modelId, aiProvider, sessionId: clientSessionId, phase: currentPhase }),
+          body: JSON.stringify({ credentials, messages: apiMessages, model: modelId, aiProvider, sessionId: clientSessionId, phase: currentPhase, sddMode }),
           signal: controller.signal,
         });
 
@@ -1040,6 +1381,7 @@ export default function Home() {
 
           // Build assistant message with phase gate info
           const assistantMsg: ChatMessage = {
+            id: genMsgId(),
             role: "assistant",
             content: data.reply,
             toolExecutions: data.toolExecutions,
@@ -1055,6 +1397,7 @@ export default function Home() {
           // Inject auto-approved system message for auto-proceed phases
           if (isAutoApprove && phaseGate) {
             newMsgs.push({
+              id: genMsgId(),
               role: "system",
               type: "info",
               content: `⚡ **${phaseGate.charAt(0).toUpperCase() + phaseGate.slice(1)}** phase auto-approved (no sign-off required). Proceeding...`,
@@ -1078,22 +1421,22 @@ export default function Home() {
             setPendingRetry({ text, images, files });
             setGateInfo((prev) => ({ ...prev, dailyUsed: data.dailyUsed ?? prev.dailyUsed, dailyLimit: data.dailyLimit ?? prev.dailyLimit }));
             setShowSignupGate(true);
-            setMessages((prev) => [...prev, { role: "system", type: "error", content: data.message || "Free request limit reached. Sign up to continue.", timestamp: new Date().toISOString() }]);
+            setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: data.message || "Free request limit reached. Sign up to continue.", timestamp: new Date().toISOString() }]);
           } else if (data.error === "apikey_required") {
             setPendingRetry({ text, images, files });
             setGateInfo((prev) => ({ ...prev, dailyUsed: data.dailyUsed ?? prev.dailyUsed, dailyLimit: data.dailyLimit ?? prev.dailyLimit }));
             setShowApiKeyGate(true);
-            setMessages((prev) => [...prev, { role: "system", type: "error", content: data.message || "Daily limit reached. Add your API key to continue.", timestamp: new Date().toISOString() }]);
+            setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: data.message || "Daily limit reached. Add your API key to continue.", timestamp: new Date().toISOString() }]);
           } else if (data.error === "anthropic_rate_limit") {
             if (allowUserApiKeys) { setPendingRetry({ text, images, files }); setShowApiKeyGate(true); }
-            setMessages((prev) => [...prev, { role: "system", type: "error", content: allowUserApiKeys ? "**API rate limit hit** -- Add your own API key to continue." : "**API rate limit hit** -- Please try again later.", timestamp: new Date().toISOString() }]);
+            setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: allowUserApiKeys ? "**API rate limit hit** -- Add your own API key to continue." : "**API rate limit hit** -- Please try again later.", timestamp: new Date().toISOString() }]);
           } else {
-            setMessages((prev) => [...prev, { role: "system", type: "error", content: data.message || "Rate limit reached. Please try again later.", timestamp: new Date().toISOString() }]);
+            setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: data.message || "Rate limit reached. Please try again later.", timestamp: new Date().toISOString() }]);
           }
         } else {
           setMessages((prev) => [
             ...prev,
-            { role: "system", type: "error", content: `Error: ${data.error}`, timestamp: new Date().toISOString() },
+            { id: genMsgId(), role: "system", type: "error", content: `Error: ${data.error}`, timestamp: new Date().toISOString() },
           ]);
         }
       } catch (err) {
@@ -1101,7 +1444,7 @@ export default function Home() {
         if (err instanceof DOMException && err.name === "AbortError") {
           setMessages((prev) => [
             ...prev,
-            { role: "system", type: "info", content: "⏹ Request cancelled.", timestamp: new Date().toISOString() },
+            { id: genMsgId(), role: "system", type: "info", content: "⏹ Request cancelled.", timestamp: new Date().toISOString() },
           ]);
         } else {
           const errMsg = err instanceof Error ? err.message : String(err);
@@ -1112,7 +1455,7 @@ export default function Home() {
             : `Unexpected error: ${errMsg}`;
           setMessages((prev) => [
             ...prev,
-            { role: "system", type: "error", content: displayMsg, timestamp: new Date().toISOString() },
+            { id: genMsgId(), role: "system", type: "error", content: displayMsg, timestamp: new Date().toISOString() },
           ]);
         }
       } finally {
@@ -1120,7 +1463,8 @@ export default function Home() {
         setIsLoading(false);
       }
     },
-    [credentials, isLoading, serverApiKeyConfigured, activeReqId, selectedModel, modelLocked, pendingRetry, allowUserApiKeys, streamingEnabled, currentPhase, clientSessionId, aiProvider, openRouterModels]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [credentials, isLoading, serverApiKeyConfigured, activeReqId, selectedModel, modelLocked, pendingRetry, allowUserApiKeys, streamingEnabled, currentPhase, clientSessionId, aiProvider, openRouterModels, sddMode, connected]
   );
 
   // Keep ref updated with latest handleSend to avoid stale closures in setTimeout callbacks
@@ -1134,6 +1478,34 @@ export default function Home() {
       abortRef.current.abort();
     }
   }, []);
+
+  // Drain the message queue when AI finishes processing
+  useEffect(() => {
+    if (!isLoading && messageQueue.length > 0) {
+      const [next, ...rest] = messageQueue;
+      setMessageQueue(rest);
+      setMessages(prev => prev.map(m => m.id === next.id ? { ...m, queued: false } : m));
+      messagesRef.current = messagesRef.current.map(m => m.id === next.id ? { ...m, queued: false } : m);
+      const contextHint = "[This message was typed while the AI was responding]\n\n";
+      setTimeout(() => handleSendRef.current(`${contextHint}${next.text}`, next.images, next.files, false), 300);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading]);
+
+  /** Remove a queued message by ID */
+  const handleDequeueMessage = useCallback((id: string) => {
+    setMessageQueue(prev => prev.filter(m => m.id !== id));
+    setMessages(prev => prev.filter(m => !(m.id === id && m.queued)));
+    messagesRef.current = messagesRef.current.filter(m => !(m.id === id && m.queued));
+  }, []);
+
+  /** Clear all queued messages */
+  const handleClearQueue = useCallback(() => {
+    const queuedIds = new Set(messageQueue.map(m => m.id));
+    setMessageQueue([]);
+    setMessages(prev => prev.filter(m => !queuedIds.has(m.id ?? "")));
+    messagesRef.current = messagesRef.current.filter(m => !queuedIds.has(m.id ?? ""));
+  }, [messageQueue]);
 
   /** Handle phase gate approval — mark the message as approved and send "approved" to continue */
   const handleApprove = useCallback(
@@ -1162,7 +1534,7 @@ export default function Home() {
       // Inject system confirmation and update messagesRef immediately
       const withSystemMsg = [
         ...messagesRef.current,
-        { role: "system" as const, type: "success" as const, content: `✅ **${phase.charAt(0).toUpperCase() + phase.slice(1)}** phase approved. Proceeding...`, timestamp: new Date().toISOString() },
+        { id: genMsgId(), role: "system" as const, type: "success" as const, content: `✅ **${phase.charAt(0).toUpperCase() + phase.slice(1)}** phase approved. Proceeding...`, timestamp: new Date().toISOString() },
       ];
       messagesRef.current = withSystemMsg;
       setMessages(withSystemMsg);
@@ -1217,6 +1589,7 @@ export default function Home() {
     setActiveReqId(null);
     setCurrentPhase(null);
     setCompletedPhases([]);
+    setSddMode(false);
     setModelLocked(false);
     setPendingRetry(null);
     setActivityLog([]);
@@ -1230,6 +1603,13 @@ export default function Home() {
     try { sessionStorage.setItem(SK.SESSION_ID, newId); } catch { /* quota */ }
   }, [clientSessionId]);
 
+  const handlePhaseClick = useCallback((phase: SDLCPhase) => {
+    const el = document.querySelector(`[data-phase-divider="${phase}"]`) || document.querySelector(`[data-phase="${phase}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, []);
+
   /** Fetch categorized prompts from the API (used on connect + auto-refresh) */
   const fetchCategorizedPromptsFromApi = useCallback(
     (creds: typeof credentials, userCtx?: { sysId: string; roles: string[]; assignmentGroups: { sysId: string; name: string }[] }) => {
@@ -1242,6 +1622,12 @@ export default function Home() {
           instanceUrl: creds.instanceUrl,
           username: creds.username,
           password: creds.password,
+          snAuthType: creds.snAuthType,
+          clientId: creds.clientId,
+          clientSecret: creds.clientSecret,
+          accessToken: creds.accessToken,
+          refreshToken: creds.refreshToken,
+          sessionCookies: creds.sessionCookies,
           userContext: userCtx,
           seenHashes: currentSeen,
         }),
@@ -1300,14 +1686,21 @@ export default function Home() {
 
   /** Disconnect and unlock fields so user can edit before reconnecting */
   const handleReconnect = useCallback(() => {
+    const authType = normalizeServiceNowAuthMethod(credentials.snAuthType);
     setConnected(false);
     setConnInfo(null);
+    setConnectingLabel(null);
     setModelLocked(false);
     setCategorizedPrompts(null);
     setPromptsLastRefreshed(null);
     setSeenSuggestionHashes([]);
+    if (authType === "session") {
+      setCredentials((prev) => ({ ...prev, sessionCookies: [] }));
+    } else if (authType === "oauth_authorization_code") {
+      setCredentials((prev) => ({ ...prev, accessToken: "", refreshToken: "" }));
+    }
     try { sessionStorage.removeItem(SK.SEEN_SUGGESTIONS); sessionStorage.removeItem(SK.CATEGORIZED_PROMPTS); } catch { /* ok */ }
-  }, []);
+  }, [credentials.snAuthType]);
 
 
   /** Sidebar resize handlers (mouse + touch) */
@@ -1356,7 +1749,7 @@ export default function Home() {
 
   /** Shared SettingsPanel props (reused for sidebar + mobile full-screen) */
   const settingsPanelProps = {
-    credentials, setCredentials, connected, connInfo, isConnecting, connectionError,
+    credentials, setCredentials, connected, connInfo, isConnecting, connectingLabel, connectionError,
     onConnect: handleConnect, onReconnect: handleReconnect,
     serverApiKeyConfigured, serverOpenRouterKeyConfigured, serverSnCredsConfigured,
     usage, rateLimitHit, trialStatus, onRefreshUsage: refreshUsage,
@@ -1430,7 +1823,7 @@ export default function Home() {
             </button>
 
             {/* App identity */}
-            <Image src={APP_LOGO} alt={APP_NAME} width={32} height={32} className="rounded-md flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8" unoptimized />
+            <Image src={APP_LOGO} alt={APP_NAME} width={32} height={32} className="rounded-full flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8" unoptimized priority />
             <div className="min-w-0">
               <h1 className="text-sm sm:text-[15px] font-semibold truncate" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>{APP_NAME}</h1>
             </div>
@@ -1466,7 +1859,7 @@ export default function Home() {
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               </button>
             )}
-            <PhaseTracker currentPhase={currentPhase} completedPhases={completedPhases} reqId={activeReqId} />
+            <PhaseTracker currentPhase={currentPhase} completedPhases={completedPhases} reqId={activeReqId} onPhaseClick={handlePhaseClick} />
             {messages.length > 0 && (
                 <button
                   onClick={handleNewChat}
@@ -1590,6 +1983,18 @@ export default function Home() {
           onGetStarted={() => setMobileStep("connect")}
           pendingPrompt={pendingPrompt}
           onPendingPromptConsumed={clearPendingPrompt}
+          sddMode={sddMode}
+          currentPhase={currentPhase}
+          queueLength={messageQueue.length}
+          onDequeue={handleDequeueMessage}
+          onClearQueue={handleClearQueue}
+          onSddModeChange={(active, phase) => {
+            setSddMode(active);
+            setCurrentPhase(phase);
+            if (!active) setCompletedPhases([]);
+          }}
+          activeReqId={activeReqId}
+          clientSessionId={clientSessionId}
         />
       </main>
 
@@ -1652,7 +2057,7 @@ export default function Home() {
           <div className="flex-1" />
           <div className="p-4 pt-6 text-center" style={{ borderTop: "1px solid var(--border-default)" }}>
             {APP_LOGO && (
-              <Image src={APP_LOGO} alt={APP_NAME || "Logo"} width={36} height={36} className="rounded-[10px] mx-auto mb-2.5" style={{ objectFit: "contain" }} unoptimized />
+              <Image src={APP_LOGO} alt={APP_NAME || "Logo"} width={36} height={36} className="rounded-full mx-auto mb-2.5" style={{ objectFit: "contain" }} unoptimized />
             )}
             {APP_NAME && (
               <div className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>{APP_NAME}</div>
@@ -1698,10 +2103,21 @@ export default function Home() {
         open={showSignInModal}
         onClose={() => {
           setShowSignInModal(false);
-          fetch("/api/auth/me")
+          fetch("/api/config")
             .then((r) => (r.ok ? r.json() : null))
-            .then((data) => setAppUser(data && data.email ? data : null))
-            .catch(() => setAppUser(null));
+            .then((data) => {
+              const authenticated = !!data?.isAuthenticated;
+              setIsAuthenticated(authenticated);
+              if (!authenticated) {
+                setAppUser(null);
+              } else {
+                refreshAppUser();
+              }
+            })
+            .catch(() => {
+              setIsAuthenticated(false);
+              setAppUser(null);
+            });
         }}
       />
 
