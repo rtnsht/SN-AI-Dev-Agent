@@ -112,6 +112,17 @@ export interface ChatMessage {
   choicesAnswered?: boolean;
   /** If true, message is sent to API but hidden from the chat UI (e.g., auto-resume messages) */
   hidden?: boolean;
+  /** If true, message is queued and waiting to be sent (user typed while AI was processing) */
+  queued?: boolean;
+}
+
+/** A message waiting in the queue to be sent after the current AI response completes */
+export interface QueuedMessage {
+  id: string;
+  text: string;
+  images?: string[];
+  files?: FileAttachment[];
+  timestamp: string;
 }
 
 /** Interactive choice option presented to user */

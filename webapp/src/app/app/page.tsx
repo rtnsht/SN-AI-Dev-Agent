@@ -12,7 +12,7 @@ import APIKeyGateModal from "@/components/APIKeyGateModal";
 import ConnectModal from "@/components/ConnectModal";
 import ThemeToggle from "@/components/ThemeToggle";
 import SuggestionPanel from "@/components/SuggestionPanel";
-import type { ChatMessage, ConnectionResult, UsageInfo, TrialStatus, SDLCPhase, LiveStatus, AIProvider, ModelOption, FileAttachment, CategorizedPrompts, Credentials } from "@/lib/types";
+import type { ChatMessage, ConnectionResult, UsageInfo, TrialStatus, SDLCPhase, LiveStatus, AIProvider, ModelOption, FileAttachment, CategorizedPrompts, Credentials, QueuedMessage } from "@/lib/types";
 import { parsePhaseGate, parseUserChoices, ANTHROPIC_MODELS, SDLC_PHASES } from "@/lib/types";
 import { APP_NAME, APP_LOGO, SHOW_INFO_BUTTON, CREATOR_NAME, CREATOR_LINKEDIN, FOOTER_TAGLINE, FOOTER_COPYRIGHT } from "@/lib/branding";
 import { dispatch as dispatchSlashCommand, type CommandContext } from "@/lib/slash-commands";
@@ -155,6 +155,8 @@ export default function Home() {
   const [trialStatus, setTrialStatus] = useState<TrialStatus | null>(null);
   // Pending retry — stores the failed message so it can be auto-retried after user provides an API key
   const [pendingRetry, setPendingRetry] = useState<{ text: string; images?: string[]; files?: FileAttachment[] } | null>(null);
+  // Message queue — stores messages typed while AI is processing, drained sequentially when AI finishes
+  const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([]);
   // AI Provider selection
   const [aiProvider, setAiProvider] = useState<AIProvider>("anthropic");
   // Model selection — locked after first message sent
@@ -939,7 +941,26 @@ export default function Home() {
 
   const handleSend = useCallback(
     async (text: string, images?: string[], files?: FileAttachment[], hidden?: boolean) => {
-      if ((!text.trim() && (!images || images.length === 0) && (!files || files.length === 0)) || isLoading) return;
+      if (!text.trim() && (!images || images.length === 0) && (!files || files.length === 0)) return;
+
+      // Queue message if AI is currently processing (unless it's an internal auto-resume)
+      if (isLoading && !hidden) {
+        const queuedMsg: QueuedMessage = { id: genMsgId(), text, images, files, timestamp: new Date().toISOString() };
+        setMessageQueue(prev => [...prev, queuedMsg]);
+        const displayMsg: ChatMessage = {
+          id: queuedMsg.id,
+          role: "user",
+          content: text,
+          queued: true,
+          timestamp: queuedMsg.timestamp,
+          ...(images?.length ? { images } : {}),
+          ...(files?.length ? { files } : {}),
+        };
+        const updated = [...messagesRef.current, displayMsg];
+        messagesRef.current = updated;
+        setMessages(updated);
+        return;
+      }
 
       // Slash command dispatch — intercept before sending to API
       if (text.trim().startsWith("/") && !hidden) {
@@ -1458,6 +1479,34 @@ export default function Home() {
     }
   }, []);
 
+  // Drain the message queue when AI finishes processing
+  useEffect(() => {
+    if (!isLoading && messageQueue.length > 0) {
+      const [next, ...rest] = messageQueue;
+      setMessageQueue(rest);
+      setMessages(prev => prev.map(m => m.id === next.id ? { ...m, queued: false } : m));
+      messagesRef.current = messagesRef.current.map(m => m.id === next.id ? { ...m, queued: false } : m);
+      const contextHint = "[This message was typed while the AI was responding]\n\n";
+      setTimeout(() => handleSendRef.current(`${contextHint}${next.text}`, next.images, next.files, false), 300);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading]);
+
+  /** Remove a queued message by ID */
+  const handleDequeueMessage = useCallback((id: string) => {
+    setMessageQueue(prev => prev.filter(m => m.id !== id));
+    setMessages(prev => prev.filter(m => !(m.id === id && m.queued)));
+    messagesRef.current = messagesRef.current.filter(m => !(m.id === id && m.queued));
+  }, []);
+
+  /** Clear all queued messages */
+  const handleClearQueue = useCallback(() => {
+    const queuedIds = new Set(messageQueue.map(m => m.id));
+    setMessageQueue([]);
+    setMessages(prev => prev.filter(m => !queuedIds.has(m.id ?? "")));
+    messagesRef.current = messagesRef.current.filter(m => !queuedIds.has(m.id ?? ""));
+  }, [messageQueue]);
+
   /** Handle phase gate approval — mark the message as approved and send "approved" to continue */
   const handleApprove = useCallback(
     (phase: SDLCPhase) => {
@@ -1936,6 +1985,9 @@ export default function Home() {
           onPendingPromptConsumed={clearPendingPrompt}
           sddMode={sddMode}
           currentPhase={currentPhase}
+          queueLength={messageQueue.length}
+          onDequeue={handleDequeueMessage}
+          onClearQueue={handleClearQueue}
           onSddModeChange={(active, phase) => {
             setSddMode(active);
             setCurrentPhase(phase);

@@ -15,6 +15,8 @@ interface Props {
   showToolDetails?: boolean;
   /** Authenticated user's display name (for avatar initial) */
   userName?: string;
+  /** Remove a queued message by ID */
+  onDequeue?: (id: string) => void;
 }
 
 /** Copy-to-clipboard button with brief "Copied!" feedback */
@@ -439,7 +441,7 @@ const MD_COMPONENTS: Record<string, any> = {
 };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-export default function MessageBubble({ message, onApprove, onChoiceSelect, showToolDetails = true, userName }: Props) {
+export default function MessageBubble({ message, onApprove, onChoiceSelect, showToolDetails = true, userName, onDequeue }: Props) {
   const [approving, setApproving] = useState(false);
   const [msgExpanded, setMsgExpanded] = useState(true);
   const [isLong, setIsLong] = useState(false);
@@ -463,23 +465,29 @@ export default function MessageBubble({ message, onApprove, onChoiceSelect, show
     }
   }, [isUser, isLong, displayContent]);
 
+  const isQueued = !!message.queued;
+
   return (
-    <div className={`group/msg flex items-start gap-3 ${isUser ? "ml-auto flex-row-reverse" : ""}`}>
+    <div className={`group/msg flex items-start gap-3 ${isUser ? "ml-auto flex-row-reverse" : ""}`} style={isQueued ? { opacity: 0.6 } : undefined}>
       {/* Content — no chat bubble styling, Linear/Notion comment aesthetic */}
       <div
         className="relative px-3 sm:px-4 py-2.5 sm:py-3 min-w-0 rounded-md"
         style={{
           background: isUser ? "var(--surface-secondary)" : "transparent",
-          border: isUser ? "1px solid var(--border-default)" : "none",
+          border: isUser
+            ? isQueued ? "1px dashed var(--border-default)" : "1px solid var(--border-default)"
+            : "none",
           color: "var(--text-primary)",
           maxWidth: isUser ? "85%" : undefined,
           flex: isUser ? undefined : "1",
         }}
       >
-        {/* Copy button — visible on hover */}
-        <div className={`absolute top-1.5 ${isUser ? "left-1.5" : "right-1.5"} opacity-0 group-hover/msg:opacity-100 transition-opacity`}>
-          <CopyButton text={displayContent} />
-        </div>
+        {/* Copy button — visible on hover (hidden for queued messages) */}
+        {!isQueued && (
+          <div className={`absolute top-1.5 ${isUser ? "left-1.5" : "right-1.5"} opacity-0 group-hover/msg:opacity-100 transition-opacity`}>
+            <CopyButton text={displayContent} />
+          </div>
+        )}
         {/* User-attached images */}
         {isUser && message.images && message.images.length > 0 && (
           <div className={`flex gap-2 flex-wrap ${displayContent ? "mb-2" : ""}`}>
@@ -490,7 +498,37 @@ export default function MessageBubble({ message, onApprove, onChoiceSelect, show
         )}
 
         {isUser ? (
-          displayContent ? <div className="text-sm whitespace-pre-wrap break-words">{displayContent}</div> : null
+          <>
+            {displayContent ? <div className="text-sm whitespace-pre-wrap break-words">{displayContent}</div> : null}
+            {isQueued && (
+              <div className="flex items-center gap-2 mt-1.5">
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
+                  style={{ background: "rgba(76,125,255,0.1)", color: "var(--color-info)", border: "1px solid rgba(76,125,255,0.2)" }}
+                >
+                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6l4 2" />
+                    <circle cx="12" cy="12" r="9" strokeWidth={2} fill="none" stroke="currentColor" />
+                  </svg>
+                  Queued
+                </span>
+                {onDequeue && message.id && (
+                  <button
+                    onClick={() => onDequeue(message.id!)}
+                    className="p-0.5 rounded transition-colors"
+                    style={{ color: "var(--text-disabled)" }}
+                    onMouseEnter={e => { e.currentTarget.style.color = "var(--color-danger)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = "var(--text-disabled)"; }}
+                    title="Cancel queued message"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            )}
+          </>
         ) : (
           <div ref={contentRef}>
             <div

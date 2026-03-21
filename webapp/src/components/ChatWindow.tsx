@@ -383,6 +383,12 @@ interface Props {
   activeReqId?: string | null;
   /** Client session ID for command context */
   clientSessionId?: string;
+  /** Number of messages waiting in the queue */
+  queueLength?: number;
+  /** Remove a queued message by ID */
+  onDequeue?: (id: string) => void;
+  /** Clear all queued messages */
+  onClearQueue?: () => void;
 }
 
 /** Deduplicate and clean activity log for display — merge status noise, keep tool entries */
@@ -708,7 +714,7 @@ function InlineAgentActivity({ activityLog, liveStatus, onCancel }: { activityLo
   );
 }
 
-export default function ChatWindow({ messages, isLoading, onSend, onCancel, onApprove, onChoiceSelect, connected, inputRef, showToolDetails = true, liveStatus, userName, categorizedPrompts, activityLog = [], taskPlan, onGetStarted, pendingPrompt, onPendingPromptConsumed, sddMode = false, currentPhase = null, onSddModeChange, activeReqId, clientSessionId = "" }: Props) {
+export default function ChatWindow({ messages, isLoading, onSend, onCancel, onApprove, onChoiceSelect, connected, inputRef, showToolDetails = true, liveStatus, userName, categorizedPrompts, activityLog = [], taskPlan, onGetStarted, pendingPrompt, onPendingPromptConsumed, sddMode = false, currentPhase = null, onSddModeChange, activeReqId, clientSessionId = "", queueLength = 0, onDequeue, onClearQueue }: Props) {
   const [input, setInput] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [files, setFiles] = useState<FileAttachment[]>([]);
@@ -903,8 +909,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
   }, [input, inputRef]);
 
   const handleSubmit = useCallback(() => {
-    if ((!input.trim() && images.length === 0 && files.length === 0) || isLoading) return;
-    // Auto-stop recording when user sends a message
+    if (!input.trim() && images.length === 0 && files.length === 0) return;
     if (isRecording) stopRecording();
     onSend(
       input.trim(),
@@ -914,7 +919,6 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
     setInput("");
     setImages([]);
     setFiles([]);
-    // Reset textarea height after sending
     if (inputRef.current) inputRef.current.style.height = "auto";
   }, [input, images, files, isLoading, isRecording, stopRecording, onSend, inputRef]);
 
@@ -1167,8 +1171,8 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            placeholder={connected ? "What should we work on next?" : "Connect your instance first →"}
-            disabled={!connected || isLoading}
+            placeholder={!connected ? "Connect your instance first →" : isLoading ? "Type to queue a follow-up message..." : "What should we work on next?"}
+            disabled={!connected}
             rows={1}
             className="w-full bg-transparent text-sm focus:outline-none disabled:opacity-50 resize-none overflow-y-auto"
             style={{ color: "var(--text-primary)", maxHeight: inHero ? "120px" : "50vh" }}
@@ -1179,7 +1183,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
             <div className="relative" ref={attachDropdownRef}>
               <button
                 onClick={() => setShowAttachDropdown((v) => !v)}
-                disabled={!connected || isLoading}
+                disabled={!connected}
                 className="w-8 h-8 rounded-full flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 style={{ border: "1px solid var(--border-emphasis)", color: "var(--text-secondary)" }}
                 title="Attach file"
@@ -1253,7 +1257,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
             {speechSupported && (
               <button
                 onClick={toggleRecording}
-                disabled={!connected || isLoading}
+                disabled={!connected}
                 className="w-8 h-8 rounded-full flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                 style={{ color: "var(--text-disabled)" }}
                 title="Voice input"
@@ -1264,25 +1268,43 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
               </button>
             )}
 
-            {/* Send / Stop */}
-            {isLoading ? (
-              <button onClick={onCancel} className="w-8 h-8 rounded-full flex items-center justify-center transition-colors" style={{ background: "var(--color-danger)", color: "white" }} title="Cancel">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
-              </button>
-            ) : (
-              <button
-                onClick={handleSubmit}
-                disabled={!connected || (!input.trim() && images.length === 0 && files.length === 0)}
-                className="w-8 h-8 rounded-full flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                style={{
-                  background: (connected && (input.trim() || images.length > 0 || files.length > 0)) ? "var(--text-primary)" : "var(--surface-elevated)",
-                  color: (connected && (input.trim() || images.length > 0 || files.length > 0)) ? "var(--surface-app)" : "var(--text-disabled)",
-                }}
-                title="Send (Enter)"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" /></svg>
-              </button>
-            )}
+            {/* Send / Queue + Stop */}
+            <div className="flex items-center gap-1">
+              {isLoading && (
+                <button onClick={onCancel} className="w-8 h-8 rounded-full flex items-center justify-center transition-colors" style={{ background: "var(--color-danger)", color: "white" }} title="Stop generating">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+                </button>
+              )}
+              <div className="relative">
+                <button
+                  onClick={handleSubmit}
+                  disabled={!connected || (!input.trim() && images.length === 0 && files.length === 0)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  style={{
+                    background: (connected && (input.trim() || images.length > 0 || files.length > 0)) ? "var(--text-primary)" : "var(--surface-elevated)",
+                    color: (connected && (input.trim() || images.length > 0 || files.length > 0)) ? "var(--surface-app)" : "var(--text-disabled)",
+                  }}
+                  title={isLoading ? "Queue message" : "Send (Enter)"}
+                >
+                  {isLoading ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6l4 2" />
+                      <circle cx="12" cy="12" r="9" strokeWidth={2} fill="none" stroke="currentColor" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" /></svg>
+                  )}
+                </button>
+                {queueLength > 0 && (
+                  <span
+                    className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[9px] font-bold px-1"
+                    style={{ background: "var(--color-primary)", color: "#fff" }}
+                  >
+                    {queueLength}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
         </>
       )}
@@ -1541,6 +1563,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
                       onChoiceSelect={onChoiceSelect}
                       showToolDetails={showToolDetails}
                       userName={userName}
+                      onDequeue={onDequeue}
                     />
                   </div>
                 );
