@@ -265,10 +265,10 @@ function validateRequirement(reqId, config, report) {
             report.addWarning(reqId, 'Design Diagrams', 'No Mermaid diagrams or AUTO_DIAGRAM markers found in design document');
         }
 
-        // Check for required diagram types
-        const hasSystemContext = designContent.includes('System Context') || designContent.includes('system_context');
-        const hasComponent = designContent.includes('Component') || designContent.includes('component');
-        const hasSequence = designContent.includes('Sequence') || designContent.includes('sequenceDiagram');
+        // Check for required diagram types by looking for Mermaid-specific content
+        const hasSystemContext = /```mermaid[\s\S]*?(?:system.context|flowchart[\s\S]*?System.Context)[\s\S]*?```/i.test(designContent) || designContent.includes('AUTO_DIAGRAM:system_context');
+        const hasComponent = /```mermaid[\s\S]*?(?:component|flowchart[\s\S]*?Component)[\s\S]*?```/i.test(designContent) || designContent.includes('AUTO_DIAGRAM:component');
+        const hasSequence = /```mermaid[\s\S]*?sequenceDiagram[\s\S]*?```/.test(designContent) || designContent.includes('AUTO_DIAGRAM:sequence');
         
         const diagramTypes = [hasSystemContext, hasComponent, hasSequence].filter(Boolean).length;
         if (diagramTypes >= 3) {
@@ -301,7 +301,6 @@ function validateRequirement(reqId, config, report) {
         
         // Check negative ratio
         const negativeTCs = testContent.match(/TC-N\d{3}/g) || [];
-        const positiveTCs = testContent.match(/TC-P\d{3}/g) || [];
         const totalTCs = uniqueTCs.length;
         
         if (totalTCs > 0) {

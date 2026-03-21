@@ -576,26 +576,6 @@ flowchart TD
 
 **Phase 0 validation:** Run `node tests/test-scope-switching.js` in `mcp-servicenow/` to validate concoursepicker behavior on a specific instance before production use.
 
-When creating Update Sets in a **custom application scope** (not Global), the REST session must be switched to the target scope first. The system uses a five-tier fallback via `ensureScopeActive()`:
-
-| Tier | Method | Notes |
-|------|--------|-------|
-| 1 | `PUT /api/now/ui/concoursepicker/application` | Built-in SN API, zero deployment, ~200ms |
-| 2 | ScopeHelper Scripted REST API | Auto-deployed, uses `gs.setCurrentApplicationId()` |
-| 3 | `sys_user_preference` write | Needs session restart; preference-based |
-| 4 | Playwright browser automation | Optional (`ENABLE_BROWSER_SCOPE_SWITCH=true`) |
-| 5 | Manual user prompt | Last resort — user switches in SN UI, AI verifies |
-
-**Tools:**
-- `sn_set_scope` — Runs all 5 tiers. Returns `success` or `userActionRequired` with checklist.
-- `sn_verify_scope` — Checks current scope via concoursepicker GET + sys_user_preference.
-
-**Scope guard:** `sn_create_update_set` and `sn_set_current_update_set` auto-call `ensureScopeActive()` if the target scope isn't active. This catches cases where the AI forgets to call `sn_set_scope`.
-
-**Per-request lifecycle:** The REST client is recreated each turn. The AI must call `sn_set_scope` at the start of each implementation turn when working in a custom scope.
-
-**Phase 0 validation:** Run `node tests/test-scope-switching.js` in `mcp-servicenow/` to validate concoursepicker behavior on a specific instance.
-
 ---
 
 ## 14. Live Session Telemetry
