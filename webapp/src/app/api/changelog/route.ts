@@ -12,7 +12,8 @@ export async function GET() {
 
     if (error) throw error;
     return NextResponse.json({ entries: data || [] });
-  } catch {
+  } catch (err) {
+    console.error("[changelog] GET error:", err);
     return NextResponse.json({ entries: [] });
   }
 }

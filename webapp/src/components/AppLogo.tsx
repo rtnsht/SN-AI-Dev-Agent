@@ -33,7 +33,8 @@ export default function AppLogo({
   title,
 }: AppLogoProps) {
   const pid = safeIdPrefix(idPrefix);
-  const label = title ?? APP_NAME ?? "Logo";
+  const label = title ?? (APP_NAME || "Logo");
+  const titleId = `${pid}-title`;
   const dim = size === undefined ? "100%" : size;
 
   const orbitA = animated ? "app-logo-orbit-a" : "";
@@ -50,31 +51,32 @@ export default function AppLogo({
       preserveAspectRatio="xMidYMid meet"
       className={`app-logo-svg ${className}`.trim()}
       role="img"
-      aria-label={label}
+      aria-labelledby={titleId}
       shapeRendering="geometricPrecision"
     >
+      <title id={titleId}>{label}</title>
       <defs>
         <linearGradient id={`${pid}-g10`} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#60a5fa" />
-          <stop offset="100%" stopColor="#a78bfa" />
+          <stop offset="0%" stopColor="var(--color-primary)" />
+          <stop offset="100%" stopColor="var(--color-accent-from)" />
         </linearGradient>
         <linearGradient id={`${pid}-ringGrad1`} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#60a5fa" stopOpacity={0.5} />
-          <stop offset="50%" stopColor="#818cf8" stopOpacity={0.35} />
-          <stop offset="100%" stopColor="#a78bfa" stopOpacity={0.5} />
+          <stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.5} />
+          <stop offset="50%" stopColor="var(--color-primary)" stopOpacity={0.35} />
+          <stop offset="100%" stopColor="var(--color-accent-from)" stopOpacity={0.5} />
         </linearGradient>
         <linearGradient id={`${pid}-ringGrad2`} x1="100%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#a78bfa" stopOpacity={0.45} />
-          <stop offset="50%" stopColor="#818cf8" stopOpacity={0.3} />
-          <stop offset="100%" stopColor="#60a5fa" stopOpacity={0.45} />
+          <stop offset="0%" stopColor="var(--color-accent-from)" stopOpacity={0.45} />
+          <stop offset="50%" stopColor="var(--color-accent-from)" stopOpacity={0.3} />
+          <stop offset="100%" stopColor="var(--color-primary)" stopOpacity={0.45} />
         </linearGradient>
         <linearGradient id={`${pid}-coreGrad`} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#141420" />
-          <stop offset="100%" stopColor="#1a1a2e" />
+          <stop offset="0%" stopColor="var(--surface-primary)" />
+          <stop offset="100%" stopColor="var(--surface-elevated)" />
         </linearGradient>
         <radialGradient id={`${pid}-innerGlow`} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#60a5fa" stopOpacity={0.08} />
-          <stop offset="100%" stopColor="#60a5fa" stopOpacity={0} />
+          <stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.08} />
+          <stop offset="100%" stopColor="var(--color-primary)" stopOpacity={0} />
         </radialGradient>
         <filter id={`${pid}-orbitalGlow`} x="-25%" y="-25%" width="150%" height="150%">
           <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" />

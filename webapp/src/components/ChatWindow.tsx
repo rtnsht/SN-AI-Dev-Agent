@@ -731,6 +731,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
   const attachDropdownRef = useRef<HTMLDivElement>(null);
+  const aiAssistRef = useRef<HTMLDivElement>(null);
 
   /* ── Voice input state ── */
   const [isRecording, setIsRecording] = useState(false);
@@ -804,6 +805,25 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
     if (showAttachDropdown) document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [showAttachDropdown]);
+
+  /** Close AI Assist popover on outside click or Escape */
+  useEffect(() => {
+    if (!showAiAssist) return;
+    const onDown = (e: MouseEvent) => {
+      if (aiAssistRef.current && !aiAssistRef.current.contains(e.target as Node)) {
+        setShowAiAssist(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowAiAssist(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [showAiAssist]);
 
   useEffect(() => {
     const handleSearchKey = (e: KeyboardEvent) => {
@@ -1209,7 +1229,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
 
             {/* AI Assist popover — groups Grammar & Enhance to reduce input clutter */}
             {connected && input.trim() && !isLoading && (
-              <div className="relative">
+              <div className="relative" ref={aiAssistRef}>
                 <button
                   onClick={() => setShowAiAssist(!showAiAssist)}
                   className="h-7 px-2.5 rounded-md flex items-center gap-1 text-[11px] font-medium transition-colors"

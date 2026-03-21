@@ -5,12 +5,12 @@
  */
 
 // ── App Identity ────────────────────────────────────────────────────────────
-export const APP_NAME        = process.env.NEXT_PUBLIC_APP_NAME        || "";
-export const APP_TAGLINE     = process.env.NEXT_PUBLIC_APP_TAGLINE     || "";
+export const APP_NAME        = process.env.NEXT_PUBLIC_APP_NAME        || "SN AI Agent";
+export const APP_TAGLINE     = process.env.NEXT_PUBLIC_APP_TAGLINE     || "Say it. Ship it.";
 export const APP_SUBTITLE    = process.env.NEXT_PUBLIC_APP_SUBTITLE    || "";
-export const APP_DESCRIPTION = process.env.NEXT_PUBLIC_APP_DESCRIPTION || "";
+export const APP_DESCRIPTION = process.env.NEXT_PUBLIC_APP_DESCRIPTION || "AI-powered ServiceNow development with spec-driven methodology.";
 export const APP_LOGO        = process.env.NEXT_PUBLIC_APP_LOGO        || "/logo-r-v10.svg";
-export const APP_HERO_TAGLINE = process.env.NEXT_PUBLIC_HERO_TAGLINE   || "";
+export const APP_HERO_TAGLINE = process.env.NEXT_PUBLIC_HERO_TAGLINE   || "Ship ServiceNow Features with AI.";
 export const HERO_VIDEO_URL   = process.env.NEXT_PUBLIC_HERO_VIDEO_URL  || "";
 /** Welcome modal pill badge (e.g. "Spec-driven · Human-approved · AI-powered") */
 export const WELCOME_BADGE    = process.env.NEXT_PUBLIC_WELCOME_BADGE   || "Spec-driven · Human-approved · AI-powered";

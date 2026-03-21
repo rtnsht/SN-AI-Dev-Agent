@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
 import { sanitizeBannerHtml } from "@/lib/sanitize-html";
+import { requireAdmin } from "@/lib/admin-auth";
 
 /** GET /api/admin/banners — list all banners */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const auth = await requireAdmin(request);
+  if (!auth.ok) return auth.response;
+
   try {
     const db = getSupabase();
     const { data, error } = await db
@@ -21,8 +25,10 @@ export async function GET() {
 
 /** POST /api/admin/banners — create a new banner */
 export async function POST(request: NextRequest) {
+  const auth = await requireAdmin(request);
+  if (!auth.ok) return auth.response;
+
   try {
-    const userId = request.headers.get("x-user-id");
     const body = await request.json();
 
     const { title, content_html, pages, bg_color, text_color, variant, start_at, end_at } = body;
@@ -46,7 +52,7 @@ export async function POST(request: NextRequest) {
       text_color: text_color || "#ffffff",
       start_at: start_at || null,
       end_at: end_at || null,
-      created_by: userId,
+      created_by: auth.session.user.id,
     };
     if (variant) payload.variant = variant;
 

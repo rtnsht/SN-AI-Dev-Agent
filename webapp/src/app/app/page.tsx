@@ -24,7 +24,6 @@ import {
 import Link from "next/link";
 import { User, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Sparkles, MessageSquare, Info, Plus, RotateCcw } from "lucide-react";
 import FeedbackFAB from "@/components/FeedbackFAB";
-import BannerDisplay from "@/components/BannerDisplay";
 
 
 /* ── Session persistence keys (sessionStorage) ──────────────── */
@@ -363,18 +362,13 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Focus Mode: auto-collapse sidebars when deep in conversation ──
+  // ── Focus Mode: auto-collapse sidebars when deep in conversation (one-shot enter) ──
   useEffect(() => {
-    if (focusMode) {
-      setShowSettings(false);
-      setShowRightPanel(false);
-    }
-  }, [focusMode]);
-
-  useEffect(() => {
-    const msgCount = messages.filter(m => m.role !== "system").length;
+    const msgCount = messages.filter((m) => m.role !== "system").length;
     if (connected && msgCount >= 10 && !focusMode && currentPhase === "implementation") {
       setFocusMode(true);
+      setShowSettings(false);
+      setShowRightPanel(false);
     }
   }, [messages, connected, currentPhase, focusMode]);
 
@@ -461,9 +455,10 @@ export default function Home() {
 
   useEffect(() => {
     if (!showRelease) return;
-    fetch("/api/changelog").then(r => r.ok ? r.json() : { entries: [] }).then(d => {
-      if (d.entries?.length) setChangelogEntries(d.entries);
-    }).catch(() => {});
+    fetch("/api/changelog")
+      .then((r) => (r.ok ? r.json() : { entries: [] }))
+      .then((d) => setChangelogEntries(Array.isArray(d.entries) ? d.entries : []))
+      .catch(() => setChangelogEntries([]));
     const handleClick = (e: MouseEvent) => {
       if (releaseRef.current && !releaseRef.current.contains(e.target as Node)) setShowRelease(false);
     };
@@ -1841,9 +1836,6 @@ export default function Home() {
 
       {/* ═══ Center Panel — Primary Context ═══ */}
       <main className="flex-1 flex flex-col min-w-0">
-        {/* ═══ Banner (above header, aligned with center content) ═══ */}
-        <BannerDisplay />
-
         {/* ═══ Header Bar ═══ */}
         <header
           className="app-header flex items-center justify-between gap-2 px-4 sm:px-5 py-2 sm:py-2.5"
@@ -1852,7 +1844,10 @@ export default function Home() {
           {/* Left zone: sidebar toggle + logo (Home) + app name */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
-              onClick={() => setShowSettings(!showSettings)}
+              onClick={() => {
+                setFocusMode(false);
+                setShowSettings(!showSettings);
+              }}
               className="header-btn flex-shrink-0"
               title={showSettings ? "Collapse settings panel" : "Expand settings panel"}
             >
@@ -2063,7 +2058,10 @@ export default function Home() {
 
             {/* Right panel toggle */}
             <button
-              onClick={() => setShowRightPanel(!showRightPanel)}
+              onClick={() => {
+                setFocusMode(false);
+                setShowRightPanel(!showRightPanel);
+              }}
               className="header-btn flex-shrink-0"
               title={showRightPanel ? "Collapse right panel" : "Expand right panel"}
             >
@@ -2229,8 +2227,8 @@ export default function Home() {
         {isLoading ? "AI is responding..." : ""}
       </div>
 
-      {/* Focus Mode exit button */}
-      {focusMode && !showSettings && !showRightPanel && (
+      {/* Focus Mode exit button — visible whenever focus mode is on (sidebars may be opened manually) */}
+      {focusMode && (
         <button
           className="focus-mode-exit"
           onClick={() => { setFocusMode(false); setShowSettings(true); setShowRightPanel(true); }}

@@ -496,13 +496,18 @@ body {
   color: var(--text-primary);
 }
 
-/* ── Release dropdown ── */
+/* ── Release dropdown (right-aligned; no -50% X — that’s for centered toasts) ── */
 .release-dropdown {
-  animation: slideDown 0.15s ease-out;
+  animation: releaseDropdownEnter 0.15s ease-out;
 }
 
-/* ── Banner toast slide-in ── */
-@keyframes slideDown {
+@keyframes releaseDropdownEnter {
+  from { opacity: 0; transform: translateY(-0.35rem); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Banner toast slide-in (centered top; uses translateX(-50%) for horizontal centering) ── */
+@keyframes bannerToastSlide {
   from { opacity: 0; transform: translateX(-50%) translateY(-1rem); }
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
