@@ -76,8 +76,8 @@ export default function CommandPalette({ inputText, ctx, onSelect, onDismiss, vi
     <div
       className="absolute bottom-full left-0 right-0 mb-1 z-50 max-h-64 overflow-y-auto rounded-lg border shadow-lg"
       style={{
-        background: "var(--color-surface, #1a1a2e)",
-        borderColor: "var(--color-border, #2a2a4a)",
+        background: "var(--surface-elevated)",
+        borderColor: "var(--border-default)",
       }}
       ref={listRef}
     >
@@ -91,7 +91,7 @@ export default function CommandPalette({ inputText, ctx, onSelect, onDismiss, vi
           className="w-full flex items-center gap-3 px-3 py-2 text-left text-sm transition-colors cursor-pointer"
           style={{
             background: i === selectedIndex ? "var(--color-primary, #3b82f6)20" : "transparent",
-            color: "var(--color-text, #e0e0e0)",
+            color: "var(--text-primary)",
           }}
           onMouseEnter={() => setSelectedIndex(i)}
           onClick={() => onSelect(cmd.name)}

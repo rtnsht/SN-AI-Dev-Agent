@@ -1,5 +1,4 @@
 import type { SlashCommand, CommandContext } from "../types";
-import { getAllCommands } from "../index";
 
 const helpCommand: SlashCommand = {
   name: "/help",
@@ -7,8 +6,8 @@ const helpCommand: SlashCommand = {
   description: "Show all available commands",
   category: "meta",
   requiresConnection: false,
-  execute: (ctx: CommandContext) => {
-    const commands = getAllCommands();
+  execute: (ctx: CommandContext, _args?: string, allCommands?: SlashCommand[]) => {
+    const commands = allCommands || [];
     const grouped: Record<string, SlashCommand[]> = {};
 
     for (const cmd of commands) {

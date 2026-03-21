@@ -107,9 +107,8 @@ export default function ChatSearch({ messages, isOpen, onClose }: Props) {
           setActiveIdx(prev);
           jumpTo(results[prev]);
         } else {
-          const next = (activeIdx + 1) % results.length;
-          setActiveIdx(next);
-          jumpTo(results[next]);
+          jumpTo(results[activeIdx]);
+          setActiveIdx((activeIdx + 1) % results.length);
         }
       }
     } else if (e.key === "ArrowDown") {

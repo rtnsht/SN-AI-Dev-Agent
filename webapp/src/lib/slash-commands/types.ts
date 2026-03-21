@@ -46,6 +46,6 @@ export interface SlashCommand {
   requiresConnection: boolean;
   /** Contextual visibility — return false to hide from the palette */
   isAvailable?: (ctx: CommandContext) => boolean;
-  /** Execute the command and return a result */
-  execute: (ctx: CommandContext, args: string) => CommandResult;
+  /** Execute the command and return a result. allCommands is passed to /help to avoid circular import. */
+  execute: (ctx: CommandContext, args?: string, allCommands?: SlashCommand[]) => CommandResult;
 }

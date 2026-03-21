@@ -75,13 +75,13 @@ export default function SDDModeChip({
         <div
           className="absolute bottom-full left-0 mb-1 min-w-[180px] rounded-lg border shadow-lg overflow-hidden z-50"
           style={{
-            background: "var(--color-surface, #1a1a2e)",
-            borderColor: "var(--color-border, #2a2a4a)",
+            background: "var(--surface-elevated)",
+            borderColor: "var(--border-default)",
           }}
         >
           <button
             className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition-colors hover:opacity-80 cursor-pointer"
-            style={{ color: "var(--color-text, #e0e0e0)" }}
+            style={{ color: "var(--text-primary)" }}
             onClick={() => {
               onShowStatus();
               setDropdownOpen(false);
@@ -90,10 +90,10 @@ export default function SDDModeChip({
             <Shield size={12} className="opacity-60" />
             View status
           </button>
-          <div style={{ borderTop: "1px solid var(--color-border, #2a2a4a)20" }} />
+          <div style={{ borderTop: "1px solid var(--border-subtle)" }} />
           <button
             className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition-colors hover:opacity-80 cursor-pointer"
-            style={{ color: "var(--color-text-muted, #888)" }}
+            style={{ color: "var(--text-disabled)" }}
             onClick={() => {
               onSwitchToFreeform();
               setDropdownOpen(false);

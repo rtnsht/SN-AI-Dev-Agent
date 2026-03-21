@@ -78,7 +78,7 @@ export function dispatch(text: string, ctx: CommandContext): CommandResult {
     };
   }
 
-  return command.execute(ctx, args);
+  return command.execute(ctx, args, COMMANDS);
 }
 
 /**

@@ -162,7 +162,7 @@ function checkSignOff(filePath) {
     const content = fs.readFileSync(filePath, 'utf8');
     const hasSignOffSection = content.includes('## Sign-Off') || content.includes('## Sign-off');
     const isApproved = content.includes('✅ Approved') || content.includes('[x] Approved') ||
-                       /☑.*Approved|Approved.*☑/s.test(content);
+                       /☑[^\n]*Approved|Approved[^\n]*☑/.test(content);
 
     return { exists: true, signedOff: isApproved, hasSection: hasSignOffSection };
 }
