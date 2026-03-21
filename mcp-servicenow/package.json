@@ -23,7 +23,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "test:integration": "echo 'Requires SN_INSTANCE_URL, SN_USERNAME, SN_PASSWORD in .env' && node tests/test-scope-switching-enhanced.js"
   },
   "keywords": [
     "mcp",

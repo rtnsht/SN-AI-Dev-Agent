@@ -32,7 +32,8 @@ export interface HelperApisStatus {
   };
 }
 
-// Cache for discovered API paths per instance
+// Cache for discovered API paths per instance.
+// Never auto-evicted — use clearCache(instanceUrl) or clearAllCaches() after redeploying helper APIs.
 const apiPathCache = new Map<string, HelperApisStatus>();
 
 /**

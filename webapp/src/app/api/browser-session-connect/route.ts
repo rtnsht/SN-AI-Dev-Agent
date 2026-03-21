@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectViaBrowser } from "@/lib/browser-scope-switcher";
+import { checkAccess } from "@/lib/access-tier";
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,6 +14,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, message: "Please provide the ServiceNow instance URL." },
         { status: 400 },
+      );
+    }
+
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const userId = request.headers.get("x-user-id");
+    try {
+      const access = await checkAccess(ip, userId, false, body.instanceUrl);
+      if (!access.allowed) {
+        return NextResponse.json(
+          { success: false, message: access.message || "Rate limit exceeded. Try again later." },
+          { status: 429 },
+        );
+      }
+    } catch {
+      return NextResponse.json(
+        { success: false, message: "Access verification temporarily unavailable." },
+        { status: 503 },
       );
     }
 

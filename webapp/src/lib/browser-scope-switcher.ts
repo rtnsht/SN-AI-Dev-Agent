@@ -63,6 +63,8 @@ type BrowserMode = "headless" | "headed" | "cdp";
 type BrowserAuthSuccessMode = "session" | "shell";
 type BrowserWaitResult = BrowserScopeSwitchResult & { page?: Page };
 
+// NOTE: In-memory rate limits assume a persistent server process (e.g., Render).
+// In serverless/Lambda deployments these reset on cold start and offer no protection.
 const scopeRateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const connectRateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
@@ -229,7 +231,9 @@ async function extractServiceNowCookies(context: BrowserContext, instanceUrl: st
 }
 
 function buildCookieHeader(cookies: BrowserSessionCookie[]): string {
-  return cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
+  return cookies
+    .map((c) => `${c.name}=${c.value.replace(/[;\r\n]/g, "")}`)
+    .join("; ");
 }
 
 function looksLikeAuthenticatedServiceNowPage(url: string): boolean {

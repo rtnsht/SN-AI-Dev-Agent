@@ -76,14 +76,18 @@ export async function POST(request: NextRequest) {
       tokenType: typeof response.data.token_type === "string" ? response.data.token_type : undefined,
     });
   } catch (error) {
-    const message = axios.isAxiosError(error)
+    const detail = axios.isAxiosError(error)
       ? (error.response?.data?.error_description as string | undefined) ||
         (error.response?.data?.error as string | undefined) ||
         error.message
       : error instanceof Error
         ? error.message
         : "OAuth exchange failed";
+    console.error("[sn-oauth/exchange] ServiceNow error:", detail);
 
-    return NextResponse.json({ success: false, message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "OAuth token exchange failed. Check instance configuration." },
+      { status: 500 },
+    );
   }
 }

@@ -24,21 +24,20 @@ export async function POST(request: NextRequest) {
       sddMode?: boolean;
     };
 
-    // SDD Policy resolution — determines effective phase and enforcement level
-    const sddPolicy = resolvePolicy({
-      sessionOverride: clientSddMode ?? null,
-      globalDefault: SDD_GLOBAL_DEFAULT,
-    });
-    const effectivePhase = resolvePhase(sddPolicy, phase);
-
-    // Validate phase if provided
-    if (effectivePhase && !isValidPhase(effectivePhase)) {
-      logger.warn(sessionId, "phase_violation", `Invalid phase value: ${effectivePhase}`, { clientPhase: phase, sddMode: clientSddMode });
+    // Reject invalid phase before policy resolution
+    if (phase && !isValidPhase(phase)) {
+      logger.warn(sessionId, "phase_violation", `Invalid phase value: ${phase}`, { sddMode: clientSddMode });
       return new Response(
         JSON.stringify({ error: "Invalid SDLC phase" }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
+
+    const sddPolicy = resolvePolicy({
+      sessionOverride: clientSddMode ?? null,
+      globalDefault: SDD_GLOBAL_DEFAULT,
+    });
+    const effectivePhase = resolvePhase(sddPolicy, phase);
 
     // Use client-provided session ID to maintain same log file throughout chat session
     // Fall back to generating a new one if client didn't provide one

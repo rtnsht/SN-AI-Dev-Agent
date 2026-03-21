@@ -399,6 +399,10 @@ export class ServiceNowClient {
         apiPath,
         { sys_id: updateSetId }
       );
+      const result = response.data?.result;
+      if (result && result.success === false) {
+        return { success: false, error: result.message || 'Server rejected update set activation' };
+      }
       this._activeUpdateSetId = updateSetId;
       return { success: true };
     } catch (error) {
@@ -630,13 +634,16 @@ export class ServiceNowClient {
       };
     }
 
-    // Get all contents of the active update set
+    const VERIFY_LIMIT = 2000;
     const updateSetContents = await this.getRecords('sys_update_xml', {
       sysparm_query: `update_set=${this._activeUpdateSetId}`,
       sysparm_fields: 'sys_id,name,type,target_name,action',
       sysparm_exclude_reference_link: true,
-      sysparm_limit: 500
+      sysparm_limit: VERIFY_LIMIT
     });
+    if (updateSetContents.length >= VERIFY_LIMIT) {
+      console.warn(`[UpdateSet] Warning: update set has >= ${VERIFY_LIMIT} items; verification may be incomplete`);
+    }
 
     // Build a Set of all sys_ids mentioned in the update set names/payloads
     const capturedNames = new Set(updateSetContents.map(r => String(r.name || '')));
@@ -701,7 +708,7 @@ export class ServiceNowClient {
       const result = response.data?.result;
       if (debugLog) console.log(`[ScopeSwitch] Tier 1: Response:`, JSON.stringify(result, null, 2));
       
-      if (result && (result.app_id === scopeId || (result as Record<string, unknown>).app_id)) {
+      if (result && result.app_id === scopeId) {
         if (debugLog) console.log(`[ScopeSwitch] Tier 1: Success`);
         return { success: true };
       }
@@ -881,6 +888,7 @@ export class ServiceNowClient {
    * The next request will authenticate fresh and get a new JSESSIONID.
    */
   private resetSession(): void {
+    helperApiPaths.delete(this.config.instanceUrl);
     this.jar = new CookieJar();
     this.client = this.createHttpClient();
 

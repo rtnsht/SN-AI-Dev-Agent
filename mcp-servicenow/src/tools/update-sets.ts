@@ -451,13 +451,16 @@ export async function verifyUpdateSetCapture(
 
     const result = await client.verifyAllArtifactsCaptured(input.artifacts);
 
-    // Also get the full update set contents for the summary
+    const VERIFY_LIMIT = 2000;
     const contents = await client.getRecords('sys_update_xml', {
       sysparm_query: `update_set=${input.update_set_id}`,
       sysparm_fields: 'sys_id,name,type,target_name,action,sys_created_on',
       sysparm_exclude_reference_link: true,
-      sysparm_limit: 500
+      sysparm_limit: VERIFY_LIMIT
     });
+    if (contents.length >= VERIFY_LIMIT) {
+      console.warn(`[UpdateSet] Warning: update set has >= ${VERIFY_LIMIT} items; contents summary may be incomplete`);
+    }
 
     return {
       success: true,

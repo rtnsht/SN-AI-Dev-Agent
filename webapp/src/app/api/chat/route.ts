@@ -24,7 +24,12 @@ export async function POST(request: NextRequest) {
       sddMode?: boolean;
     };
 
-    // SDD Policy resolution
+    // Reject invalid phase before policy resolution
+    if (phase && !isValidPhase(phase)) {
+      logger.warn(sessionId, "phase_violation", `Invalid phase value: ${phase}`, { sddMode: clientSddMode });
+      return NextResponse.json({ error: "Invalid SDLC phase" }, { status: 400 });
+    }
+
     const sddPolicy = resolvePolicy({
       sessionOverride: clientSddMode ?? null,
       globalDefault: SDD_GLOBAL_DEFAULT,

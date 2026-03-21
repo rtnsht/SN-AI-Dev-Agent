@@ -19,7 +19,7 @@ import {
 
 export class DiagramGenerator {
   constructor(designData) {
-    this.designData = designData;
+    this.designData = designData || { artifacts: [], dataModel: {}, integrations: {} };
     this.diagrams = { mermaid: {}, text: {} };
   }
 

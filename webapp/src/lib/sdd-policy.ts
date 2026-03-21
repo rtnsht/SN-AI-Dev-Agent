@@ -154,7 +154,4 @@ export function getNextPhase(phase: SDLCPhase): SDLCPhase | null {
  * Read the global SDD default from environment.
  * Works on both client (NEXT_PUBLIC_*) and server.
  */
-export const SDD_GLOBAL_DEFAULT =
-  typeof process !== "undefined"
-    ? process.env.NEXT_PUBLIC_DEFAULT_SDD_MODE === "true"
-    : false;
+export const SDD_GLOBAL_DEFAULT = process.env.NEXT_PUBLIC_DEFAULT_SDD_MODE === "true";

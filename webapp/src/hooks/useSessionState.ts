@@ -110,7 +110,7 @@ export function useSessionState(): SessionState {
       const saved = sessionStorage.getItem(SK.SESSION_ID);
       if (saved) return saved;
     }
-    const id = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const id = `sess_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
     if (typeof window !== "undefined") sessionStorage.setItem(SK.SESSION_ID, id);
     return id;
   });
@@ -222,7 +222,7 @@ export function useSessionState(): SessionState {
     setTaskPlan(null);
     ALL_SESSION_KEYS.forEach((k) => sessionStorage.removeItem(k));
 
-    const newId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const newId = `sess_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
     setClientSessionId(newId);
     try { sessionStorage.setItem(SK.SESSION_ID, newId); } catch { /* quota */ }
   }, [clientSessionId]);
