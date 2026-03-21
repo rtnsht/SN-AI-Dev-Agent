@@ -8,13 +8,45 @@
  * - Auto-initialization of helper APIs on first connection
  */
 
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { wrapper } from 'axios-cookiejar-support';
-import { CookieJar } from 'tough-cookie';
-import { SNConfig, SNRecord, SNQueryParams, SNApiResponse, SNErrorResponse } from '../types/index.js';
+import { Cookie, CookieJar } from 'tough-cookie';
+import {
+  SNAuthType,
+  SNBrowserCookie,
+  SNConfig,
+  SNRecord,
+  SNQueryParams,
+  SNApiResponse,
+  SNErrorResponse,
+} from '../types/index.js';
 
 // Helper API key type
-type HelperApiKey = 'uiPolicyActionHelper' | 'updateSetHelper' | 'addToUpdateSetHelper';
+type HelperApiKey = 'uiPolicyActionHelper' | 'updateSetHelper' | 'addToUpdateSetHelper' | 'scopeHelper';
+
+/** Result of a scope-switching attempt */
+export interface ScopeSwitchResult {
+  success: boolean;
+  method?: string;
+  scopeId?: string;
+  scopeName?: string;
+  error?: string;
+  failureCategory?: 'mfa_sso_redirect' | 'mfa_challenge' | 'generic';
+  userActionRequired?: boolean;
+  checklist?: string[];
+}
+
+export interface BrowserFallbackResult {
+  success: boolean;
+  error?: string;
+  failureCategory?: 'mfa_sso_redirect' | 'mfa_challenge' | 'generic';
+  cookies?: SNBrowserCookie[];
+}
+
+/** Options for ensureScopeActive — allows webapp to inject browser fallback */
+export interface EnsureScopeOptions {
+  browserFallback?: (scopeId: string, scopeName: string) => Promise<BrowserFallbackResult>;
+}
 
 // Cache for helper API paths per instance
 const helperApiPaths = new Map<string, Partial<Record<HelperApiKey, string>>>();
@@ -22,6 +54,10 @@ const helperApiPaths = new Map<string, Partial<Record<HelperApiKey, string>>>();
 export class ServiceNowClient {
   private client: AxiosInstance;
   private config: SNConfig;
+  private jar: CookieJar;
+  private accessToken: string | null = null;
+  private refreshToken: string | null = null;
+  private tokenExpiresAt: number | null = null;
 
   /** The sys_id of the currently active update set (set via sn_set_current_update_set) */
   private _activeUpdateSetId: string | null = null;
@@ -30,29 +66,249 @@ export class ServiceNowClient {
   private _helperApisInitialized: boolean = false;
 
   constructor(config: SNConfig) {
-    this.config = config;
+    this.config = {
+      ...config,
+      instanceUrl: config.instanceUrl.replace(/\/$/, '')
+    };
+    this.jar = new CookieJar();
+    this.accessToken = config.accessToken || null;
+    this.refreshToken = config.refreshToken || null;
+    this.client = this.createHttpClient();
 
-    // Remove trailing slash from URL
-    const baseURL = config.instanceUrl.replace(/\/$/, '');
+    if (config.sessionCookies?.length) {
+      this.importCookies(config.sessionCookies, config.sessionToken);
+    }
+  }
 
-    // Create cookie jar for session persistence
-    // This ensures GlideUpdateSet().set() effects persist across REST calls
-    const jar = new CookieJar();
+  private getAuthType(): SNAuthType {
+    if (this.config.authType) {
+      return this.config.authType;
+    }
+    if (this.config.accessToken) {
+      return 'bearer';
+    }
+    if (this.config.sessionCookies && this.config.sessionCookies.length > 0) {
+      return 'session';
+    }
+    return 'basic';
+  }
 
-    this.client = wrapper(axios.create({
-      baseURL,
+  private createHttpClient(): AxiosInstance {
+    const client = wrapper(axios.create({
+      baseURL: this.config.instanceUrl,
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-      auth: {
-        username: config.username,
-        password: config.password
-      },
       timeout: 30000,
-      jar,
+      jar: this.jar,
       withCredentials: true
     }));
+
+    client.interceptors.request.use(async (requestConfig) => this.applyAuthToRequest(requestConfig));
+    return client;
+  }
+
+  private async applyAuthToRequest(
+    requestConfig: InternalAxiosRequestConfig
+  ): Promise<InternalAxiosRequestConfig> {
+    const authType = this.getAuthType();
+    const headerBag = (requestConfig.headers ?? {}) as Record<string, unknown>;
+
+    delete headerBag.Authorization;
+    requestConfig.auth = undefined;
+
+    if (authType === 'basic') {
+      if (!this.config.username || !this.config.password) {
+        throw new Error('Basic auth requires username and password');
+      }
+      requestConfig.auth = {
+        username: this.config.username,
+        password: this.config.password
+      };
+    } else if (authType === 'bearer' || authType === 'oauth_client_credentials' || authType === 'oauth_authorization_code') {
+      const token = await this.ensureAccessToken();
+      headerBag.Authorization = `Bearer ${token}`;
+    } else if (authType === 'session') {
+      if (this.config.sessionToken) {
+        headerBag['X-UserToken'] = this.config.sessionToken;
+      }
+    }
+
+    requestConfig.headers = headerBag as InternalAxiosRequestConfig['headers'];
+    return requestConfig;
+  }
+
+  private getTokenEndpoint(): string {
+    return this.config.tokenEndpoint || `${this.config.instanceUrl}/oauth_token.do`;
+  }
+
+  private isTokenFresh(): boolean {
+    return Boolean(
+      this.accessToken &&
+      (!this.tokenExpiresAt || Date.now() < this.tokenExpiresAt - 60_000)
+    );
+  }
+
+  private async exchangeToken(params: URLSearchParams): Promise<string> {
+    const response = await axios.post<Record<string, unknown>>(
+      this.getTokenEndpoint(),
+      params.toString(),
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json'
+        },
+        timeout: 30000
+      }
+    );
+
+    const accessToken = typeof response.data.access_token === 'string'
+      ? response.data.access_token
+      : '';
+
+    if (!accessToken) {
+      throw new Error('OAuth token exchange did not return an access token');
+    }
+
+    this.accessToken = accessToken;
+    this.refreshToken = typeof response.data.refresh_token === 'string'
+      ? response.data.refresh_token
+      : this.refreshToken;
+
+    const expiresIn = Number(response.data.expires_in ?? 0);
+    this.tokenExpiresAt = Number.isFinite(expiresIn) && expiresIn > 0
+      ? Date.now() + (expiresIn * 1000)
+      : null;
+
+    return accessToken;
+  }
+
+  private async fetchClientCredentialsToken(): Promise<string> {
+    if (this.isTokenFresh()) {
+      return this.accessToken!;
+    }
+
+    if (!this.config.clientId || !this.config.clientSecret) {
+      throw new Error('OAuth client credentials auth requires clientId and clientSecret');
+    }
+
+    const params = new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: this.config.clientId,
+      client_secret: this.config.clientSecret
+    });
+
+    if (this.config.scope) {
+      params.set('scope', this.config.scope);
+    }
+
+    return this.exchangeToken(params);
+  }
+
+  private async refreshAuthorizationCodeToken(): Promise<string> {
+    if (!this.refreshToken) {
+      throw new Error('No refresh token available for OAuth authorization-code auth');
+    }
+
+    if (!this.config.clientId) {
+      throw new Error('OAuth authorization-code refresh requires clientId');
+    }
+
+    const params = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: this.refreshToken,
+      client_id: this.config.clientId
+    });
+
+    if (this.config.clientSecret) {
+      params.set('client_secret', this.config.clientSecret);
+    }
+
+    return this.exchangeToken(params);
+  }
+
+  private async exchangeAuthorizationCodeForToken(): Promise<string> {
+    if (!this.config.authorizationCode || !this.config.clientId || !this.config.codeVerifier || !this.config.redirectUri) {
+      throw new Error('OAuth authorization-code auth requires authorizationCode, clientId, codeVerifier, and redirectUri');
+    }
+
+    const params = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code: this.config.authorizationCode,
+      client_id: this.config.clientId,
+      code_verifier: this.config.codeVerifier,
+      redirect_uri: this.config.redirectUri
+    });
+
+    if (this.config.clientSecret) {
+      params.set('client_secret', this.config.clientSecret);
+    }
+
+    return this.exchangeToken(params);
+  }
+
+  private async ensureAccessToken(): Promise<string> {
+    const authType = this.getAuthType();
+
+    if (authType === 'bearer') {
+      if (this.accessToken) {
+        return this.accessToken;
+      }
+      throw new Error('Bearer auth requires an access token');
+    }
+
+    if (authType === 'oauth_client_credentials') {
+      return this.fetchClientCredentialsToken();
+    }
+
+    if (authType === 'oauth_authorization_code') {
+      if (this.isTokenFresh()) {
+        return this.accessToken!;
+      }
+      if (this.refreshToken) {
+        return this.refreshAuthorizationCodeToken();
+      }
+      return this.exchangeAuthorizationCodeForToken();
+    }
+
+    throw new Error(`Auth type ${authType} does not use bearer tokens`);
+  }
+
+  private getCurrentUsername(): string | undefined {
+    return this.config.username?.trim() || undefined;
+  }
+
+  importCookies(cookies: SNBrowserCookie[], sessionToken?: string): void {
+    this.config.authType = 'session';
+    this.config.sessionCookies = cookies;
+    if (sessionToken) {
+      this.config.sessionToken = sessionToken;
+    }
+
+    for (const cookie of cookies) {
+      if (!cookie.name || !cookie.value || !cookie.domain) {
+        continue;
+      }
+
+      try {
+        const parsedCookie = new Cookie({
+          key: cookie.name,
+          value: cookie.value,
+          domain: cookie.domain,
+          path: cookie.path || '/',
+          httpOnly: cookie.httpOnly ?? false,
+          secure: cookie.secure ?? false,
+          expires: typeof cookie.expires === 'number' && cookie.expires > 0
+            ? new Date(cookie.expires * 1000)
+            : 'Infinity'
+        });
+
+        this.jar.setCookieSync(parsedCookie, this.config.instanceUrl);
+      } catch {
+        // Ignore malformed cookies from imported browser sessions.
+      }
+    }
   }
 
   /**
@@ -89,6 +345,29 @@ export class ServiceNowClient {
     this._helperApisInitialized = value;
   }
 
+  // ─── Active Scope Tracking ───────────────────────────────────
+
+  /** The sys_id of the currently active application scope */
+  private _activeScopeId: string | null = null;
+
+  /** Optional browser-based scope fallback injected by webapp */
+  private _ensureScopeOptions: EnsureScopeOptions = {};
+
+  /** Get the currently active scope ID */
+  getActiveScope(): string | null {
+    return this._activeScopeId;
+  }
+
+  /** Set the active scope ID */
+  setActiveScope(scopeId: string | null): void {
+    this._activeScopeId = scopeId;
+  }
+
+  /** Inject options for ensureScopeActive (e.g. browser fallback from webapp) */
+  setEnsureScopeOptions(options: EnsureScopeOptions): void {
+    this._ensureScopeOptions = options;
+  }
+
   // ─── Active Update Set Tracking ──────────────────────────────
 
   /** Get the currently active update set ID */
@@ -118,11 +397,7 @@ export class ServiceNowClient {
     try {
       const response = await this.client.post<SNApiResponse<{ success: boolean; message: string }>>(
         apiPath,
-        { sys_id: updateSetId },
-        {
-          auth: { username: this.config.username, password: this.config.password },
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
-        }
+        { sys_id: updateSetId }
       );
       this._activeUpdateSetId = updateSetId;
       return { success: true };
@@ -166,10 +441,6 @@ export class ServiceNowClient {
           table,
           sys_id: recordSysId,
           update_set_id: updateSetId || this._activeUpdateSetId || ''
-        },
-        {
-          auth: { username: this.config.username, password: this.config.password },
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
         }
       );
 
@@ -411,10 +682,368 @@ export class ServiceNowClient {
   }
 
 
+  // ─── Scope Switching (Five-Tier Fallback) ─────────────────────
+
+  /**
+   * Tier 1: Switch scope via ServiceNow's built-in concoursepicker API.
+   * This is the same mechanism the ServiceNow UI uses for the scope dropdown.
+   * Uses the existing cookie-jar session so the switch persists across calls.
+   */
+  async switchScopeViaConcoursePicker(scopeId: string): Promise<{ success: boolean; error?: string }> {
+    const debugLog = process.env.SN_DEBUG_SCOPE === 'true';
+    if (debugLog) console.log(`[ScopeSwitch] Tier 1: Attempting concoursepicker switch to ${scopeId}`);
+    
+    try {
+      const response = await this.client.put<SNApiResponse<{ app_id?: string }>>(
+        '/api/now/ui/concoursepicker/application',
+        { app_id: scopeId }
+      );
+      const result = response.data?.result;
+      if (debugLog) console.log(`[ScopeSwitch] Tier 1: Response:`, JSON.stringify(result, null, 2));
+      
+      if (result && (result.app_id === scopeId || (result as Record<string, unknown>).app_id)) {
+        if (debugLog) console.log(`[ScopeSwitch] Tier 1: Success`);
+        return { success: true };
+      }
+      const error = 'Concoursepicker response did not confirm target scope';
+      if (debugLog) console.log(`[ScopeSwitch] Tier 1: Failed - ${error}`);
+      return { success: false, error };
+    } catch (error) {
+      const axiosError = error as AxiosError<SNErrorResponse>;
+      const status = axiosError.response?.status;
+      const msg = axiosError.response?.data?.error?.message || axiosError.message;
+      const errorMsg = `Concoursepicker API failed (${status || 'unknown'}): ${msg}`;
+      if (debugLog) console.log(`[ScopeSwitch] Tier 1: Exception - ${errorMsg}`);
+      return { success: false, error: errorMsg };
+    }
+  }
+
+  /**
+   * Verify the current scope via GET concoursepicker or sys_user_preference fallback.
+   * Does NOT use gs.getCurrentApplicationId() (always returns 'global' in REST context).
+   */
+  async verifyCurrentScope(targetScopeId?: string): Promise<{
+    currentScopeId: string;
+    currentScopeName: string;
+    matchesTarget: boolean;
+  }> {
+    const debugLog = process.env.SN_DEBUG_SCOPE === 'true';
+    if (debugLog) console.log(`[ScopeSwitch] Verifying scope, target: ${targetScopeId || 'none'}`);
+    
+    let currentScopeId = 'global';
+    let currentScopeName = 'Global';
+
+    try {
+      const response = await this.client.get<SNApiResponse<{
+        current?: string;
+        list?: Array<{ sysId: string; name: string }>;
+      }>>('/api/now/ui/concoursepicker/application');
+      const result = response.data?.result;
+      if (debugLog) console.log(`[ScopeSwitch] Concoursepicker GET result:`, JSON.stringify(result, null, 2));
+      
+      if (result?.current) {
+        currentScopeId = result.current;
+        const match = result.list?.find(a => a.sysId === currentScopeId);
+        if (match) currentScopeName = match.name;
+      }
+    } catch (e) {
+      const error = e as Error;
+      if (debugLog) console.log(`[ScopeSwitch] Concoursepicker GET failed, using fallback:`, error.message);
+      // Fallback: read from sys_user_preference
+      try {
+        const currentUsername = this.getCurrentUsername();
+        if (!currentUsername) {
+          throw new Error('Current username unavailable for scope verification fallback');
+        }
+        const prefs = await this.getRecords('sys_user_preference', {
+          sysparm_query: `name=apps.current.app^user.user_name=${currentUsername}`,
+          sysparm_fields: 'sys_id,value',
+          sysparm_limit: 1
+        });
+        if (prefs.length > 0 && prefs[0].value) {
+          currentScopeId = String(prefs[0].value);
+          if (debugLog) console.log(`[ScopeSwitch] Found scope in preference: ${currentScopeId}`);
+        }
+      } catch { /* best effort */ }
+    }
+
+    const matches = targetScopeId ? currentScopeId === targetScopeId : true;
+    if (debugLog) console.log(`[ScopeSwitch] Verification result: current=${currentScopeId} (${currentScopeName}), matches=${matches}`);
+    
+    return {
+      currentScopeId,
+      currentScopeName,
+      matchesTarget: matches
+    };
+  }
+
+  /**
+   * Tier 2: Switch scope via the custom ScopeHelper Scripted REST API.
+   * Falls back to this when concoursepicker is unavailable.
+   */
+  async switchScopeViaScopeHelper(scopeId: string, updateSetId?: string): Promise<{ success: boolean; error?: string }> {
+    const debugLog = process.env.SN_DEBUG_SCOPE === 'true';
+    if (debugLog) console.log(`[ScopeSwitch] Tier 2: Attempting ScopeHelper switch to ${scopeId}`);
+    
+    const helperPath = this.getHelperApiPath('scopeHelper');
+    if (!helperPath) {
+      const error = 'ScopeHelper API not available. It will be auto-deployed on next connection.';
+      if (debugLog) console.log(`[ScopeSwitch] Tier 2: ${error}`);
+      return { success: false, error };
+    }
+
+    if (debugLog) console.log(`[ScopeSwitch] Tier 2: Using helper path: ${helperPath}`);
+    
+    try {
+      const response = await this.client.post<SNApiResponse<{
+        success: boolean;
+        currentScope?: string;
+        scopeName?: string;
+      }>>(
+        `${helperPath}/set_scope`,
+        { scope_id: scopeId, update_set_id: updateSetId || '' }
+      );
+      if (debugLog) console.log(`[ScopeSwitch] Tier 2: Response:`, JSON.stringify(response.data, null, 2));
+      return { success: true };
+    } catch (error) {
+      const axiosError = error as AxiosError<SNErrorResponse>;
+      const msg = axiosError.response?.data?.error?.message || axiosError.message;
+      const errorMsg = `ScopeHelper API failed: ${msg}`;
+      if (debugLog) console.log(`[ScopeSwitch] Tier 2: Exception - ${errorMsg}`);
+      return { success: false, error: errorMsg };
+    }
+  }
+
+  /**
+   * Tier 3: Write user preference, clear cookies, and re-authenticate.
+   * Preferences only take effect after a new session, so we destroy the current
+   * JSESSIONID by recreating the axios client with a fresh CookieJar, then make
+   * an authenticated request to establish a new session that reads the preference.
+   */
+  async switchScopeViaPreference(scopeId: string): Promise<{ success: boolean; error?: string }> {
+    const debugLog = process.env.SN_DEBUG_SCOPE === 'true';
+    if (debugLog) console.log(`[ScopeSwitch] Tier 3: Attempting preference write for ${scopeId}`);
+    
+    try {
+      const currentUsername = this.getCurrentUsername();
+      if (!currentUsername) {
+        return { success: false, error: 'User preference scope switch requires a username' };
+      }
+
+      // Step 1: Write the preference
+      const existing = await this.getRecords('sys_user_preference', {
+        sysparm_query: `name=apps.current.app^user.user_name=${currentUsername}`,
+        sysparm_fields: 'sys_id,value',
+        sysparm_limit: 1
+      });
+
+      if (existing.length > 0) {
+        if (debugLog) console.log(`[ScopeSwitch] Tier 3: Updating existing preference ${existing[0].sys_id}`);
+        await this.updateRecord('sys_user_preference', String(existing[0].sys_id), { value: scopeId });
+      } else {
+        if (debugLog) console.log(`[ScopeSwitch] Tier 3: Creating new preference`);
+        const currentUser = await this.getCurrentUser();
+        if (!currentUser) {
+          const error = 'Could not determine current user for preference write';
+          if (debugLog) console.log(`[ScopeSwitch] Tier 3: ${error}`);
+          return { success: false, error };
+        }
+        await this.createRecord('sys_user_preference', {
+          name: 'apps.current.app',
+          user: currentUser.sys_id,
+          value: scopeId
+        });
+      }
+      if (debugLog) console.log(`[ScopeSwitch] Tier 3: Preference written successfully`);
+
+      // Step 2: Clear cookies and re-authenticate to start a new session
+      // ServiceNow reads apps.current.app on session creation, so we need a fresh session.
+      if (debugLog) console.log(`[ScopeSwitch] Tier 3: Clearing cookies and re-authenticating...`);
+      this.resetSession();
+
+      // Step 3: Trigger a new session by making an authenticated request
+      // This forces ServiceNow to create a new JSESSIONID and read the preference.
+      await this.client.get('/api/now/table/sys_properties', {
+        params: { sysparm_query: 'name=glide.product.name', sysparm_fields: 'name', sysparm_limit: 1 }
+      });
+      if (debugLog) console.log(`[ScopeSwitch] Tier 3: Re-authenticated with new session`);
+
+      return { success: true };
+    } catch (error) {
+      const errorMsg = `User preference write failed: ${error}`;
+      if (debugLog) console.log(`[ScopeSwitch] Tier 3: Exception - ${errorMsg}`);
+      return { success: false, error: errorMsg };
+    }
+  }
+
+  /**
+   * Destroy the current session by replacing the cookie jar and axios client.
+   * The next request will authenticate fresh and get a new JSESSIONID.
+   */
+  private resetSession(): void {
+    this.jar = new CookieJar();
+    this.client = this.createHttpClient();
+
+    if (this.getAuthType() === 'session' && this.config.sessionCookies?.length) {
+      this.importCookies(this.config.sessionCookies, this.config.sessionToken);
+    }
+  }
+
+  /**
+   * Five-tier fallback to ensure the session is in the correct application scope.
+   * Tiers 1-3 are REST-only (run in mcp-servicenow). Tier 4 uses an optional
+   * browser callback injected by the webapp. Tier 5 returns userActionRequired.
+   */
+  async ensureScopeActive(
+    scopeId: string,
+    scopeName?: string,
+    options?: EnsureScopeOptions
+  ): Promise<ScopeSwitchResult> {
+    const debugLog = process.env.SN_DEBUG_SCOPE === 'true';
+    if (debugLog) console.log(`[ScopeSwitch] ensureScopeActive called: scopeId=${scopeId}, scopeName=${scopeName || 'none'}`);
+    
+    const opts = options || this._ensureScopeOptions;
+    const displayName = scopeName || scopeId;
+    let lastFailureCategory: ScopeSwitchResult['failureCategory'] = 'generic';
+    let lastFailureError: string | undefined;
+
+    // Skip if already in the right scope
+    if (this._activeScopeId === scopeId) {
+      if (debugLog) console.log(`[ScopeSwitch] Already in target scope, skipping`);
+      return { success: true, method: 'already_active', scopeId, scopeName: displayName };
+    }
+
+    // Validate scopeId against sys_scope before attempting any switch
+    try {
+      const scopeRecord = await this.getRecord('sys_scope', scopeId, ['sys_id', 'name']);
+      if (!scopeRecord) {
+        return { success: false, error: `Scope not found in sys_scope: ${scopeId}` };
+      }
+      if (!scopeName) scopeName = String(scopeRecord.name);
+    } catch {
+      // Non-fatal; proceed with the switch attempts
+    }
+
+    // --- Tier 1: Concoursepicker (built-in, zero deployment) ---
+    if (debugLog) console.log(`[ScopeSwitch] Trying Tier 1: Concoursepicker`);
+    const tier1 = await this.switchScopeViaConcoursePicker(scopeId);
+    if (tier1.success) {
+      const verified = await this.verifyCurrentScope(scopeId);
+      if (verified.matchesTarget) {
+        this._activeScopeId = scopeId;
+        if (debugLog) console.log(`[ScopeSwitch] Tier 1 succeeded and verified`);
+        return { success: true, method: 'concoursepicker', scopeId, scopeName: verified.currentScopeName || displayName };
+      } else {
+        if (debugLog) console.log(`[ScopeSwitch] Tier 1 succeeded but verification failed`);
+        lastFailureError = 'Tier 1 verification failed';
+      }
+    } else {
+      if (debugLog) console.log(`[ScopeSwitch] Tier 1 failed: ${tier1.error}`);
+      lastFailureError = tier1.error;
+    }
+
+    // --- Tier 2: ScopeHelper Scripted REST API ---
+    if (debugLog) console.log(`[ScopeSwitch] Trying Tier 2: ScopeHelper API`);
+    const tier2 = await this.switchScopeViaScopeHelper(scopeId);
+    if (tier2.success) {
+      const verified = await this.verifyCurrentScope(scopeId);
+      if (verified.matchesTarget) {
+        this._activeScopeId = scopeId;
+        if (debugLog) console.log(`[ScopeSwitch] Tier 2 succeeded and verified`);
+        return { success: true, method: 'scope_helper_api', scopeId, scopeName: verified.currentScopeName || displayName };
+      } else {
+        if (debugLog) console.log(`[ScopeSwitch] Tier 2 succeeded but verification failed`);
+        lastFailureError = 'Tier 2 verification failed';
+      }
+    } else {
+      if (debugLog) console.log(`[ScopeSwitch] Tier 2 failed: ${tier2.error}`);
+      lastFailureError = tier2.error;
+    }
+
+    // --- Tier 3: User preference write ---
+    if (debugLog) console.log(`[ScopeSwitch] Trying Tier 3: User Preference`);
+    const tier3 = await this.switchScopeViaPreference(scopeId);
+    if (tier3.success) {
+      // Preference needs new session — verify after write
+      const verified = await this.verifyCurrentScope(scopeId);
+      if (verified.matchesTarget) {
+        this._activeScopeId = scopeId;
+        if (debugLog) console.log(`[ScopeSwitch] Tier 3 succeeded and verified`);
+        return { success: true, method: 'user_preference', scopeId, scopeName: displayName };
+      } else {
+        if (debugLog) console.log(`[ScopeSwitch] Tier 3 succeeded but verification failed (expected - needs new session)`);
+        lastFailureError = 'Tier 3 verification failed after session reset';
+      }
+    } else {
+      if (debugLog) console.log(`[ScopeSwitch] Tier 3 failed: ${tier3.error}`);
+      lastFailureError = tier3.error;
+    }
+
+    // --- Tier 4: Browser fallback (optional, injected by webapp) ---
+    if (opts.browserFallback) {
+      if (debugLog) console.log(`[ScopeSwitch] Trying Tier 4: Browser Automation`);
+      const tier4 = await opts.browserFallback(scopeId, displayName);
+      if (tier4.success) {
+        if (tier4.cookies?.length) {
+          this.importCookies(tier4.cookies);
+        }
+        const verified = await this.verifyCurrentScope(scopeId);
+        if (verified.matchesTarget) {
+          this._activeScopeId = scopeId;
+          if (debugLog) console.log(`[ScopeSwitch] Tier 4 succeeded and verified`);
+          return { success: true, method: 'browser_automation', scopeId, scopeName: displayName };
+        } else {
+          if (debugLog) console.log(`[ScopeSwitch] Tier 4 succeeded but verification failed`);
+          lastFailureError = 'Tier 4 verification failed after browser login';
+        }
+      } else {
+        if (debugLog) console.log(`[ScopeSwitch] Tier 4 failed: ${tier4.error}`);
+        lastFailureCategory = tier4.failureCategory || 'generic';
+        lastFailureError = tier4.error;
+      }
+    } else {
+      if (debugLog) console.log(`[ScopeSwitch] Tier 4 skipped (no browser fallback provided)`);
+    }
+
+    // --- Tier 5: Manual user action required ---
+    const instanceUrl = this.config.instanceUrl.replace(/\/$/, '');
+    const manualChecklist = lastFailureCategory === 'mfa_sso_redirect' || lastFailureCategory === 'mfa_challenge'
+      ? [
+          `Open your instance: ${instanceUrl}/nav_to.do`,
+          'Complete your ServiceNow or IdP sign-in flow, including any MFA prompts, in the browser.',
+          `After sign-in completes, use the scope picker (globe icon) and select "${displayName}"`,
+          `If you don't see the scope picker, go to Settings (gear) > Developer > enable "Show application picker in header"`,
+          'Once the scope is switched, come back here and click "Scope switched" to continue.'
+        ]
+      : [
+          `Open your instance: ${instanceUrl}/nav_to.do`,
+          `In the header, click the scope picker (globe icon) and select "${displayName}"`,
+          `If you don't see the scope picker, go to Settings (gear) > Developer > enable "Show application picker in header"`,
+          'Once switched, come back here and click "Scope switched" to continue.'
+        ];
+
+    return {
+      success: false,
+      userActionRequired: true,
+      scopeId,
+      scopeName: displayName,
+      failureCategory: lastFailureCategory,
+      error: lastFailureError || 'All automated scope-switching methods failed. Manual action required.',
+      checklist: manualChecklist
+    };
+  }
+
   /**
    * Test connection to ServiceNow instance
    */
-  async testConnection(): Promise<{ success: boolean; message: string; instanceInfo?: unknown }> {
+  async testConnection(): Promise<{
+    success: boolean;
+    message: string;
+    instanceInfo?: unknown;
+    authType?: SNAuthType;
+    failureCategory?: 'sso_redirect' | 'mfa_required' | 'generic';
+    suggestedAuthMethods?: Array<'oauth_authorization_code' | 'session'>;
+  }> {
     try {
       const response = await this.client.get('/api/now/table/sys_user', {
         params: { sysparm_limit: 1 },
@@ -426,7 +1055,10 @@ export class ServiceNowClient {
       if (!contentType.includes('application/json')) {
         return {
           success: false,
-          message: 'Authentication failed. The server returned a login page instead of API data. Please check your username and password.'
+          authType: this.getAuthType(),
+          failureCategory: 'sso_redirect',
+          suggestedAuthMethods: ['oauth_authorization_code', 'session'],
+          message: 'Authentication failed. The instance returned a login page instead of API data. This usually means SSO or MFA is intercepting the request. Try OAuth Authorization Code or Browser Session sign-in.'
         };
       }
 
@@ -441,6 +1073,7 @@ export class ServiceNowClient {
       return {
         success: true,
         message: `Connected to ${this.config.instanceUrl}`,
+        authType: this.getAuthType(),
         instanceInfo: {
           url: this.config.instanceUrl,
           authenticated: true
@@ -455,7 +1088,10 @@ export class ServiceNowClient {
       if (status && status >= 300 && status < 400) {
         return {
           success: false,
-          message: 'Authentication failed. The server redirected to a login page. Please check your username and password.'
+          authType: this.getAuthType(),
+          failureCategory: 'sso_redirect',
+          suggestedAuthMethods: ['oauth_authorization_code', 'session'],
+          message: 'Authentication failed. The instance redirected to a login page. This usually indicates SSO or MFA. Try OAuth Authorization Code or Browser Session sign-in.'
         };
       }
 
@@ -464,7 +1100,12 @@ export class ServiceNowClient {
       if (status) {
         message = `${status}: ${message}`;
       }
-      return { success: false, message };
+      return {
+        success: false,
+        authType: this.getAuthType(),
+        failureCategory: status === 401 || status === 403 ? 'generic' : 'generic',
+        message
+      };
     }
   }
 
@@ -575,17 +1216,41 @@ export class ServiceNowClient {
    * Get current user info
    */
   async getCurrentUser(): Promise<SNRecord | null> {
-    const response = await this.client.get<SNApiResponse<SNRecord[]>>(
-      '/api/now/table/sys_user',
-      {
-        params: {
-          sysparm_query: `user_name=${this.config.username}`,
-          sysparm_limit: 1
+    const currentUsername = this.getCurrentUsername();
+    if (currentUsername) {
+      const response = await this.client.get<SNApiResponse<SNRecord[]>>(
+        '/api/now/table/sys_user',
+        {
+          params: {
+            sysparm_query: `user_name=${currentUsername}`,
+            sysparm_limit: 1
+          }
         }
+      );
+      const users = response.data.result;
+      return users && users.length > 0 ? users[0] : null;
+    }
+
+    try {
+      const response = await this.client.get<SNApiResponse<Record<string, unknown>>>('/api/now/ui/user/me');
+      const result = response.data?.result ?? {};
+      const user = (result.user && typeof result.user === 'object'
+        ? result.user
+        : result) as Record<string, unknown>;
+
+      if (user && Object.keys(user).length > 0) {
+        return {
+          sys_id: String(user.sys_id || user.id || ''),
+          user_name: user.user_name || user.userName || user.name || '',
+          name: user.name || user.display_name || user.user_name || '',
+          email: user.email || ''
+        };
       }
-    );
-    const users = response.data.result;
-    return users && users.length > 0 ? users[0] : null;
+    } catch {
+      // Best effort only — not all instances expose this endpoint.
+    }
+
+    return null;
   }
 
   get instanceUrl(): string {
@@ -593,11 +1258,27 @@ export class ServiceNowClient {
   }
 
   /** Expose credentials for SDK CI mode (used by sn_deploy_sdk_flow tool) */
-  get credentials(): { instanceUrl: string; username: string; password: string } {
+  get credentials(): {
+    instanceUrl: string;
+    username?: string;
+    password?: string;
+    authType: SNAuthType;
+    accessToken?: string;
+    refreshToken?: string;
+    clientId?: string;
+    clientSecret?: string;
+    sessionCookies?: SNBrowserCookie[];
+  } {
     return {
       instanceUrl: this.config.instanceUrl,
       username: this.config.username,
       password: this.config.password,
+      authType: this.getAuthType(),
+      accessToken: this.accessToken || undefined,
+      refreshToken: this.refreshToken || undefined,
+      clientId: this.config.clientId,
+      clientSecret: this.config.clientSecret,
+      sessionCookies: this.config.sessionCookies,
     };
   }
 

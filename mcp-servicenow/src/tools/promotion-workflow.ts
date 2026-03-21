@@ -189,7 +189,7 @@ async function fetchArtifact(
  * Create a promotion package with artifacts from source instance
  */
 export async function createPromotionPackage(
-  _client: ServiceNowClient,
+  client: ServiceNowClient,
   input: CreatePromotionPackageInput
 ): Promise<{
   success: boolean;
@@ -197,7 +197,7 @@ export async function createPromotionPackage(
   package: Omit<PromotionPackage, 'artifacts'> & { artifactCount: number; artifacts: { name: string; type: string; found: boolean }[] };
   errors: string[];
 }> {
-  const sourceClient = getClientForInstance(input.sourceInstanceId);
+  const sourceClient = getClientForInstance(input.sourceInstanceId, client);
 
   if (!sourceClient) {
     return {
@@ -259,7 +259,7 @@ export async function createPromotionPackage(
  * Preview what changes would be made on target instance
  */
 export async function previewPromotion(
-  _client: ServiceNowClient,
+  client: ServiceNowClient,
   input: PreviewPromotionInput
 ): Promise<{
   success: boolean;
@@ -285,7 +285,7 @@ export async function previewPromotion(
     };
   }
 
-  const targetClient = getClientForInstance(input.targetInstanceId);
+  const targetClient = getClientForInstance(input.targetInstanceId, client);
 
   if (!targetClient) {
     return {
@@ -335,7 +335,7 @@ export async function previewPromotion(
  * Validate promotion for conflicts and dependencies
  */
 export async function validatePromotion(
-  _client: ServiceNowClient,
+  client: ServiceNowClient,
   input: ValidatePromotionInput
 ): Promise<{
   success: boolean;
@@ -366,7 +366,7 @@ export async function validatePromotion(
     };
   }
 
-  const targetClient = getClientForInstance(input.targetInstanceId);
+  const targetClient = getClientForInstance(input.targetInstanceId, client);
 
   if (!targetClient) {
     return {
@@ -475,7 +475,7 @@ export async function validatePromotion(
  * Execute the promotion (apply changes to target instance)
  */
 export async function executePromotion(
-  _client: ServiceNowClient,
+  client: ServiceNowClient,
   input: ExecutePromotionInput
 ): Promise<{
   success: boolean;
@@ -502,7 +502,7 @@ export async function executePromotion(
     };
   }
 
-  const targetClient = getClientForInstance(input.targetInstanceId);
+  const targetClient = getClientForInstance(input.targetInstanceId, client);
 
   if (!targetClient) {
     return {
@@ -609,7 +609,7 @@ export async function executePromotion(
  * Rollback a promotion to previous state
  */
 export async function rollbackPromotion(
-  _client: ServiceNowClient,
+  client: ServiceNowClient,
   input: RollbackPromotionInput
 ): Promise<{
   success: boolean;
@@ -649,7 +649,7 @@ export async function rollbackPromotion(
     };
   }
 
-  const targetClient = getClientForInstance(promotion.targetInstanceId);
+  const targetClient = getClientForInstance(promotion.targetInstanceId, client);
 
   if (!targetClient) {
     return {

@@ -83,6 +83,14 @@ interface SessionTelemetry {
     tasksPlanned: number;
     roundsSaved: number;
   };
+  // SDD enforcement stats
+  sddStats: {
+    modeActivations: number;
+    modeDeactivations: number;
+    phaseGatesDetected: { phase: string; round: number; timestamp: string }[];
+    phaseViolations: { clientPhase: string; effectivePhase: string; timestamp: string }[];
+    enforcementLevel: string;
+  };
 }
 
 // ── Parser ─────────────────────────────────────────────────────────────────
@@ -107,6 +115,7 @@ function parseSessionLog(logFile: string, content: string): SessionTelemetry {
     toolStats: new Map(),
     errors: [],
     plannerStats: { plansGenerated: 0, plansFailed: 0, totalPlanDurationMs: 0, cacheHits: 0, tasksPlanned: 0, roundsSaved: 0 },
+    sddStats: { modeActivations: 0, modeDeactivations: 0, phaseGatesDetected: [], phaseViolations: [], enforcementLevel: "off" },
   };
 
   let currentRound: Partial<RoundInfo> | null = null;
@@ -229,6 +238,31 @@ function parseSessionLog(logFile: string, content: string): SessionTelemetry {
       telemetry.plannerStats.cacheHits++;
     }
 
+    // ── SDD enforcement stats ────────────────────────────────────────
+    if (entry.category === "sdd_mode") {
+      const reason = (d.reason as string) || "";
+      if (reason.includes("build") || reason.includes("always") || reason.includes("strict")) {
+        telemetry.sddStats.modeActivations++;
+      } else if (reason.includes("freeform") || reason.includes("never")) {
+        telemetry.sddStats.modeDeactivations++;
+      }
+      if (d.enforcementLevel) telemetry.sddStats.enforcementLevel = d.enforcementLevel as string;
+    }
+    if (entry.category === "phase_gate") {
+      telemetry.sddStats.phaseGatesDetected.push({
+        phase: (d.phase as string) || "",
+        round: (d.round as number) || 0,
+        timestamp: entry.timestamp,
+      });
+    }
+    if (entry.category === "phase_violation") {
+      telemetry.sddStats.phaseViolations.push({
+        clientPhase: (d.clientPhase as string) || "",
+        effectivePhase: (d.effectivePhase as string) || "",
+        timestamp: entry.timestamp,
+      });
+    }
+
     // ── Completion ───────────────────────────────────────────────────
     if (entry.message.includes("completed") || entry.message.includes("Stream completed")) {
       telemetry.finalStopReason = (d.stopReason as string) || "end_turn";
@@ -338,6 +372,37 @@ function generateMarkdown(t: SessionTelemetry): string {
     md += `| Tasks Planned | ${ps.tasksPlanned} |\n`;
     md += `| Cache Hits | ${ps.cacheHits} |\n`;
     md += `| Rounds Saved | ${ps.roundsSaved} |\n`;
+  }
+
+  // SDD enforcement stats
+  const sdd = t.sddStats;
+  if (sdd.modeActivations > 0 || sdd.phaseGatesDetected.length > 0 || sdd.phaseViolations.length > 0) {
+    md += `\n---\n\n## 🛡️ SDD Enforcement\n\n`;
+    md += `| Metric | Value |\n`;
+    md += `|--------|-------|\n`;
+    md += `| Mode Activations | ${sdd.modeActivations} |\n`;
+    md += `| Mode Deactivations | ${sdd.modeDeactivations} |\n`;
+    md += `| Enforcement Level | \`${sdd.enforcementLevel}\` |\n`;
+    md += `| Phase Gates Detected | ${sdd.phaseGatesDetected.length} |\n`;
+    md += `| Phase Violations | ${sdd.phaseViolations.length} |\n`;
+
+    if (sdd.phaseGatesDetected.length > 0) {
+      md += `\n**Phase Gates:**\n\n`;
+      md += `| Time | Phase | Round |\n`;
+      md += `|------|-------|-------|\n`;
+      for (const g of sdd.phaseGatesDetected) {
+        md += `| ${timeOnly(g.timestamp)} | \`${g.phase}\` | ${g.round} |\n`;
+      }
+    }
+
+    if (sdd.phaseViolations.length > 0) {
+      md += `\n**Phase Violations:**\n\n`;
+      md += `| Time | Client Phase | Effective Phase |\n`;
+      md += `|------|-------------|----------------|\n`;
+      for (const v of sdd.phaseViolations) {
+        md += `| ${timeOnly(v.timestamp)} | \`${v.clientPhase}\` | \`${v.effectivePhase}\` |\n`;
+      }
+    }
   }
 
   // Tool usage distribution

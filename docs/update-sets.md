@@ -51,3 +51,21 @@ All three helper APIs are auto-deployed on connection init. No manual setup requ
 3. Create artifacts — each response includes `updateSetCapture` field confirming capture
 4. After ALL artifacts created, call `sn_verify_update_set_capture` with the full artifact list
 5. Use `sn_move_to_update_set` as fallback for any remaining missing artifacts
+
+## Custom Scope Support
+
+When creating update sets in a **custom application scope** (not Global), the REST session must be switched to the correct scope first. The system uses a five-tier fallback via `ensureScopeActive()`:
+
+| Tier | Method | Speed |
+|------|--------|-------|
+| 1 | Concoursepicker API (`PUT /api/now/ui/concoursepicker/application`) | ~200ms |
+| 2 | ScopeHelper Scripted REST API | ~500ms |
+| 3 | User preference write + session refresh | ~1s |
+| 4 | Playwright browser automation (optional) | ~30s |
+| 5 | Manual user prompt with verification | User-paced |
+
+**Tools:** `sn_set_scope` (runs all tiers), `sn_verify_scope` (checks current scope).
+
+Both `sn_create_update_set` and `sn_set_current_update_set` include an automatic scope guard that calls `ensureScopeActive()` when a custom scope is specified but not yet active.
+
+For the full design, see **[Custom Scope Capture](custom-scope-capture.md)**.

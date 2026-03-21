@@ -15,6 +15,7 @@ import * as dotenv from 'dotenv';
 import { ServiceNowClient } from './client/sn-client.js';
 import { ALL_TOOLS } from './tool-definitions.js';
 import { executeToolCall } from './tool-registry.js';
+import type { SNAuthType } from './types/index.js';
 
 // Load environment variables
 dotenv.config();
@@ -24,17 +25,64 @@ function createClient(): ServiceNowClient {
   const instanceUrl = process.env.SN_INSTANCE_URL;
   const username = process.env.SN_USERNAME;
   const password = process.env.SN_PASSWORD;
+  const authType = (process.env.SN_AUTH_TYPE as SNAuthType | undefined) || 'basic';
+  const clientId = process.env.SN_CLIENT_ID;
+  const clientSecret = process.env.SN_CLIENT_SECRET;
+  const accessToken = process.env.SN_ACCESS_TOKEN;
+  const refreshToken = process.env.SN_REFRESH_TOKEN;
 
-  if (!instanceUrl || !username || !password) {
-    throw new Error('Missing required environment variables: SN_INSTANCE_URL, SN_USERNAME, SN_PASSWORD');
+  if (!instanceUrl) {
+    throw new Error('Missing required environment variable: SN_INSTANCE_URL');
   }
 
-  return new ServiceNowClient({
-    instanceUrl,
-    username,
-    password,
-    defaultScope: process.env.SN_DEFAULT_SCOPE || 'global'
-  });
+  if (authType === 'basic') {
+    if (!username || !password) {
+      throw new Error('Missing required environment variables for basic auth: SN_INSTANCE_URL, SN_USERNAME, SN_PASSWORD');
+    }
+
+    return new ServiceNowClient({
+      instanceUrl,
+      username,
+      password,
+      authType,
+      defaultScope: process.env.SN_DEFAULT_SCOPE || 'global'
+    });
+  }
+
+  if (authType === 'oauth_client_credentials') {
+    if (!clientId || !clientSecret) {
+      throw new Error('Missing required environment variables for oauth_client_credentials: SN_CLIENT_ID, SN_CLIENT_SECRET');
+    }
+
+    return new ServiceNowClient({
+      instanceUrl,
+      authType,
+      clientId,
+      clientSecret,
+      username,
+      password,
+      defaultScope: process.env.SN_DEFAULT_SCOPE || 'global'
+    });
+  }
+
+  if (authType === 'bearer' || authType === 'oauth_authorization_code') {
+    if (!accessToken && !refreshToken) {
+      throw new Error(`Missing required environment variables for ${authType}: SN_ACCESS_TOKEN or SN_REFRESH_TOKEN`);
+    }
+
+    return new ServiceNowClient({
+      instanceUrl,
+      authType,
+      username,
+      accessToken,
+      refreshToken,
+      clientId,
+      clientSecret,
+      defaultScope: process.env.SN_DEFAULT_SCOPE || 'global'
+    });
+  }
+
+  throw new Error(`Unsupported SN_AUTH_TYPE: ${authType}`);
 }
 
 // Create the MCP server

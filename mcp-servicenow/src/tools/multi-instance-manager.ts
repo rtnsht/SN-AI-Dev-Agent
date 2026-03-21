@@ -65,10 +65,14 @@ interface InstanceConfig {
   isActive: boolean;
 }
 
-// In-memory store for registered instances
-const instances = new Map<string, InstanceConfig>();
-let activeInstanceId: string | null = null;
-let activeClient: ServiceNowClient | null = null;
+interface InstanceManagerState {
+  instances: Map<string, InstanceConfig>;
+  activeInstanceId: string | null;
+  activeClient: ServiceNowClient | null;
+}
+
+// In-memory store scoped to the requesting ServiceNow client identity.
+const instanceStates = new Map<string, InstanceManagerState>();
 
 // =============================================================================
 // INTERNAL HELPERS
@@ -94,6 +98,27 @@ function createClientForInstance(config: InstanceConfig): ServiceNowClient {
   });
 }
 
+function getRequesterState(client: ServiceNowClient): InstanceManagerState {
+  const credentials = client.credentials;
+  const requesterKey = [
+    client.instanceUrl,
+    credentials.authType,
+    credentials.username || 'anonymous'
+  ].join('::');
+
+  let state = instanceStates.get(requesterKey);
+  if (!state) {
+    state = {
+      instances: new Map<string, InstanceConfig>(),
+      activeInstanceId: null,
+      activeClient: null,
+    };
+    instanceStates.set(requesterKey, state);
+  }
+
+  return state;
+}
+
 // =============================================================================
 // EXPORTED FUNCTIONS
 // =============================================================================
@@ -102,7 +127,7 @@ function createClientForInstance(config: InstanceConfig): ServiceNowClient {
  * Register a new instance (enhanced version)
  */
 export async function registerInstanceEnhanced(
-  _client: ServiceNowClient,
+  client: ServiceNowClient,
   input: {
     instanceId: string;
     name: string;
@@ -153,12 +178,13 @@ export async function registerInstanceEnhanced(
   }
 
   // Register even if connection fails (user may fix credentials later)
-  instances.set(input.instanceId, config);
+  const state = getRequesterState(client);
+  state.instances.set(input.instanceId, config);
 
   // If this is the first instance, make it active
-  if (instances.size === 1) {
-    activeInstanceId = input.instanceId;
-    activeClient = testClient;
+  if (state.instances.size === 1) {
+    state.activeInstanceId = input.instanceId;
+    state.activeClient = testClient;
     config.isActive = true;
   }
 
@@ -178,7 +204,7 @@ export async function registerInstanceEnhanced(
  * Switch to a different registered instance
  */
 export async function switchInstance(
-  _client: ServiceNowClient,
+  client: ServiceNowClient,
   input: SwitchInstanceInput
 ): Promise<{
   success: boolean;
@@ -187,23 +213,24 @@ export async function switchInstance(
   currentInstance: string | null;
   connectionStatus: { connected: boolean; responseTime?: number };
 }> {
-  const config = instances.get(input.instanceId);
+  const state = getRequesterState(client);
+  const config = state.instances.get(input.instanceId);
 
   if (!config) {
     return {
       success: false,
       message: `Instance "${input.instanceId}" not found. Use sn_list_instances to see registered instances.`,
-      currentInstance: activeInstanceId
+      currentInstance: state.activeInstanceId
     } as any;
   }
 
-  const previousInstance = activeInstanceId;
+  const previousInstance = state.activeInstanceId;
 
   // Update active states
-  if (activeInstanceId && instances.has(activeInstanceId)) {
-    const prev = instances.get(activeInstanceId)!;
+  if (state.activeInstanceId && state.instances.has(state.activeInstanceId)) {
+    const prev = state.instances.get(state.activeInstanceId)!;
     prev.isActive = false;
-    instances.set(activeInstanceId, prev);
+    state.instances.set(state.activeInstanceId, prev);
   }
 
   // Create new client and test connection
@@ -222,11 +249,11 @@ export async function switchInstance(
   }
 
   // Switch even if connection fails
-  activeInstanceId = input.instanceId;
-  activeClient = newClient;
+  state.activeInstanceId = input.instanceId;
+  state.activeClient = newClient;
   config.isActive = true;
   config.lastConnected = new Date().toISOString();
-  instances.set(input.instanceId, config);
+  state.instances.set(input.instanceId, config);
 
   return {
     success: true,
@@ -234,7 +261,7 @@ export async function switchInstance(
       ? `Switched to "${config.name}" (${config.environment})`
       : `Switched to "${config.name}" but connection failed`,
     previousInstance: previousInstance || undefined,
-    currentInstance: activeInstanceId,
+    currentInstance: state.activeInstanceId,
     connectionStatus
   };
 }
@@ -243,7 +270,7 @@ export async function switchInstance(
  * Get the currently active instance
  */
 export async function getActiveInstance(
-  _client: ServiceNowClient,
+  client: ServiceNowClient,
   _input: GetActiveInstanceInput
 ): Promise<{
   success: boolean;
@@ -251,9 +278,10 @@ export async function getActiveInstance(
   activeInstance: Omit<InstanceConfig, 'password'> | null;
   allInstances: { instanceId: string; name: string; environment: string; isActive: boolean }[];
 }> {
-  const activeConfig = activeInstanceId ? instances.get(activeInstanceId) : null;
+  const state = getRequesterState(client);
+  const activeConfig = state.activeInstanceId ? state.instances.get(state.activeInstanceId) : null;
 
-  const allInstances = Array.from(instances.values()).map(i => ({
+  const allInstances = Array.from(state.instances.values()).map(i => ({
     instanceId: i.instanceId,
     name: i.name,
     environment: i.environment,
@@ -283,7 +311,7 @@ export async function getActiveInstance(
  * Test connection to a specific instance
  */
 export async function testInstanceConnection(
-  _client: ServiceNowClient,
+  client: ServiceNowClient,
   input: TestInstanceConnectionInput
 ): Promise<{
   success: boolean;
@@ -293,7 +321,8 @@ export async function testInstanceConnection(
   instanceInfo?: { url: string; version?: string };
   error?: string;
 }> {
-  const config = instances.get(input.instanceId);
+  const state = getRequesterState(client);
+  const config = state.instances.get(input.instanceId);
 
   if (!config) {
     return {
@@ -333,7 +362,7 @@ export async function testInstanceConnection(
  * Diff a specific artifact between two instances
  */
 export async function diffArtifact(
-  _client: ServiceNowClient,
+  client: ServiceNowClient,
   input: DiffArtifactInput
 ): Promise<{
   success: boolean;
@@ -348,8 +377,9 @@ export async function diffArtifact(
     differences?: { field: string; sourceValue: string; targetValue: string }[];
   };
 }> {
-  const sourceConfig = instances.get(input.sourceInstanceId);
-  const targetConfig = instances.get(input.targetInstanceId);
+  const state = getRequesterState(client);
+  const sourceConfig = state.instances.get(input.sourceInstanceId);
+  const targetConfig = state.instances.get(input.targetInstanceId);
 
   if (!sourceConfig || !targetConfig) {
     return {
@@ -445,15 +475,15 @@ export async function diffArtifact(
 /**
  * Get the active client (for use by other tools)
  */
-export function getActiveClient(): ServiceNowClient | null {
-  return activeClient;
+export function getActiveClient(requesterClient: ServiceNowClient): ServiceNowClient | null {
+  return getRequesterState(requesterClient).activeClient;
 }
 
 /**
  * Get client for a specific instance
  */
-export function getClientForInstance(instanceId: string): ServiceNowClient | null {
-  const config = instances.get(instanceId);
+export function getClientForInstance(instanceId: string, requesterClient: ServiceNowClient): ServiceNowClient | null {
+  const config = getRequesterState(requesterClient).instances.get(instanceId);
   if (!config) return null;
   return createClientForInstance(config);
 }

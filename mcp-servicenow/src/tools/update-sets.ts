@@ -6,6 +6,17 @@
 import { z } from 'zod';
 import { ServiceNowClient } from '../client/sn-client.js';
 
+// ============ SCOPE SCHEMAS ============
+
+export const setScopeSchema = z.object({
+  scope_id: z.string().describe('The sys_id of the target application scope (sys_scope.sys_id / sys_app.sys_id). Omit or use "global" for Global scope.'),
+  scope_name: z.string().optional().describe('Display name of the target scope (for user-facing messages)')
+});
+
+export const verifyScopeSchema = z.object({
+  target_scope_id: z.string().optional().describe('Expected scope sys_id to verify against. If provided, response includes matchesTarget.')
+});
+
 // ============ SCHEMAS ============
 
 export const listUpdateSetsSchema = z.object({
@@ -133,6 +144,14 @@ export async function getUpdateSet(client: ServiceNowClient, input: z.infer<type
 }
 
 export async function createUpdateSet(client: ServiceNowClient, input: z.infer<typeof createUpdateSetSchema>) {
+  // ── Scope guard: ensure scope is active for custom-scope update sets ──
+  if (input.application && input.application !== 'global' && client.getActiveScope() !== input.application) {
+    const scopeResult = await client.ensureScopeActive(input.application);
+    if (!scopeResult.success) {
+      return scopeResult;
+    }
+  }
+
   let finalName = input.name;
 
   // ── Duplicate name check (unless force=true) ──────────────────────
@@ -210,6 +229,17 @@ export async function setCurrentUpdateSet(client: ServiceNowClient, input: z.inf
 
     if (updateSet.state !== 'in progress') {
       return { success: false, error: 'Update set is not in progress' };
+    }
+
+    // ── Scope guard: if this update set is in a custom scope, ensure scope is active ──
+    const usApplication = typeof updateSet.application === 'string'
+      ? updateSet.application
+      : (updateSet.application as Record<string, unknown>)?.value as string || '';
+    if (usApplication && usApplication !== 'global' && client.getActiveScope() !== usApplication) {
+      const scopeResult = await client.ensureScopeActive(usApplication);
+      if (!scopeResult.success && scopeResult.userActionRequired) {
+        return scopeResult;
+      }
     }
 
     // Layer 1: Call the UpdateSetHelper Scripted REST API (session-based)
@@ -459,4 +489,74 @@ export async function verifyUpdateSetCapture(
       error: `Failed to verify update set capture: ${error}`
     };
   }
+}
+
+// ============ SCOPE TOOLS ============
+
+/**
+ * sn_set_scope — Switch to a specific application scope.
+ * Runs the five-tier fallback via client.ensureScopeActive().
+ * Returns success with method used, or userActionRequired with a checklist.
+ */
+export async function setScope(client: ServiceNowClient, input: z.infer<typeof setScopeSchema>) {
+  const scopeId = input.scope_id;
+
+  if (!scopeId || scopeId === 'global') {
+    client.setActiveScope('global');
+    return {
+      success: true,
+      message: 'Scope set to Global (no scope switch needed)',
+      scopeId: 'global',
+      scopeName: 'Global',
+      method: 'global_default'
+    };
+  }
+
+  const result = await client.ensureScopeActive(scopeId, input.scope_name);
+
+  if (result.success) {
+    return {
+      success: true,
+      message: `Scope switched to "${result.scopeName || scopeId}" via ${result.method}`,
+      scopeId: result.scopeId,
+      scopeName: result.scopeName,
+      method: result.method
+    };
+  }
+
+  if (result.userActionRequired) {
+    return {
+      success: false,
+      userActionRequired: true,
+      message: `I tried to switch to scope "${input.scope_name || scopeId}" automatically but it didn't work. Please do this manually:`,
+      scopeId,
+      scopeName: input.scope_name || scopeId,
+      checklist: result.checklist,
+      error: result.error
+    };
+  }
+
+  return {
+    success: false,
+    error: result.error || 'Unknown scope switch failure'
+  };
+}
+
+/**
+ * sn_verify_scope — Check the current application scope.
+ * Uses concoursepicker GET + sys_user_preference fallback.
+ */
+export async function verifyScope(client: ServiceNowClient, input: z.infer<typeof verifyScopeSchema>) {
+  const result = await client.verifyCurrentScope(input.target_scope_id);
+
+  return {
+    success: true,
+    currentScopeId: result.currentScopeId,
+    currentScopeName: result.currentScopeName,
+    matchesTarget: input.target_scope_id ? result.matchesTarget : undefined,
+    targetScopeId: input.target_scope_id || undefined,
+    note: result.matchesTarget === false
+      ? `Current scope (${result.currentScopeName}) does not match target (${input.target_scope_id}). Call sn_set_scope to switch.`
+      : undefined
+  };
 }

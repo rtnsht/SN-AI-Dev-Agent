@@ -311,6 +311,30 @@ export const MORE_TOOLS: ToolDefinition[] = [
       },
       required: ['update_set_id', 'artifacts']
     }
+  },
+  // ── Scope Management ────────────────────────────────────────
+  {
+    name: 'sn_set_scope',
+    description: 'Switch the session to a specific application scope. Uses a multi-tier fallback (concoursepicker API → ScopeHelper API → user preference). If all automated methods fail, returns userActionRequired with a checklist for the user to switch manually. Call this BEFORE creating update sets or artifacts in a custom scope. Must be called at the START of each implementation turn (scope resets per request).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        scope_id: { type: 'string', description: 'The sys_id of the target application scope (sys_scope.sys_id / sys_app.sys_id). Use "global" for Global scope.' },
+        scope_name: { type: 'string', description: 'Display name of the target scope (for user-facing messages)' }
+      },
+      required: ['scope_id']
+    }
+  },
+  {
+    name: 'sn_verify_scope',
+    description: 'Verify the current application scope of the REST session. Uses concoursepicker GET and sys_user_preference fallback. Optionally checks if the current scope matches a target. Call this after the user manually switches scope to confirm.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        target_scope_id: { type: 'string', description: 'Expected scope sys_id to verify against. If provided, response includes matchesTarget boolean.' }
+      },
+      required: []
+    }
   }
 ];
 
@@ -2229,6 +2253,8 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
   scope_selection: new Set([
     // Scope selection tools
     'sn_get_custom_apps', 'sn_get_scope_selection_options', 'sn_create_custom_app',
+    // Scope switching and verification
+    'sn_set_scope', 'sn_verify_scope',
     // Update set tools (needed to create/set update set as part of scope finalization)
     'sn_create_update_set', 'sn_set_current_update_set',
     // Flow read (to verify what exists)
@@ -2279,6 +2305,8 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
     'sn_create_fix_script', 'sn_run_fix_script',
     // Update set management
     'sn_create_update_set', 'sn_set_current_update_set', 'sn_move_to_update_set', 'sn_verify_update_set_capture',
+    // Scope switching and verification
+    'sn_set_scope', 'sn_verify_scope',
     // Flow Designer
     'sn_list_flows', 'sn_get_flow', 'sn_analyze_flow',
     'sn_create_flow', 'sn_create_flow_trigger', 'sn_create_flow_action_instance', 'sn_create_flow_stage',

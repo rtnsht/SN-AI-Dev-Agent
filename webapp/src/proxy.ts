@@ -1,5 +1,5 @@
 /**
- * Auth gate middleware.
+ * Auth gate proxy.
  * Intercepts all requests, validates session cookies, enforces role checks.
  * Uses Node.js runtime (not edge) for Supabase client compatibility.
  */
@@ -37,9 +37,11 @@ const PUBLIC_PATHS = [
   "/api/chat",            // open for anonymous access (rate-limited server-side)
   "/api/chat-stream",     // open for anonymous access (rate-limited server-side)
   "/api/trial-status",    // trial status check (works for anon too)
-  "/api/test-connection",  // SN instance connect (used from public /app page)
-  "/api/session-start",    // session telemetry init (used from public /app page)
-  "/api/session-end",      // session finalization (used from public /app page + sendBeacon)
+  "/api/test-connection",          // SN instance connect (used from public /app page)
+  "/api/browser-session-connect",  // browser-assisted SN sign-in (MFA/SSO, used from public /app page)
+  "/api/sn-oauth/",                // OAuth token exchange (used from public /app page)
+  "/api/session-start",            // session telemetry init (used from public /app page)
+  "/api/session-end",              // session finalization (used from public /app page + sendBeacon)
 ];
 const USER_CONTEXT_HEADERS = ["x-user-id", "x-user-email", "x-user-name", "x-user-role"] as const;
 
@@ -76,7 +78,7 @@ function sanitizeUserHeaders(headers: Headers): Headers {
   return sanitized;
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // ── Production safety: reject BYPASS_AUTH ─────────────────────────────────
@@ -225,4 +227,3 @@ function addUserHeaders(
     request: { headers: requestHeaders },
   });
 }
-

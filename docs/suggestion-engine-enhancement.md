@@ -16,6 +16,55 @@ Suggestions never changed on refresh because the pipeline was 100% deterministic
 
 ## Architecture
 
+```mermaid
+graph TD
+    subgraph DataLayer ["Data Layer (new)"]
+        Registry["PromptProviderRegistry"]
+        P1["UserWorkProvider"]
+        P2["InstanceArtifactProvider"]
+        P3["RoleBasedProvider"]
+        P4["UpdateSetProvider"]
+        P5["GenericFallbackProvider"]
+    end
+
+    subgraph CoreEngine ["Core Engine (new)"]
+        Scorer["PromptScorer"]
+        Shuffler["ShuffleSelector"]
+        SeenTracker["SeenPromptsTracker"]
+        Composer["PromptComposer"]
+    end
+
+    subgraph APILayer ["API Layer (existing, modified)"]
+        Route["instance-prompts/route.ts"]
+        PageState["page.tsx state"]
+    end
+
+    subgraph UILayer ["UI Layer (existing, modified)"]
+        ChatWindow["ChatWindow.tsx"]
+        SuggestionPanel["SuggestionPanel.tsx"]
+    end
+
+    Registry --> P1
+    Registry --> P2
+    Registry --> P3
+    Registry --> P4
+    Registry --> P5
+    P1 --> Composer
+    P2 --> Composer
+    P3 --> Composer
+    P4 --> Composer
+    P5 --> Composer
+    Composer --> Scorer
+    Scorer --> Shuffler
+    Shuffler --> SeenTracker
+    SeenTracker --> Route
+    Route --> PageState
+    PageState --> ChatWindow
+    PageState --> SuggestionPanel
+```
+
+**Module Structure:**
+
 ```
 suggestion-engine/
   types.ts              -- Shared types: PromptProvider, ScoredPrompt, ProviderContext, PromptPoolMap
@@ -34,6 +83,41 @@ suggestion-engine/
 ```
 
 ## Data Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant SuggestionPanel
+    participant PageState as page.tsx
+    participant API as instance-prompts API
+    participant Composer as PromptComposer
+    participant Providers
+    participant SN as ServiceNow
+
+    User->>PageState: Connect
+    PageState->>API: POST /api/instance-prompts (creds, userCtx, seenHashes)
+    API->>Composer: compose(snClient, userCtx, seenHashes)
+    Composer->>Providers: fetch(ctx) x5 in parallel
+    Providers->>SN: 13 parallel queries
+    SN-->>Providers: Records
+    Providers-->>Composer: ScoredPrompt[] per category
+    Composer->>Composer: score -> shuffle -> select top 6
+    Composer-->>API: { prompts, _pools, promptHashes }
+    API-->>PageState: Response
+    PageState->>PageState: Update state + sessionStorage
+    PageState->>SuggestionPanel: prompts, onShuffle, onRefresh
+
+    User->>SuggestionPanel: Click Shuffle
+    SuggestionPanel->>PageState: onShuffle()
+    PageState->>PageState: selectPrompts(pools, 6, seen)
+    PageState->>SuggestionPanel: Updated prompts (no API call)
+
+    User->>SuggestionPanel: Click Refresh
+    SuggestionPanel->>PageState: onRefresh()
+    PageState->>API: POST /api/instance-prompts (fresh SN data)
+```
+
+**Text Summary:**
 
 ```
 User connects

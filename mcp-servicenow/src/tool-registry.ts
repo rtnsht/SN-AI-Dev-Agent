@@ -80,6 +80,10 @@ const TOOL_HANDLERS: Record<string, (snClient: ServiceNowClient, args: unknown) 
   sn_move_to_update_set: async (c, a) => updateSets.moveToUpdateSet(c, updateSets.moveToUpdateSetSchema.parse(a)),
   sn_verify_update_set_capture: async (c, a) => updateSets.verifyUpdateSetCapture(c, updateSets.verifyUpdateSetCaptureSchema.parse(a)),
 
+  // Scope Management
+  sn_set_scope: async (c, a) => updateSets.setScope(c, updateSets.setScopeSchema.parse(a)),
+  sn_verify_scope: async (c, a) => updateSets.verifyScope(c, updateSets.verifyScopeSchema.parse(a)),
+
   // UI Policies & Actions
   sn_get_ui_policies: async (c, a) => uiPolicies.getUiPolicies(c, uiPolicies.getUiPoliciesSchema.parse(a)),
   sn_create_ui_policy: async (c, a) => uiPolicies.createUiPolicy(c, uiPolicies.createUiPolicySchema.parse(a)),

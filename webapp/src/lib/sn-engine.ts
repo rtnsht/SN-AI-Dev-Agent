@@ -15,12 +15,14 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createRequire } from "node:module";
 import { processFileAttachments } from "./file-parser";
 import path from "node:path";
-import { buildSystemPrompt, buildDynamicContext } from "./system-prompt";
+import { buildSystemPrompt, buildDynamicContext, type DynamicContextOptions } from "./system-prompt";
+import { parsePhaseGate, type BrowserSessionCookie, type ServiceNowAuthMethod } from "./types";
 import { logger } from "./logger";
 import { chatCompletion, OpenRouterRequest, OpenRouterMessage, OpenRouterContentBlock, OpenRouterTool } from "./openrouter";
 import { getSessionCache, SessionCache } from "./session-cache";
 import { APP_NAME } from "./branding";
 import { shouldPlan, generatePlan, executePlan, formatGatheredData, type PlanStreamEvent, type ExecutionPlan } from "./task-planner";
+import { normalizeServiceNowAuthMethod } from "./servicenow-auth";
 
 /* ── Context management constants ─────────────────────────────── */
 
@@ -85,9 +87,25 @@ class ToolCallDeduplicator {
 /* ── Phase-aware gate reminder messages ─────────────────────── */
 
 const PHASE_GATE_REMINDERS: Partial<Record<string, { threshold: number; message: string }>> = {
+  spec: {
+    threshold: 10,
+    message: `[SYSTEM: You are in spec phase. You have spent 10 rounds. Create the spec document and emit <!-- PHASE_GATE:spec --> in your text response to present it for user approval.]`,
+  },
+  design: {
+    threshold: 12,
+    message: `[SYSTEM: You are in design phase. You have spent 12 rounds. Finalize the design document and emit <!-- PHASE_GATE:design --> in your text response to present it for user approval.]`,
+  },
   scope_selection: {
-    threshold: 3,  // After 3 rounds, remind AI to emit the gate
+    threshold: 3,
     message: `[SYSTEM: You are in scope_selection phase. The user has already chosen their scope. You MUST emit <!-- PHASE_GATE:scope_selection --> in your text response NOW to proceed to implementation. Do NOT make more tool calls — you have all the information you need.]`,
+  },
+  implementation: {
+    threshold: 25,
+    message: `[SYSTEM: You are in implementation phase. You have spent 25 rounds. If all artifacts are created and verified, emit <!-- PHASE_GATE:implementation --> in your text response to present the implementation for user approval.]`,
+  },
+  testing: {
+    threshold: 15,
+    message: `[SYSTEM: You are in testing phase. You have spent 15 rounds. Complete testing and emit <!-- PHASE_GATE:testing --> in your text response to present test results for user approval.]`,
   },
 };
 
@@ -390,6 +408,13 @@ export interface UserCredentials {
   instanceUrl: string;
   username: string;
   password: string;
+  snAuthType?: ServiceNowAuthMethod;
+  clientId?: string;
+  clientSecret?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  sessionCookies?: BrowserSessionCookie[];
+  sessionToken?: string;
   claudeApiKey: string;
   /** OpenRouter API key (when using OpenRouter provider) */
   openRouterApiKey?: string;
@@ -436,14 +461,83 @@ const SYSTEM_PROMPT = buildSystemPrompt();
 
 /* ── Shared helpers (extracted from 4 chat functions) ────────── */
 
+function isBrowserScopeSwitchEnabled(): boolean {
+  const mode = process.env.BROWSER_SCOPE_SWITCH_MODE;
+  return (
+    mode === "headless" ||
+    mode === "headed" ||
+    mode === "cdp" ||
+    process.env.ENABLE_BROWSER_SCOPE_SWITCH === "true"
+  );
+}
+
+function buildServiceNowConfig(credentials: UserCredentials): Record<string, unknown> {
+  const authType = normalizeServiceNowAuthMethod(credentials.snAuthType);
+  const config: Record<string, unknown> = {
+    instanceUrl: credentials.instanceUrl.replace(/\/$/, ""),
+    authType,
+  };
+
+  if (credentials.username) config.username = credentials.username;
+  if (credentials.password) config.password = credentials.password;
+
+  switch (authType) {
+    case "oauth_client_credentials":
+      config.clientId = credentials.clientId;
+      config.clientSecret = credentials.clientSecret;
+      break;
+    case "oauth_authorization_code":
+      config.clientId = credentials.clientId;
+      config.clientSecret = credentials.clientSecret;
+      config.accessToken = credentials.accessToken;
+      config.refreshToken = credentials.refreshToken;
+      break;
+    case "session":
+      config.sessionCookies = credentials.sessionCookies;
+      if (credentials.sessionToken) config.sessionToken = credentials.sessionToken;
+      break;
+    default:
+      break;
+  }
+
+  return config;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function createSnClient(credentials: UserCredentials, registry: any) {
-  return new registry.ServiceNowClient({
-    instanceUrl: credentials.instanceUrl.replace(/\/$/, ""),
-    username: credentials.username,
-    password: credentials.password,
-    defaultScope: "global",
-  });
+  const client = new registry.ServiceNowClient(buildServiceNowConfig(credentials));
+
+  // Inject optional browser fallback for scope switching (Tier 4)
+  if (isBrowserScopeSwitchEnabled()) {
+    try {
+      // Dynamic import to keep playwright-core optional
+      const { switchScopeViaBrowser } = require("./browser-scope-switcher");
+      client.setEnsureScopeOptions({
+        browserFallback: async (scopeId: string, scopeName: string) => {
+          const result = await switchScopeViaBrowser(
+            {
+              instanceUrl: credentials.instanceUrl,
+              username: credentials.username,
+              password: credentials.password,
+              sessionCookies: credentials.sessionCookies,
+            },
+            scopeId,
+            scopeName
+          );
+
+          if (result.success && result.cookies?.length) {
+            client.importCookies(result.cookies);
+          }
+
+          return result;
+        },
+      });
+    } catch {
+      // playwright-core not installed — Tier 4 will be skipped
+    }
+  }
+
+  return client;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -535,14 +629,34 @@ function toOpenRouterTools(anthropicTools: Anthropic.Tool[]): OpenRouterTool[] {
  * Keeps full keys but truncates long string values.
  */
 function summarizeToolInput(input: unknown): Record<string, unknown> {
+  const isSensitiveKey = (key: string): boolean => {
+    const lower = key.toLowerCase();
+    return (
+      lower.includes("password") ||
+      lower.includes("secret") ||
+      lower.includes("token") ||
+      lower.includes("cookie") ||
+      lower.includes("sessionid") ||
+      lower.includes("jsessionid") ||
+      lower.includes("authorizationcode") ||
+      lower.includes("codeverifier")
+    );
+  };
+
   if (input === null || input === undefined || typeof input !== "object") {
     return { _raw: typeof input === "string" && input.length > 200 ? input.slice(0, 200) + "..." : input };
   }
   const obj = input as Record<string, unknown>;
   const summary: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(obj)) {
-    if (typeof v === "string" && v.length > 200) {
+    if (isSensitiveKey(k)) {
+      summary[k] = "[REDACTED]";
+    } else if (Array.isArray(v) && isSensitiveKey(k)) {
+      summary[k] = `[REDACTED:${v.length}]`;
+    } else if (typeof v === "string" && v.length > 200) {
       summary[k] = v.slice(0, 200) + `... [${v.length} chars]`;
+    } else if (v && typeof v === "object") {
+      summary[k] = summarizeToolInput(v);
     } else {
       summary[k] = v;
     }
@@ -657,7 +771,7 @@ export async function chat(
         response = await anthropic.messages.create({
           model,
           max_tokens: 8192,
-          system: SYSTEM_PROMPT + "\n" + buildDynamicContext(),
+          system: SYSTEM_PROMPT + "\n" + buildDynamicContext({ phase: phase || undefined }),
           tools,
           messages: anthropicMessages,
           cache_control: { type: "ephemeral" },
@@ -817,22 +931,22 @@ export async function testConnection(credentials: Omit<UserCredentials, "claudeA
   // 2. Get current user sys_id
   let user: Record<string, unknown> | undefined;
   let userSysId: unknown;
-  let userName: string = credentials.username;
+  let userName: string = credentials.username || "Authenticated user";
+  let userUsername: string = credentials.username || "";
   try {
-    const userRecords = await snClient.getRecords("sys_user", {
-      sysparm_query: `user_name=${credentials.username}`,
-      sysparm_fields: "sys_id,user_name,name,email",
-      sysparm_limit: 1,
-    });
-    user = userRecords?.[0];
-    userSysId = user?.sys_id;
-    userName = (user?.name as string) || credentials.username;
+    const currentUser = await snClient.getCurrentUser();
+    if (currentUser) {
+      user = currentUser as Record<string, unknown>;
+      userSysId = currentUser.sys_id;
+      userName = String(currentUser.name || currentUser.user_name || userName);
+      userUsername = String(currentUser.user_name || credentials.username || "");
+    }
   } catch (err) {
     console.warn("[testConnection] User lookup failed:", err);
   }
 
-  // If the user was not found, the username is likely wrong
-  if (!user || !userSysId) {
+  // If the user was not found and the caller supplied a username, treat it as a mismatch.
+  if ((!user || !userSysId) && credentials.username) {
     return {
       success: false,
       message: `User "${credentials.username}" was not found on this instance. Please check the username and try again.`,
@@ -869,7 +983,7 @@ export async function testConnection(credentials: Omit<UserCredentials, "claudeA
 
   const hasAdmin = roles.includes("admin");
   const hasSecurityAdmin = roles.includes("security_admin");
-  const noRoles = roles.length === 0;
+  const noRoles = !!user && roles.length === 0;
 
   // 4. Fetch assignment groups for the user (non-blocking — fallback to empty)
   let assignmentGroups: { sysId: string; name: string }[] = [];
@@ -899,9 +1013,10 @@ export async function testConnection(credentials: Omit<UserCredentials, "claudeA
   return {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ...(connResult as any),
+    authType: credentials.snAuthType || "basic",
     userInfo: {
       name: userName,
-      username: credentials.username,
+      username: userUsername,
       sysId: userSysId ? String(userSysId) : undefined,
       email: user?.email ? String(user.email) : undefined,
       assignmentGroups,
@@ -995,13 +1110,14 @@ export async function* chatStream(
   maxToolRounds: number = 30,
   sessionId: string = "unknown",
   phase?: string | null,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  sddMode?: boolean,
 ): AsyncGenerator<StreamEvent> {
   // Apply per-phase round limit (overrides the caller's default if phase is set)
   const effectiveMaxRounds = Math.min(maxToolRounds, getPhaseRoundLimit(phase));
 
   if (credentials.aiProvider === "openrouter" && credentials.openRouterApiKey) {
-    yield* chatStreamOpenRouter(credentials, messages, model, effectiveMaxRounds, sessionId, phase, signal);
+    yield* chatStreamOpenRouter(credentials, messages, model, effectiveMaxRounds, sessionId, phase, signal, sddMode);
     return;
   }
 
@@ -1172,9 +1288,10 @@ export async function* chatStream(
     let response: Anthropic.Message;
     for (let attempt = 0; ; attempt++) {
       try {
+        const dynamicCtxOpts: DynamicContextOptions = { sddMode, phase: phase || undefined };
         response = await anthropic.messages.create({
           model, max_tokens: 8192,
-          system: SYSTEM_PROMPT + "\n" + buildDynamicContext(),
+          system: SYSTEM_PROMPT + "\n" + buildDynamicContext(dynamicCtxOpts),
           tools, messages: anthropicMessages,
           cache_control: { type: "ephemeral" },
         });
@@ -1258,9 +1375,34 @@ export async function* chatStream(
       }
 
       anthropicMessages.push({ role: "user", content: toolResults });
+
+      // Phase gate detection BETWEEN rounds — after all tools executed, before next API call.
+      // If Claude emitted a PHASE_GATE marker alongside tool calls, we honor the tools
+      // (no orphaned artifacts) but stop the loop so the user can approve.
+      const textInToolResponse = response.content
+        .filter((b): b is Anthropic.TextBlock => b.type === "text")
+        .map(b => b.text)
+        .join("\n");
+      const gateInToolRound = parsePhaseGate(textInToolResponse);
+      if (gateInToolRound) {
+        logger.info(sessionId, "phase_gate", `Phase gate detected between rounds: ${gateInToolRound}`, {
+          phase: gateInToolRound, round: rounds, toolCount: toolExecutions.length,
+        });
+        yield { type: "done", reply: textInToolResponse, toolExecutions };
+        return;
+      }
     } else {
       yield { type: "status", message: "Generating response...", phase: "responding" };
       const reply = response.content.filter((b): b is Anthropic.TextBlock => b.type === "text").map((b) => b.text).join("\n");
+
+      // Phase gate detection on final text response
+      const gateInFinal = parsePhaseGate(reply);
+      if (gateInFinal) {
+        logger.info(sessionId, "phase_gate", `Phase gate detected in final response: ${gateInFinal}`, {
+          phase: gateInFinal, round: rounds, toolCount: toolExecutions.length,
+        });
+      }
+
       logger.info(sessionId, "chat_stream", "Stream completed", {
         toolCount: toolExecutions.length,
         totalRounds: rounds,
@@ -1299,7 +1441,8 @@ async function* chatStreamOpenRouter(
   maxToolRounds: number,
   sessionId: string,
   phase?: string | null,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  sddMode?: boolean,
 ): AsyncGenerator<StreamEvent> {
   const registry = getToolRegistry();
   const snClient = createSnClient(credentials, registry);
@@ -1455,9 +1598,28 @@ async function* chatStreamOpenRouter(
           : `[SYSTEM: Duplicate tool call detected. Use the data you already have.]`;
         orMessages.push({ role: "system", content: dupeMsg } as OpenRouterMessage);
       }
+
+      // Phase gate detection between rounds (OpenRouter path)
+      if (message.content) {
+        const gateInToolRound = parsePhaseGate(message.content);
+        if (gateInToolRound) {
+          logger.info(sessionId, "phase_gate", `OpenRouter: Phase gate detected between rounds: ${gateInToolRound}`, {
+            phase: gateInToolRound, round: rounds, toolCount: toolExecutions.length,
+          });
+          yield { type: "done", reply: message.content, toolExecutions };
+          return;
+        }
+      }
     } else {
       yield { type: "status", message: "Generating response...", phase: "responding" };
-      yield { type: "done", reply: message.content || "", toolExecutions };
+      const reply = message.content || "";
+      const gateInFinal = parsePhaseGate(reply);
+      if (gateInFinal) {
+        logger.info(sessionId, "phase_gate", `OpenRouter: Phase gate detected in final response: ${gateInFinal}`, {
+          phase: gateInFinal, round: rounds, toolCount: toolExecutions.length,
+        });
+      }
+      yield { type: "done", reply, toolExecutions };
       return;
     }
   }

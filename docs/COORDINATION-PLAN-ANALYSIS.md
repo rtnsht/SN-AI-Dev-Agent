@@ -33,7 +33,7 @@ External dependencies: Anthropic/OpenRouter APIs, Supabase (auth + DB), ServiceN
 | Access tier & rate limiting | `webapp/src/lib/access-tier.ts`, `auth-rate-limiter.ts` | Race conditions, cache invalidation, dual-budget logic |
 | Session & auth | `webapp/src/lib/auth.ts`, `session-cache.ts` | Session expiry, token handling, temporary session flow |
 | Log persistence | `webapp/src/lib/log-persistence.ts` | Buffer overflow, upsert merge, flush race conditions |
-| Middleware | `webapp/src/middleware.ts` | Path matching, admin role check, BYPASS_AUTH edge cases |
+| Middleware | `webapp/src/proxy.ts` | Path matching, admin role check, BYPASS_AUTH edge cases |
 | ServiceNow client | `mcp-servicenow/src/client/sn-client.ts` | Update set capture, retry logic, cookie jar |
 | Deployer | `mcp-servicenow/src/deployer/*.js` | Artifact creation, update set move, helper API init |
 
@@ -54,7 +54,7 @@ External dependencies: Anthropic/OpenRouter APIs, Supabase (auth + DB), ServiceN
 | Priority | Risk | Location |
 |----------|------|----------|
 | P0 | Access check failure allows request | `access-tier.ts` catch block |
-| P0 | Session validation bypass | `middleware.ts` BYPASS_AUTH, public paths |
+| P0 | Session validation bypass | `proxy.ts` BYPASS_AUTH, public paths |
 | P1 | Double consumption of access tier | `checkAccess` vs. `getAccessStatus` usage |
 | P1 | Log persistence upsert overwrite | `log-persistence.ts` BUG-1/BUG-3 fixes |
 | P1 | Tool result truncation losing critical data | `sn-engine.ts` truncateToolResult |
@@ -161,7 +161,7 @@ External dependencies: Anthropic/OpenRouter APIs, Supabase (auth + DB), ServiceN
 | Session cache | `webapp/src/lib/session-cache.ts` | In-memory session state |
 | Log persistence | `webapp/src/lib/log-persistence.ts` | Concurrent flush, batch size |
 | Supabase | `webapp/src/lib/supabase.ts` | Connection limits, connection pool |
-| Middleware | `webapp/src/middleware.ts` | Per-request auth validation |
+| Middleware | `webapp/src/proxy.ts` | Per-request auth validation |
 | MCP tools | `mcp-servicenow/src/tools/*.ts` | ServiceNow instance rate limits |
 
 ### 3.2 Patterns and Issues to Look For
@@ -182,7 +182,7 @@ External dependencies: Anthropic/OpenRouter APIs, Supabase (auth + DB), ServiceN
 | P1 | Supabase connection exhaustion | `supabase.ts`, all API routes |
 | P1 | ServiceNow instance rate limit from tool burst | MCP tools, sn-client |
 | P1 | Log persistence backlog under load | `log-persistence.ts` |
-| P2 | Middleware auth validation on every request | `middleware.ts` |
+| P2 | Middleware auth validation on every request | `proxy.ts` |
 
 ### 3.4 Recommended Report Structure
 
@@ -215,7 +215,7 @@ External dependencies: Anthropic/OpenRouter APIs, Supabase (auth + DB), ServiceN
 | Component | Path | Focus |
 |-----------|------|-------|
 | Auth & session | `webapp/src/lib/auth.ts` | Password hashing (bcrypt 12), token generation, session storage |
-| Middleware | `webapp/src/middleware.ts` | Path allowlist, admin check, BYPASS_AUTH |
+| Middleware | `webapp/src/proxy.ts` | Path allowlist, admin check, BYPASS_AUTH |
 | Auth routes | `webapp/src/app/api/auth/**/*.ts` | Login, OTP, magic link, invite, set-password |
 | Auth rate limiter | `webapp/src/lib/auth-rate-limiter.ts` | Brute force protection |
 | Check-email | `webapp/src/app/api/auth/check-email/route.ts` | AUTH_HINT_SECRET, HMAC, email enumeration |
@@ -246,7 +246,7 @@ External dependencies: Anthropic/OpenRouter APIs, Supabase (auth + DB), ServiceN
 |----------|------|----------|
 | P0 | AUTH_HINT_SECRET default in production | `check-email/route.ts` |
 | P0 | XSS via admin banner HTML | `BannerDisplay.tsx`, admin banner editor |
-| P0 | BYPASS_AUTH in production | `middleware.ts`, env config |
+| P0 | BYPASS_AUTH in production | `proxy.ts`, env config |
 | P1 | SN credentials in request body (no encryption in transit) | Chat, test-connection |
 | P1 | API keys in logs | `logger.ts`, error objects |
 | P1 | Admin routes without role check | `api/admin/*` |

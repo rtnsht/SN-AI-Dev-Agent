@@ -7,6 +7,10 @@
 import { logger } from '../utils/logger.js';
 import fs from 'fs';
 import path from 'path';
+import { createRequire } from 'module';
+import { DiagramGenerator } from './diagram-generator.js';
+
+const require = createRequire(import.meta.url);
 
 export class SolutionDesigner {
   constructor(analysis, context = null) {
@@ -248,11 +252,58 @@ export class SolutionDesigner {
   }
 
   generateTestCases() {
-    return [
-      { id: 'TC-001', description: 'Verify basic functionality', type: 'functional' },
-      { id: 'TC-002', description: 'Verify error handling', type: 'negative' },
-      { id: 'TC-003', description: 'Verify security/access control', type: 'security' }
-    ];
+    try {
+      const { TestCaseGenerator } = require('./test-case-generator.js');
+      const { TestCategorizer } = require('./test-categorizer.js');
+
+      const spec = {
+        requirements: this.analysis?.entities?.tables?.map((table, i) => ({
+          id: `REQ-${String(i + 1).padStart(3, '0')}`,
+          description: `${this.analysis.title || 'Feature'} on ${table}`,
+          priority: this.analysis.priority || 'medium'
+        })) || []
+      };
+
+      const design = {
+        artifacts: this.solution?.artifacts || [],
+        dataModel: this.solution?.dataModel || {},
+        integrations: this.solution?.integrations || {},
+        security: this.solution?.security || {}
+      };
+
+      const generator = new TestCaseGenerator(spec, design);
+      const testCases = generator.generate();
+
+      const categorizer = new TestCategorizer();
+      const categorization = categorizer.categorize(testCases);
+
+      return testCases;
+    } catch (err) {
+      logger.warn(`Test case generator not available, using defaults: ${err.message}`);
+      return [
+        { id: 'TC-001', description: 'Verify basic functionality', type: 'functional', category: 'positive' },
+        { id: 'TC-002', description: 'Verify error handling', type: 'negative', category: 'negative' },
+        { id: 'TC-003', description: 'Verify security/access control', type: 'security', category: 'security' }
+      ];
+    }
+  }
+
+  generateDiagrams() {
+    const designData = {
+      artifacts: this.solution.artifacts.map(a => ({
+        name: a.name,
+        type: a.type,
+        table: a.table || '',
+        description: a.description || ''
+      })),
+      dataModel: this.solution.dataModel || {},
+      integrations: this.solution.integrations || {},
+      security: this.solution.security || {}
+    };
+
+    const generator = new DiagramGenerator(designData);
+    this.solution.diagrams = generator.generateAll();
+    return this.solution.diagrams;
   }
 
   toPascalCase(str) {
@@ -271,6 +322,16 @@ export class SolutionDesigner {
     let md = `# Technical Solution Design\n\n`;
     md += `**Solution ID:** ${this.solution.id}\n\n`;
     md += `## Architecture\n\nPattern: ${this.solution.architecture.pattern}\n\n`;
+    if (this.solution.diagrams) {
+      const gen = new DiagramGenerator({
+        artifacts: this.solution.artifacts,
+        dataModel: this.solution.dataModel,
+        integrations: this.solution.integrations,
+        security: this.solution.security
+      });
+      gen.diagrams = this.solution.diagrams;
+      md += gen.toMarkdownSection();
+    }
     md += `## Artifacts to Create\n\n`;
     this.solution.artifacts.forEach((a, i) => {
       md += `${i + 1}. **${a.type}**: ${a.name}\n`;

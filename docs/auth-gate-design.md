@@ -25,7 +25,7 @@
 | Authentication | None — app is open access | New system required |
 | Rate limiting | IP-based via `rate-limiter.ts` | Pattern reusable for brute force protection |
 | Session management | `sessionStorage` client-side only | Server-side sessions needed |
-| Middleware | None | New `middleware.ts` required |
+| Middleware | None | New `proxy.ts` required |
 | Database | None (stateless app) | Supabase added for user/session persistence |
 
 ### 1.2 Implementation Decision
@@ -66,7 +66,7 @@ An invite-only access gate that requires users to either (a) request access and 
 ┌─────────────┐     HTTPS      ┌──────────────────────────────────┐
 │   Browser    │◄──────────────►│   Next.js App (webapp/)          │
 │             │                │                                  │
-│  - Login    │                │  middleware.ts (auth gate)        │
+│  - Login    │                │  proxy.ts (auth gate)        │
 │  - Chat     │                │  /api/auth/* (auth endpoints)    │
 │  - Admin    │                │  /api/admin/* (admin endpoints)  │
 └─────────────┘                │  /api/chat* (existing, gated)    │
@@ -221,7 +221,7 @@ User → /login (direct URL or middleware redirect)
 ### 3.6 Session Validation (Every Request)
 
 ```
-middleware.ts runs on every request
+proxy.ts runs on every request
     │
     ├─ Extract cookie: sn-ai-session
     ├─ No cookie? → public route? Allow : redirect /login
@@ -310,7 +310,7 @@ middleware.ts runs on every request
 
 | Route / File | Change |
 |-------|--------|
-| `middleware.ts` | Removed `/api/chat-stream`, `/api/chat`, `/api/test-connection`, `/api/session-start` from `PUBLIC_PATHS` |
+| `proxy.ts` | Removed `/api/chat-stream`, `/api/chat`, `/api/test-connection`, `/api/session-start` from `PUBLIC_PATHS` |
 | `page.tsx` | Replaced `Home` component with `LandingPage` import |
 | `app/app/page.tsx` | **New** — renders `Home` component (moved from `page.tsx`) |
 | `login/page.tsx` | Default redirect changed from `"/"` to `"/app"` |
@@ -635,7 +635,7 @@ REQUIRE_EMAIL_VERIFICATION=true
 
 ```
 webapp/src/
-├── middleware.ts                          # Auth gate — intercepts all requests
+├── proxy.ts                          # Auth gate — intercepts all requests
 ├── lib/
 │   ├── supabase.ts                       # Supabase server client (service_role)
 │   ├── auth.ts                           # Session creation, validation, password hashing
@@ -766,7 +766,7 @@ This runs in the middleware or a dedicated `/api/auth/init` route called on firs
 ## 14. Rollback Plan
 
 1. Set `REQUIRE_ACCESS_APPROVAL=false` in `.env` → disables the gate, app is open again
-2. Remove `middleware.ts` → all routes become unprotected
+2. Remove `proxy.ts` → all routes become unprotected
 3. Database tables remain in Supabase (no data loss) — can be dropped manually if needed
 
 ---

@@ -249,6 +249,8 @@ stateDiagram-v2
     DeployPhase --> [*]: Requirement Complete ✅
 ```
 
+For the full design of quality gates (phase gates, sign-off rules, validation, and configuration), see **[Quality Gate Design](quality-gate-design.md)**. For custom scope update set capture (five-tier scope switching), see **[Custom Scope Capture](custom-scope-capture.md)**.
+
 ---
 
 ## 5. Credential & API Key Flow
