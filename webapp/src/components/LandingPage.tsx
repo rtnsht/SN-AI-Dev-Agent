@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRotatingText } from "@/hooks/useRotatingText";
 import Image from "next/image";
+import AppLogo from "@/components/AppLogo";
 import ThemeToggle from "@/components/ThemeToggle";
 import ConnectModal from "@/components/ConnectModal";
 import Footer from "@/components/Footer";
@@ -141,7 +142,7 @@ export default function LandingPage() {
         {/* 1. Logo — focal point, bigger */}
         {APP_LOGO && (
           <div className="hero-logo-container landing-logo-container" style={{ width: 120, height: 120, marginBottom: 24 }}>
-            <Image src={APP_LOGO} alt={APP_NAME} width={120} height={120} className="hero-logo" style={{ width: 120, height: 120 }} unoptimized priority />
+            <AppLogo idPrefix="landing-hero" animated className="hero-logo w-full h-full" title={APP_NAME || undefined} />
           </div>
         )}
 

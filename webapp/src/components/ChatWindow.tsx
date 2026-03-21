@@ -5,8 +5,8 @@ import { useRotatingText } from "@/hooks/useRotatingText";
 import type { ChatMessage, SDLCPhase, LiveStatus, FileAttachment, CategorizedPrompts, ExamplePrompt, UpdateSetSummary } from "@/lib/types";
 import { SDLC_PHASES } from "@/lib/types";
 import MessageBubble from "./MessageBubble";
-import Image from "next/image";
 import { APP_NAME, APP_LOGO, APP_HERO_TAGLINE, APP_SUBTITLE, APP_TAGLINE, HERO_FEATURES, WELCOME_BADGE } from "@/lib/branding";
+import AppLogo from "./AppLogo";
 import { SUGGESTION_FALLBACK } from "@/lib/suggestion-engine";
 import CommandPalette from "./CommandPalette";
 import SDDModeChip from "./SDDModeChip";
@@ -722,6 +722,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
   const [activeTab, setActiveTab] = useState<TabKey>("foryou");
   const [expandedUpdates, setExpandedUpdates] = useState<Set<string>>(new Set());
   const [showAttachDropdown, setShowAttachDropdown] = useState(false);
+  const [showAiAssist, setShowAiAssist] = useState(false);
   const [showTOC, setShowTOC] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -730,6 +731,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
   const attachDropdownRef = useRef<HTMLDivElement>(null);
+  const aiAssistRef = useRef<HTMLDivElement>(null);
 
   /* ── Voice input state ── */
   const [isRecording, setIsRecording] = useState(false);
@@ -803,6 +805,25 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
     if (showAttachDropdown) document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [showAttachDropdown]);
+
+  /** Close AI Assist popover on outside click or Escape */
+  useEffect(() => {
+    if (!showAiAssist) return;
+    const onDown = (e: MouseEvent) => {
+      if (aiAssistRef.current && !aiAssistRef.current.contains(e.target as Node)) {
+        setShowAiAssist(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowAiAssist(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [showAiAssist]);
 
   useEffect(() => {
     const handleSearchKey = (e: KeyboardEvent) => {
@@ -1079,7 +1100,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
       )}
       {/* Drag overlay */}
       {dragOver && (
-        <div className="mb-2 py-3 rounded-lg text-center text-xs" style={{ border: "2px dashed rgba(76,125,255,0.4)", color: "var(--color-info)" }}>
+        <div className="mb-2 py-3 rounded-lg text-center text-xs" style={{ border: "2px dashed color-mix(in srgb, var(--color-primary) 40%, transparent)", color: "var(--color-primary)" }}>
           Drop images or documents here
         </div>
       )}
@@ -1206,49 +1227,53 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
             <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { if (e.target.files) addImageFiles(e.target.files); e.target.value = ""; }} />
             <input ref={docInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" multiple className="hidden" onChange={(e) => { if (e.target.files) addDocFiles(e.target.files); e.target.value = ""; }} />
 
-            {/* Grammar & Enhance buttons — visible when there's text */}
+            {/* AI Assist popover — groups Grammar & Enhance to reduce input clutter */}
             {connected && input.trim() && !isLoading && (
-              <>
+              <div className="relative" ref={aiAssistRef}>
                 <button
-                  onClick={() => handleEnhance("grammar")}
-                  disabled={!!enhancing}
-                  className="h-7 px-2.5 rounded-md flex items-center gap-1.5 text-[11px] font-medium transition-colors disabled:opacity-40"
-                  style={{ color: "var(--text-secondary)", background: "var(--surface-elevated)" }}
-                  title="Fix grammar & spelling"
+                  onClick={() => setShowAiAssist(!showAiAssist)}
+                  className="h-7 px-2.5 rounded-md flex items-center gap-1 text-[11px] font-medium transition-colors"
+                  style={{ color: "var(--color-primary)", background: "color-mix(in srgb, var(--color-primary) 10%, transparent)" }}
+                  title="AI writing tools"
                 >
-                  {enhancing === "grammar" ? (
-                    <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  )}
-                  Grammar
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
+                  AI
                 </button>
-                <button
-                  onClick={() => handleEnhance("enhance")}
-                  disabled={!!enhancing}
-                  className="h-7 px-2.5 rounded-md flex items-center gap-1.5 text-[11px] font-medium transition-colors disabled:opacity-40"
-                  style={{ color: "var(--text-secondary)", background: "var(--surface-elevated)" }}
-                  title="Enhance & optimize prompt"
-                >
-                  {enhancing === "enhance" ? (
-                    <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
-                  )}
-                  Enhance
-                </button>
-                {preEnhanceText !== null && !enhancing && (
-                  <button
-                    onClick={handleUndoEnhance}
-                    className="h-7 px-2 rounded-md flex items-center gap-1 text-[11px] transition-colors"
-                    style={{ color: "var(--text-disabled)" }}
-                    title="Undo enhancement"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a5 5 0 010 10H9m-6-10l4-4m-4 4l4 4" /></svg>
-                    Undo
-                  </button>
+                {showAiAssist && (
+                  <div className="attach-dropdown" style={{ bottom: "calc(100% + 6px)", left: 0, minWidth: "140px" }}>
+                    <button
+                      onClick={() => { handleEnhance("grammar"); setShowAiAssist(false); }}
+                      disabled={!!enhancing}
+                      className="attach-dropdown-item disabled:opacity-40"
+                    >
+                      {enhancing === "grammar" ? (
+                        <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      )}
+                      Grammar
+                    </button>
+                    <button
+                      onClick={() => { handleEnhance("enhance"); setShowAiAssist(false); }}
+                      disabled={!!enhancing}
+                      className="attach-dropdown-item disabled:opacity-40"
+                    >
+                      {enhancing === "enhance" ? (
+                        <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
+                      )}
+                      Enhance
+                    </button>
+                    {preEnhanceText !== null && !enhancing && (
+                      <button onClick={() => { handleUndoEnhance(); setShowAiAssist(false); }} className="attach-dropdown-item">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a5 5 0 010 10H9m-6-10l4-4m-4 4l4 4" /></svg>
+                        Undo
+                      </button>
+                    )}
+                  </div>
                 )}
-              </>
+              </div>
             )}
 
             <div className="flex-1" />
@@ -1315,7 +1340,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
     <div className="flex-1 flex flex-col min-h-0" style={{ background: "var(--surface-app)" }}>
       {showEmptyState ? (
         /* ════ EMPTY STATE — two modes: disconnected (full hero) vs connected (ready-to-chat) ════ */
-        <div className="flex-1 flex flex-col items-center justify-start sm:justify-center px-4 py-4 sm:py-8 overflow-y-auto">
+        <div className="flex-1 flex flex-col items-center justify-center px-4 py-6 sm:py-8 overflow-y-auto min-h-0">
           <div className="w-full max-w-2xl lg:max-w-3xl xl:max-w-4xl mx-auto flex flex-col items-center">
 
             {/* ── DISCONNECTED: Minimal hero ── */}
@@ -1324,14 +1349,11 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
                 {/* 1. Logo — focal point */}
                 {APP_LOGO && (
                   <div className="hero-logo-container mb-4">
-                    <Image
-                      src={APP_LOGO}
-                      alt={APP_NAME || "App Logo"}
-                      width={120}
-                      height={120}
-                      className="hero-logo w-24 h-24 sm:w-[120px] sm:h-[120px]"
-                      unoptimized
-                      priority
+                    <AppLogo
+                      idPrefix="chat-hero"
+                      animated
+                      className="hero-logo w-full h-full"
+                      title={APP_NAME || "App Logo"}
                     />
                   </div>
                 )}
@@ -1391,13 +1413,11 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
                 {/* 1. Logo — focal point */}
                 {APP_LOGO && (
                   <div className="hero-logo-container mb-4">
-                    <Image
-                      src={APP_LOGO}
-                      alt={APP_NAME || "App Logo"}
-                      width={120}
-                      height={120}
-                      className="hero-logo w-24 h-24 sm:w-[120px] sm:h-[120px]"
-                      unoptimized
+                    <AppLogo
+                      idPrefix="chat-hero-ready"
+                      animated
+                      className="hero-logo w-full h-full"
+                      title={APP_NAME || "App Logo"}
                     />
                   </div>
                 )}

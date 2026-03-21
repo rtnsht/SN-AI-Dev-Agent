@@ -180,7 +180,7 @@ export default function SettingsPanel({
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
           </button>
         )}
-        <Image src={APP_LOGO} alt="App Logo" width={32} height={32} className="rounded-full" unoptimized priority />
+        {APP_LOGO && <Image src={APP_LOGO} alt="App Logo" width={32} height={32} className="rounded-full" unoptimized priority />}
         <div>
           <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Settings</h2>
           <p className="text-[10px]" style={{ color: "var(--text-disabled)", padding: 0 }}>Configure your connection</p>
@@ -191,7 +191,7 @@ export default function SettingsPanel({
         {/* ── Section 1: ServiceNow Instance ── */}
         <div style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "12px" }}>
           <div className="flex items-center gap-2 mb-3">
-            <span className="flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-semibold" style={{ background: "rgba(76,125,255,0.1)", color: "var(--color-info)", border: "1px solid rgba(76,125,255,0.2)" }}>1</span>
+            <span className="flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-semibold" style={{ background: "color-mix(in srgb, var(--color-primary) 10%, transparent)", color: "var(--color-primary)", border: "1px solid color-mix(in srgb, var(--color-primary) 20%, transparent)" }}>1</span>
             <span className="text-[11px] font-semibold" style={{ color: "var(--text-primary)" }}>ServiceNow Instance</span>
             <svg className="w-3.5 h-3.5 ml-auto" style={{ color: "var(--text-disabled)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
           </div>
@@ -207,33 +207,39 @@ export default function SettingsPanel({
                 <input type="url" placeholder="https://dev12345.service-now.com" value={credentials.instanceUrl} onChange={(e) => update("instanceUrl", e.target.value)} className={INPUT_CLS} style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }} disabled={fieldsDisabled} />
               )}
             </div>
-            <div>
-              <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Auth Method</label>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { key: "basic", label: "Basic", desc: "Username + password" },
-                  { key: "session", label: "Browser Session", desc: "Manual browser/MFA session" },
-                ].map((option) => {
-                  const selected = snAuthType === option.key;
-                  return (
-                    <button
-                      key={option.key}
-                      type="button"
-                      onClick={() => !fieldsDisabled && setSnAuthType(option.key as Credentials["snAuthType"])}
-                      disabled={fieldsDisabled}
-                      className={`px-3 py-2 rounded-md text-left transition-colors ${fieldsDisabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
-                      style={{
-                        background: selected ? "rgba(76,125,255,0.1)" : "var(--surface-elevated)",
-                        border: `1px solid ${selected ? "rgba(76,125,255,0.3)" : "var(--border-emphasis)"}`,
-                      }}
-                    >
-                      <div className="text-[11px] font-medium" style={{ color: selected ? "var(--color-info)" : "var(--text-primary)" }}>{option.label}</div>
-                      <div className="text-[10px]" style={{ color: "var(--text-disabled)" }}>{option.desc}</div>
-                    </button>
-                  );
-                })}
+            <details className="group">
+              <summary className="flex items-center gap-1.5 cursor-pointer text-[11px] font-medium" style={{ color: "var(--text-disabled)" }}>
+                <svg className="w-3 h-3 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                Advanced Settings
+              </summary>
+              <div className="mt-2">
+                <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Auth Method</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { key: "basic", label: "Basic", desc: "Username + password" },
+                    { key: "session", label: "Browser Session", desc: "Manual browser/MFA session" },
+                  ].map((option) => {
+                    const selected = snAuthType === option.key;
+                    return (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => !fieldsDisabled && setSnAuthType(option.key as Credentials["snAuthType"])}
+                        disabled={fieldsDisabled}
+                        className={`px-3 py-2 rounded-md text-left transition-colors ${fieldsDisabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+                        style={{
+                          background: selected ? "color-mix(in srgb, var(--color-primary) 10%, transparent)" : "var(--surface-elevated)",
+                          border: `1px solid ${selected ? "color-mix(in srgb, var(--color-primary) 30%, transparent)" : "var(--border-emphasis)"}`,
+                        }}
+                      >
+                        <div className="text-[11px] font-medium" style={{ color: selected ? "var(--color-primary)" : "var(--text-primary)" }}>{option.label}</div>
+                        <div className="text-[10px]" style={{ color: "var(--text-disabled)" }}>{option.desc}</div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            </details>
             <div>
               <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>
                 Username
@@ -281,14 +287,14 @@ export default function SettingsPanel({
               </div>
             )}
             {snAuthType === "oauth_authorization_code" && (
-              <div className="px-3 py-2 rounded-md text-[10px]" style={{ background: "rgba(76,125,255,0.06)", border: "1px solid rgba(76,125,255,0.15)", color: "var(--text-secondary)" }}>
+              <div className="px-3 py-2 rounded-md text-[10px]" style={{ background: "color-mix(in srgb, var(--color-primary) 6%, transparent)", border: "1px solid color-mix(in srgb, var(--color-primary) 15%, transparent)", color: "var(--text-secondary)" }}>
                 {credentials.accessToken
                   ? "OAuth sign-in completed in this browser session. Click Connect to validate the ServiceNow API session."
                   : "OAuth Authorization Code opens a ServiceNow sign-in popup. Complete SSO/MFA there, then the app will exchange the code for an API token."}
               </div>
             )}
             {snAuthType === "session" && (
-              <div className="px-3 py-2 rounded-md text-[10px]" style={{ background: "rgba(76,125,255,0.06)", border: "1px solid rgba(76,125,255,0.15)", color: "var(--text-secondary)" }}>
+              <div className="px-3 py-2 rounded-md text-[10px]" style={{ background: "color-mix(in srgb, var(--color-primary) 6%, transparent)", border: "1px solid color-mix(in srgb, var(--color-primary) 15%, transparent)", color: "var(--text-secondary)" }}>
                 {(credentials.sessionCookies?.length || 0) > 0
                   ? "A browser-backed ServiceNow session is ready. Click Connect to validate it."
                   : "Browser Session opens a real browser using your ServiceNow username and password so you can finish SSO/MFA manually. The resulting ServiceNow session cookies stay in memory for this chat session only."}
@@ -313,9 +319,9 @@ export default function SettingsPanel({
                   disabled={modelLocked || fieldsDisabled}
                   className={`flex-1 px-3 py-2 rounded-md text-[11px] font-medium transition-colors ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
                   style={{
-                    background: aiProvider === "anthropic" ? "rgba(76,125,255,0.1)" : "var(--surface-elevated)",
-                    border: `1px solid ${aiProvider === "anthropic" ? "rgba(76,125,255,0.3)" : "var(--border-emphasis)"}`,
-                    color: aiProvider === "anthropic" ? "var(--color-info)" : "var(--text-secondary)",
+                    background: aiProvider === "anthropic" ? "color-mix(in srgb, var(--color-primary) 10%, transparent)" : "var(--surface-elevated)",
+                    border: `1px solid ${aiProvider === "anthropic" ? "color-mix(in srgb, var(--color-primary) 30%, transparent)" : "var(--border-emphasis)"}`,
+                    color: aiProvider === "anthropic" ? "var(--color-primary)" : "var(--text-secondary)",
                   }}
                 >
                   Anthropic
@@ -489,7 +495,7 @@ export default function SettingsPanel({
                 <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
                   {displayModels.map((opt) => {
                     const isSelected = selectedModel === opt.key;
-                    const accentColor = aiProvider === "openrouter" ? OPENROUTER_COLOR : "var(--color-info)";
+                    const accentColor = aiProvider === "openrouter" ? OPENROUTER_COLOR : "var(--color-primary)";
                     return (
                       <button
                         key={opt.key}

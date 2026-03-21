@@ -22,8 +22,12 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function FeedbackFAB() {
+export default function FeedbackFAB({ hideButton = false, externalOpen = false, onExternalClose }: { hideButton?: boolean; externalOpen?: boolean; onExternalClose?: () => void }) {
   const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    if (externalOpen) setIsOpen(true);
+  }, [externalOpen]);
   const [type, setType] = useState<FeedbackType>("feedback");
   const [description, setDescription] = useState("");
   const [email, setEmail] = useState("");
@@ -56,8 +60,9 @@ export default function FeedbackFAB() {
 
   const handleClose = useCallback(() => {
     setIsOpen(false);
+    onExternalClose?.();
     if (status === "success") resetForm();
-  }, [status, resetForm]);
+  }, [status, resetForm, onExternalClose]);
 
   // Escape key to close
   useEffect(() => {
@@ -155,8 +160,8 @@ export default function FeedbackFAB() {
 
   return (
     <>
-      {/* Floating Action Button — hidden when mobile keyboard is open */}
-      {!isOpen && !keyboardOpen && (
+      {/* Floating Action Button — hidden when mobile keyboard is open or when hideButton is set */}
+      {!isOpen && !keyboardOpen && !hideButton && (
         <button
           onClick={() => setIsOpen(true)}
           aria-label="Send feedback"
@@ -428,7 +433,7 @@ export default function FeedbackFAB() {
                       }}
                       onFocus={(e) => {
                         e.currentTarget.style.borderColor =
-                          "var(--color-info)";
+                          "var(--color-primary)";
                       }}
                       onBlur={(e) => {
                         e.currentTarget.style.borderColor =
@@ -469,7 +474,7 @@ export default function FeedbackFAB() {
                       }}
                       onFocus={(e) => {
                         e.currentTarget.style.borderColor =
-                          "var(--color-info)";
+                          "var(--color-primary)";
                       }}
                       onBlur={(e) => {
                         e.currentTarget.style.borderColor =

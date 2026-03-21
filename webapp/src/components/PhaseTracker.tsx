@@ -14,14 +14,13 @@ interface Props {
   onPhaseClick?: (phase: SDLCPhase) => void;
 }
 
-/** Palantir-style phase index labels */
-const PHASE_INDEX: Record<SDLCPhase, string> = {
-  spec: "/0.1",
-  design: "/0.2",
-  scope_selection: "/0.3",
-  implementation: "/0.4",
-  testing: "/0.5",
-  deployment: "/0.6",
+const PHASE_STEP: Record<SDLCPhase, number> = {
+  spec: 1,
+  design: 2,
+  scope_selection: 3,
+  implementation: 4,
+  testing: 5,
+  deployment: 6,
 };
 
 export default function PhaseTracker({ currentPhase, completedPhases, reqId, onPhaseClick }: Props) {
@@ -39,7 +38,7 @@ export default function PhaseTracker({ currentPhase, completedPhases, reqId, onP
 
         const statusText = isCompleted ? "Complete" : isCurrent ? "In progress" : "Pending";
         const gateText = phase.requiresApproval ? "Requires approval" : "Auto-proceeds";
-        const hoverTitle = `${PHASE_INDEX[phase.key]} ${phase.label} — ${statusText}\n${gateText}`;
+        const hoverTitle = `Step ${PHASE_STEP[phase.key]}: ${phase.label} — ${statusText}\n${gateText}`;
 
         // Status dot color
         const dotColor = isCompleted
@@ -59,10 +58,15 @@ export default function PhaseTracker({ currentPhase, completedPhases, reqId, onP
             <button
               type="button"
               className={`flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded transition-all border-none outline-none ${
-                isCurrent ? "ring-1 ring-[rgba(76,125,255,0.3)]" : ""
-              } ${(isCompleted || isCurrent) && onPhaseClick ? "cursor-pointer hover:opacity-80" : "cursor-default"}`}
+                (isCompleted || isCurrent) && onPhaseClick ? "cursor-pointer hover:opacity-80" : "cursor-default"
+              }`}
               style={{
-                background: isCurrent ? "rgba(76,125,255,0.12)" : isCompleted ? "rgba(56,201,118,0.06)" : "transparent",
+                background: isCurrent
+                  ? "color-mix(in srgb, var(--status-progress) 12%, transparent)"
+                  : isCompleted ? "color-mix(in srgb, var(--status-success) 6%, transparent)" : "transparent",
+                ...(isCurrent ? {
+                  boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--status-progress) 30%, transparent)",
+                } : {}),
               }}
               title={hoverTitle}
               onClick={() => {
@@ -79,15 +83,15 @@ export default function PhaseTracker({ currentPhase, completedPhases, reqId, onP
                   ...(isCurrent ? { animation: "statusPulse 2s ease-in-out infinite" } : {}),
                 }}
               />
-              {/* Phase index + label */}
+              {/* Step number + label */}
               <span className="hidden sm:flex items-baseline gap-1">
-                <span className="phase-label" style={{ fontSize: "9px", color: "var(--text-disabled)" }}>
-                  {PHASE_INDEX[phase.key]}
+                <span className="text-[9px] font-mono tabular-nums" style={{ color: "var(--text-disabled)", opacity: 0.7 }}>
+                  {PHASE_STEP[phase.key]}
                 </span>
                 <span
                   className="text-[10px] sm:text-[11px] font-medium"
                   style={{
-                    color: isCurrent ? "var(--color-info)" : isCompleted ? "var(--color-success)" : "var(--text-disabled)",
+                    color: isCurrent ? "var(--status-progress)" : isCompleted ? "var(--color-success)" : "var(--text-disabled)",
                   }}
                 >
                   {phase.label}
@@ -97,7 +101,7 @@ export default function PhaseTracker({ currentPhase, completedPhases, reqId, onP
               <span
                 className="sm:hidden text-[9px] font-medium"
                 style={{
-                  color: isCurrent ? "var(--color-info)" : isCompleted ? "var(--color-success)" : "var(--text-disabled)",
+                  color: isCurrent ? "var(--status-progress)" : isCompleted ? "var(--color-success)" : "var(--text-disabled)",
                 }}
               >
                 {phase.label.slice(0, 4)}

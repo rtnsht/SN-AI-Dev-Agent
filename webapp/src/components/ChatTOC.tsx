@@ -107,7 +107,7 @@ export default function ChatTOC({ messages, isOpen, onClose }: Props) {
   if (!isOpen) return null;
 
   const phaseColor: Record<string, string> = {
-    spec: "var(--color-info)",
+    spec: "var(--color-primary)",
     design: "var(--color-primary)",
     scope_selection: "#a78bfa",
     implementation: "var(--color-warning)",
@@ -166,7 +166,7 @@ export default function ChatTOC({ messages, isOpen, onClose }: Props) {
               ) : entry.type === "system" ? (
                 <span className="text-[9px] mt-0.5 flex-shrink-0" style={{ color: "var(--text-disabled)" }}>Sys</span>
               ) : (
-                <span className="text-[9px] mt-0.5 flex-shrink-0" style={{ color: "var(--color-info)" }}>AI</span>
+                <span className="text-[9px] mt-0.5 flex-shrink-0" style={{ color: "var(--color-primary)" }}>AI</span>
               )}
               <span className="truncate">
                 {entry.type === "phase" ? (

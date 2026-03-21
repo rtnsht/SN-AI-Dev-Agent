@@ -43,3 +43,6 @@ next-env.d.ts
 # session logs (ignore contents, keep folder)
 /logs/*
 !/logs/.gitkeep
+
+# Manual UI test captures (avoid committing large binaries; keep TEST-REPORT.md tracked)
+/test-screenshots/*.png

@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
 import { sanitizeBannerHtml } from "@/lib/sanitize-html";
+import { requireAdmin } from "@/lib/admin-auth";
 
 /** PATCH /api/admin/banners/:id — update banner (toggle active, edit, etc.) */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAdmin(request);
+  if (!auth.ok) return auth.response;
+
   try {
     const { id } = await params;
     const body = await request.json();
@@ -43,9 +47,12 @@ export async function PATCH(
 
 /** DELETE /api/admin/banners/:id — delete banner */
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAdmin(request);
+  if (!auth.ok) return auth.response;
+
   try {
     const { id } = await params;
     const db = getSupabase();

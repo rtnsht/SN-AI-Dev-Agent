@@ -48,7 +48,7 @@ export default function InfoModal({ open, onClose, onTryPrompt }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4" style={{ borderBottom: "1px solid var(--border-default)" }}>
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <Image src={APP_LOGO} alt={APP_NAME} width={36} height={36} className="rounded-full flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9" unoptimized />
+            {APP_LOGO && <Image src={APP_LOGO} alt={APP_NAME} width={36} height={36} className="rounded-full flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9" unoptimized />}
             <div className="min-w-0">
               <h2 className="text-base sm:text-lg font-semibold truncate" style={{ color: "var(--text-primary)" }}>{APP_NAME}</h2>
               <p className="text-[10px] sm:text-xs mt-0.5" style={{ color: "var(--text-disabled)" }}>{APP_SUBTITLE || "What you can do with this app"}</p>
