@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import type { ChatMessage, SDLCPhase } from "@/lib/types";
 import { SDLC_PHASES } from "@/lib/types";
 
@@ -70,12 +70,14 @@ export default function ChatTOC({ messages, isOpen, onClose }: Props) {
   const [entries, setEntries] = useState<TOCEntry[]>([]);
   const [activeId, setActiveId] = useState<string>("");
 
-  useEffect(() => {
-    setEntries(buildTOC(messages));
-  }, [messages]);
+  const stableEntries = useMemo(() => buildTOC(messages), [messages]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    setEntries(stableEntries);
+  }, [stableEntries]);
+
+  useEffect(() => {
+    if (!isOpen || stableEntries.length === 0) return;
     const observer = new IntersectionObserver(
       (obs) => {
         for (const entry of obs) {
@@ -87,12 +89,12 @@ export default function ChatTOC({ messages, isOpen, onClose }: Props) {
       },
       { rootMargin: "-10% 0px -80% 0px" }
     );
-    entries.forEach(e => {
+    stableEntries.forEach(e => {
       const el = document.getElementById(e.id);
       if (el) observer.observe(el);
     });
     return () => observer.disconnect();
-  }, [entries, isOpen]);
+  }, [stableEntries, isOpen]);
 
   const scrollTo = useCallback((id: string) => {
     const el = document.getElementById(id);

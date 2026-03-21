@@ -515,6 +515,7 @@ function TimelineEntry({ entry, isLast, liveStatus }: { entry: ActivityLogEntry;
 /** Elegant inline agent activity — timeline-style with visual hierarchy */
 function InlineAgentActivity({ activityLog, liveStatus, onCancel }: { activityLog: ActivityLogEntry[]; liveStatus: LiveStatus | null; onCancel: () => void }) {
   const [expanded, setExpanded] = useState(true);
+  const [elapsed, setElapsed] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const startTime = useRef(Date.now());
 
@@ -525,10 +526,17 @@ function InlineAgentActivity({ activityLog, liveStatus, onCancel }: { activityLo
     }
   }, [activityLog, expanded]);
 
+  // Self-updating elapsed timer
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setElapsed(Math.round((Date.now() - startTime.current) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const processed = processActivityLog(activityLog);
   const toolCount = processed.filter(e => e.phase === "tool").length;
   const taskCount = processed.filter(e => e.phase === "task").length;
-  const elapsed = Math.round((Date.now() - startTime.current) / 1000);
 
   // Determine if we have task-grouped entries (planner was used)
   const hasTasks = taskCount > 0;

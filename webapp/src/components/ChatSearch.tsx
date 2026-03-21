@@ -63,21 +63,39 @@ export default function ChatSearch({ messages, isOpen, onClose }: Props) {
     setActiveIdx(0);
   }, [query, messages]);
 
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const highlightedElRef = useRef<{ el: HTMLElement; origRadius: string } | null>(null);
+
+  const clearHighlight = useCallback(() => {
+    if (highlightedElRef.current) {
+      const { el, origRadius } = highlightedElRef.current;
+      el.style.outline = "none";
+      el.style.outlineOffset = "0";
+      el.style.borderRadius = origRadius;
+      highlightedElRef.current = null;
+    }
+    if (highlightTimerRef.current) {
+      clearTimeout(highlightTimerRef.current);
+      highlightTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => clearHighlight();
+  }, [clearHighlight]);
+
   const jumpTo = useCallback((result: SearchResult) => {
+    clearHighlight();
     const el = document.getElementById(result.messageId);
     if (el) {
       el.scrollIntoView({ behavior: "smooth", block: "center" });
-      const origRadius = el.style.borderRadius;
+      highlightedElRef.current = { el, origRadius: el.style.borderRadius };
       el.style.outline = "2px solid var(--color-primary)";
       el.style.outlineOffset = "4px";
       el.style.borderRadius = "8px";
-      setTimeout(() => {
-        el.style.outline = "none";
-        el.style.outlineOffset = "0";
-        el.style.borderRadius = origRadius;
-      }, 2000);
+      highlightTimerRef.current = setTimeout(() => clearHighlight(), 2000);
     }
-  }, []);
+  }, [clearHighlight]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
