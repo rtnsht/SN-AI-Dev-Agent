@@ -143,7 +143,7 @@ export default function SignupGateModal({ open, onClose, dailyUsed, dailyLimit, 
         {/* Header */}
         <div className="flex flex-col items-center px-6 pt-6 pb-4 text-center" style={{ borderBottom: "1px solid var(--border-default)" }}>
           {APP_LOGO && (
-            <Image src={APP_LOGO} alt={APP_NAME} width={48} height={48} className="rounded-xl mb-3" unoptimized />
+            <Image src={APP_LOGO} alt={APP_NAME} width={48} height={48} className="rounded-full mb-3" unoptimized />
           )}
           <h2 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
             You&apos;ve used {dailyUsed}/{dailyLimit} free requests today

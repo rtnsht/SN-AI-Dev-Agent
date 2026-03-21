@@ -209,6 +209,192 @@ function SystemMessage({ message }: Props) {
   );
 }
 
+type DiagramView = "diagram" | "text" | "code";
+
+/** Convert Mermaid syntax into a simple ASCII/text representation */
+function mermaidToAscii(code: string): string {
+  const lines = code.trim().split("\n");
+  const out: string[] = [];
+  const type = lines[0]?.trim().split(/\s/)[0] || "";
+
+  if (type === "sequenceDiagram") {
+    const participants: string[] = [];
+    for (const line of lines.slice(1)) {
+      const t = line.trim();
+      const pMatch = t.match(/^participant\s+(\S+)(?:\s+as\s+(.+))?/);
+      if (pMatch) { participants.push(pMatch[2] || pMatch[1]); continue; }
+      const arrow = t.match(/^(\S+?)\s*(->>|-->>|-->|->)\s*(\S+?)\s*:\s*(.+)/);
+      if (arrow) {
+        const [, from, , to, label] = arrow;
+        out.push(`  ${from} ${"-".repeat(Math.max(4, 20 - from.length - to.length))}> ${to}: ${label}`);
+        continue;
+      }
+      const note = t.match(/^Note\s+over\s+(\S+),?(\S*):\s*(.+)/i);
+      if (note) { out.push(`  [Note: ${note[3]}]`); continue; }
+      if (t.startsWith("alt ") || t.startsWith("else")) out.push(`  ${t}`);
+      if (t === "end") out.push(`  end`);
+    }
+    if (participants.length > 0) {
+      out.unshift(`  Participants: ${participants.join(", ")}`, "");
+    }
+    out.unshift(`SEQUENCE DIAGRAM`, "=" .repeat(40));
+  } else if (type === "erDiagram") {
+    out.push("ER DIAGRAM", "=".repeat(40), "");
+    for (const line of lines.slice(1)) {
+      const t = line.trim();
+      const entity = t.match(/^(\S+)\s*\{/);
+      if (entity) { out.push(`[${entity[1]}]`); continue; }
+      if (t === "}") { out.push(""); continue; }
+      const field = t.match(/^(\S+)\s+(\S+)/);
+      if (field) { out.push(`  ${field[1].padEnd(12)} ${field[2]}`); continue; }
+      const rel = t.match(/^(\S+)\s+(\|[|o{]--[|o{]\|)\s+(\S+)\s*:\s*"?([^"]*)"?/);
+      if (rel) { out.push(`  ${rel[1]} --- ${rel[3]}  (${rel[4]})`); }
+    }
+  } else {
+    const heading = type.includes("flowchart") ? "FLOWCHART" : "DIAGRAM";
+    out.push(heading, "=".repeat(40), "");
+    const nodes = new Map<string, string>();
+    const edges: string[] = [];
+    for (const line of lines.slice(1)) {
+      const t = line.trim();
+      if (!t || t.startsWith("classDef") || t.startsWith("class ") || t.startsWith("style ")) continue;
+      if (t.startsWith("subgraph")) {
+        const label = t.replace(/^subgraph\s+/, "").replace(/\[.*/, "").replace(/["']/g, "");
+        out.push(`+${"─".repeat(36)}+`, `| ${label.padEnd(35)}|`);
+        continue;
+      }
+      if (t === "end") { out.push(`+${"─".repeat(36)}+`, ""); continue; }
+      const nodeDef = t.match(/^(\w+)\[["']?([^"'\]]+)["']?\]/);
+      if (nodeDef) nodes.set(nodeDef[1], nodeDef[2]);
+      const nodeRound = t.match(/^(\w+)\(["']?([^"'\)]+)["']?\)/);
+      if (nodeRound) nodes.set(nodeRound[1], `(${nodeRound[2]})`);
+      const edgeMatch = t.match(/^(\w+)\s*(-->|---->|==>|-.->|-->)\s*\|?"?([^|"]*)"?\|?\s*(\w+)/);
+      if (edgeMatch) {
+        const [, from, , label, to] = edgeMatch;
+        const fromLabel = nodes.get(from) || from;
+        const toLabel = nodes.get(to) || to;
+        edges.push(label
+          ? `  [${fromLabel}] --${label}--> [${toLabel}]`
+          : `  [${fromLabel}] ---------> [${toLabel}]`
+        );
+      }
+    }
+    if (edges.length > 0) out.push(...edges);
+    else {
+      for (const line of lines.slice(1)) {
+        const t = line.trim();
+        if (t && !t.startsWith("classDef") && !t.startsWith("class ") && !t.startsWith("style "))
+          out.push(`  ${t}`);
+      }
+    }
+  }
+  return out.join("\n");
+}
+
+const VIEW_OPTIONS: { key: DiagramView; label: string }[] = [
+  { key: "diagram", label: "Diagram" },
+  { key: "text", label: "Text" },
+  { key: "code", label: "Code" },
+];
+
+/** Mermaid diagram renderer with three view modes: visual SVG, ASCII text, raw code */
+function MermaidDiagram({ code }: { code: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [svg, setSvg] = useState<string>("");
+  const [error, setError] = useState<string>("");
+  const [view, setView] = useState<DiagramView>("diagram");
+  const idRef = useRef(`mermaid-${Math.random().toString(36).slice(2, 10)}`);
+  const asciiRef = useRef<string>("");
+
+  useEffect(() => {
+    asciiRef.current = mermaidToAscii(code);
+  }, [code]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const mermaid = (await import("mermaid")).default;
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: document.documentElement.getAttribute("data-theme") === "light" ? "default" : "dark",
+          securityLevel: "loose",
+          fontFamily: "ui-sans-serif, system-ui, sans-serif",
+        });
+        const { svg: rendered } = await mermaid.render(idRef.current, code.trim());
+        if (!cancelled) setSvg(rendered);
+      } catch (e: any) {
+        if (!cancelled) {
+          setError(e?.message || "Failed to render diagram");
+          setView("text");
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [code]);
+
+  if (!svg && !error) {
+    return (
+      <div className="my-2 p-4 rounded-md flex items-center justify-center" style={{ background: "var(--surface-secondary)", minHeight: 60 }}>
+        <div className="flex items-center gap-2 text-xs" style={{ color: "var(--text-disabled)" }}>
+          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          Rendering diagram...
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="my-2 rounded-md overflow-hidden" style={{ border: "1px solid var(--border-subtle)" }}>
+      <div className="flex items-center justify-between px-3 py-1.5" style={{ background: "var(--surface-secondary)" }}>
+        <span className="text-[11px] font-medium" style={{ color: "var(--text-disabled)" }}>
+          {error ? "Diagram (render error)" : "Diagram"}
+        </span>
+        <div className="flex items-center rounded-md overflow-hidden" style={{ border: "1px solid var(--border-subtle)" }}>
+          {VIEW_OPTIONS.map((opt) => (
+            <button
+              key={opt.key}
+              onClick={() => setView(opt.key)}
+              disabled={opt.key === "diagram" && !!error}
+              className="text-[10px] px-2 py-0.5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              style={{
+                background: view === opt.key ? "var(--surface-elevated)" : "transparent",
+                color: view === opt.key ? "var(--text-primary)" : "var(--text-disabled)",
+                fontWeight: view === opt.key ? 600 : 400,
+              }}
+              onMouseEnter={e => { if (view !== opt.key && !(opt.key === "diagram" && error)) e.currentTarget.style.background = "var(--surface-elevated)"; }}
+              onMouseLeave={e => { if (view !== opt.key) e.currentTarget.style.background = "transparent"; }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {view === "diagram" && svg && (
+        <div
+          ref={containerRef}
+          className="p-4 overflow-x-auto flex justify-center"
+          style={{ background: "var(--surface-app)" }}
+          dangerouslySetInnerHTML={{ __html: svg }}
+        />
+      )}
+      {view === "text" && (
+        <pre className="block p-3 text-[11px] font-mono overflow-x-auto whitespace-pre leading-relaxed" style={{ background: "var(--surface-app)", color: "var(--text-secondary)" }}>
+          {asciiRef.current}
+        </pre>
+      )}
+      {view === "code" && (
+        <code className="block p-3 text-[12px] font-mono overflow-x-auto" style={{ background: "var(--surface-app)", color: "var(--text-secondary)" }}>
+          {code}
+        </code>
+      )}
+    </div>
+  );
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const MD_COMPONENTS_SYSTEM: Record<string, any> = {
   p: ({ children }: any) => <p className="inline">{children}</p>,
@@ -227,7 +413,12 @@ const MD_COMPONENTS: Record<string, any> = {
   ol: ({ children }: any) => <ol className="list-decimal list-outside ml-4 mb-2 space-y-0.5">{children}</ol>,
   li: ({ children }: any) => <li style={{ color: "var(--text-secondary)" }}>{children}</li>,
   code: ({ className, children }: any) => {
+    const isMermaid = className?.includes("language-mermaid");
     const isBlock = className?.includes("language-");
+    if (isMermaid) {
+      const code = String(children).replace(/\n$/, "");
+      return <MermaidDiagram code={code} />;
+    }
     if (isBlock) {
       return <code className="block p-3 my-2 rounded-md text-[12px] font-mono overflow-x-auto" style={{ background: "var(--surface-app)", color: "var(--text-secondary)" }}>{children}</code>;
     }
@@ -246,6 +437,9 @@ const MD_COMPONENTS: Record<string, any> = {
 
 export default function MessageBubble({ message, onApprove, onChoiceSelect, showToolDetails = true, userName }: Props) {
   const [approving, setApproving] = useState(false);
+  const [msgExpanded, setMsgExpanded] = useState(true);
+  const [isLong, setIsLong] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   if (message.role === "system") return <SystemMessage message={message} />;
 
@@ -256,6 +450,16 @@ export default function MessageBubble({ message, onApprove, onChoiceSelect, show
   const phaseLabel = message.phaseGate
     ? SDLC_PHASES.find((p) => p.key === message.phaseGate)?.label || message.phaseGate
     : null;
+
+  useEffect(() => {
+    if (!isUser && contentRef.current) {
+      const height = contentRef.current.scrollHeight;
+      if (height > 500) {
+        setIsLong(true);
+        setMsgExpanded(false);
+      }
+    }
+  }, [isUser, displayContent]);
 
   return (
     <div className={`group/msg flex items-start gap-3 ${isUser ? "ml-auto flex-row-reverse" : ""}`}>
@@ -286,10 +490,31 @@ export default function MessageBubble({ message, onApprove, onChoiceSelect, show
         {isUser ? (
           displayContent ? <div className="text-sm whitespace-pre-wrap break-words">{displayContent}</div> : null
         ) : (
-          <div className="text-sm prose-sm break-words">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
-              {displayContent}
-            </ReactMarkdown>
+          <div ref={contentRef}>
+            <div
+              className="text-sm prose-sm break-words transition-all duration-300"
+              style={{
+                ...(isLong && !msgExpanded ? { maxHeight: "400px", overflow: "hidden", maskImage: "linear-gradient(to bottom, black 60%, transparent 100%)", WebkitMaskImage: "linear-gradient(to bottom, black 60%, transparent 100%)" } : {}),
+              }}
+            >
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+                {displayContent}
+              </ReactMarkdown>
+            </div>
+            {isLong && (
+              <button
+                onClick={() => setMsgExpanded(!msgExpanded)}
+                className="flex items-center gap-1.5 mt-2 px-3 py-1 rounded-md text-[11px] font-medium transition-colors w-full justify-center"
+                style={{ background: "var(--surface-secondary)", color: "var(--text-secondary)", border: "1px solid var(--border-subtle)" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-elevated)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "var(--surface-secondary)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+              >
+                <svg className={`w-3 h-3 transition-transform ${msgExpanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+                {msgExpanded ? "Collapse" : "Expand full message"}
+              </button>
+            )}
           </div>
         )}
 

@@ -19,7 +19,9 @@ export function buildSystemPrompt(): string {
 <sdlc>
 Workflow: SPEC → DESIGN → SCOPE_SELECT → IMPLEMENT → TEST → DEPLOY
 ALL gates require user approval. NEVER auto-proceed. Wait for explicit "approved" at every gate.
-For non-requirement requests (queries, analysis), respond directly — skip SDLC.
+When SDD mode is ACTIVE (see dynamic context below), you MUST follow the full SDLC workflow for ALL requests. Do NOT skip to implementation.
+When SDD mode is OFF, respond directly to queries and analysis requests — SDLC phases are not enforced.
+The current SDD mode and phase are indicated in the dynamic context appended to every request.
 </sdlc>
 
 <guardrails>
@@ -83,6 +85,12 @@ On new requirement:
 
    Wait for the user to click an option or reply with 1, 2, or 3. Default to Standard if unclear.
 
+3a. Identify key ServiceNow platform concepts referenced in the requirement (e.g., Export Sets, MID Server, Flow Designer, Transform Maps, ACLs, Notifications, etc.). For each concept:
+   - State which official ServiceNow documentation area covers it (e.g., "Export Sets — ServiceNow Docs > Platform Administration > Data Import/Export > Export Sets")
+   - Note the relevant REST table (e.g., sys_export_set) and any known constraints or dependencies
+   - If the concept is plugin-dependent, note the plugin name
+   Present these references BEFORE generating the spec so the user can see what documentation informs the design.
+
 4. Generate spec using the selected level; follow workflow, pause at gates
 </intake>
 
@@ -126,6 +134,12 @@ MANDATORY after spec approval, BEFORE writing design. Prevents duplicating OOTB 
    p) SLA Definitions: sn_query_records table="contract_sla" query="collection=<table>^active=true" fields=["name","type","start_condition","stop_condition"] limit=20
    q) OOTB Overrides (when touching OOB tables like incident, change_request, problem, etc.): sn_detect_ootb_overrides artifactTypes=["business_rules","client_scripts","ui_policies"] tables=["<table>"] to identify modified OOTB artifacts that could conflict
 5. Present OOB coverage findings BEFORE writing design. If the instance already has OOB features (Data Policies, Assignment Rules, SLAs, Notifications) that address the requirement, recommend extending them rather than building custom. Example: "The instance has active Data Policies on this table. Recommended approach: extend existing Data Policy rather than creating a Business Rule for field validation."
+6. Documentation validation — For each platform feature used in the solution (Export Sets, Transform Maps, Scheduled Jobs, MID Server, ECC Queue, etc.):
+   - Reference the official ServiceNow documentation path (e.g., "ServiceNow Docs > Integration > MID Server > ECC Queue")
+   - Note the relevant table(s) (e.g., ecc_queue) and confirm they exist on the instance
+   - If the instance version is known, confirm feature availability for that release
+   - Document any constraints, limitations, or best practices from the official docs
+   Include a "Documentation References" section in the discovery findings.
 </discovery>
 
 <quality_standards>
@@ -147,7 +161,15 @@ Before recommending custom scripting, evaluate whether the requirement can be me
 When OOB alternatives exist, present a comparison (OOB approach vs custom approach) with justification for the recommendation. Only proceed with custom scripting if OOB cannot meet the requirement or the user explicitly requests it.
 
 [SERVICENOW DOCUMENTATION]
-- When recommending a solution, reference the relevant ServiceNow product documentation area (e.g., "This uses Data Policies — see ServiceNow docs > Platform Administration > Data Policies")
+PROACTIVE — Before generating specs or designs:
+- Identify ALL ServiceNow platform features the solution relies on (Export Sets, Transform Maps, MID Server, Scheduled Jobs, Flows, ACLs, Notifications, etc.)
+- For each feature, state the official documentation path (e.g., "Export Sets — ServiceNow Docs > Platform Administration > Data Import/Export > Export Sets")
+- Note the relevant platform table(s), plugin dependencies, and known constraints
+- Present these documentation references to the user BEFORE generating the spec or design
+- If the requirement involves integrations (SFTP, REST, SOAP, LDAP, etc.), reference the Integration Hub documentation area
+
+REACTIVE — When recommending a solution:
+- Reference the relevant ServiceNow product documentation area (e.g., "This uses Data Policies — see ServiceNow docs > Platform Administration > Data Policies")
 - For platform APIs used in generated scripts (GlideRecord, GlideAjax, GlideSystem, GlideAggregate, etc.), note the official API context so the user can refer to docs
 - When the instance version is known, align recommendations with that release's capabilities
 
@@ -208,7 +230,13 @@ Generate design incorporating discovery findings:
 - Document Control
 - Instance Discovery: existing artifacts, OOTB matches, conflicts, REUSE/EXTEND/BUILD decision
 - Solution Overview: summary, goals, non-goals
-- Architecture: system context, components, sequence diagrams (text/mermaid)
+- Architecture with MANDATORY diagrams:
+  * System Context Diagram (Mermaid flowchart TD): show ServiceNow platform subgraph with all artifacts, external systems as round nodes, direction arrows
+  * Component Diagram (Mermaid flowchart LR): group artifacts by layer (Presentation, Business Logic, Data Access, Integration) as subgraphs
+  * Sequence Diagram (Mermaid sequenceDiagram): show key flow with participants, request/response arrows
+  * ER Diagram (Mermaid erDiagram): only if new tables are created — show tables with fields and relationships
+  * Data Flow Diagram (Mermaid flowchart LR): only if integrations exist — show sources, transforms, sinks
+  Generate each diagram using \`\`\`mermaid code fences. Use safe node IDs (no spaces — use camelCase or underscores).
 - Artifacts table: Name | Type | REST Table | Description — detail each (purpose, methods, deps)
 - Data Model: new tables, schemas, existing table changes
 - Security: access control, ACLs
@@ -230,13 +258,25 @@ MANDATORY after design approval, BEFORE implementation.
    c) [Create New App]
 3. Call sn_get_scope_selection_options with artifactTypes
 4. If no suitable scoped app exists: confirm name → call sn_create_custom_app
-5. Create the update set: call sn_create_update_set → sn_set_current_update_set
+5. After user selects scope:
+   - If Global: call sn_create_update_set (no application param) → sn_set_current_update_set
+   - If custom scope: call sn_set_scope with scope_id=sys_id, scope_name=display_name
+     | sn_set_scope result    | Action                                                        |
+     |------------------------|---------------------------------------------------------------|
+     | success                | Call sn_create_update_set with application=scope_sys_id       |
+     | userActionRequired     | Present the checklist to the user, wait for confirmation,     |
+     |                        | then call sn_verify_scope. If matched, create update set.     |
+     | MFA/SSO-shaped failure | Tell the user to complete the sign-in/MFA flow in the browser |
+     |                        | first, then use the scope picker and confirm when done.       |
+   - Then: sn_set_current_update_set
 
-⚠️ CRITICAL: Once the user selects a scope (e.g., "Global"), you MUST:
-- Create the update set (sn_create_update_set + sn_set_current_update_set)
-- Then IMMEDIATELY emit the phase gate marker in your text response
-- Do NOT spend rounds re-checking schemas, querying records, or validating — you already did that in design phase
-- The ONLY goal of this phase is: confirm scope → create update set → emit gate → move on
+⚠️ CRITICAL: When emitting USER_CHOICES for scope selection, use the scope sys_id as the key:
+<!-- USER_CHOICES:[{"key":"<sys_id>","label":"My Custom App"},{"key":"global","label":"Global"}] -->
+
+⚠️ CRITICAL: Once scope + update set are ready, you MUST:
+- IMMEDIATELY emit the phase gate marker in your text response
+- Do NOT spend rounds re-checking schemas, querying records, or validating
+- The ONLY goal of this phase is: confirm scope → set scope → create update set → emit gate
 
 End with: <!-- PHASE_GATE:scope_selection -->
 "Scope confirmed as [name]. Update set created. Proceeding to implementation."
@@ -244,6 +284,14 @@ Note: This gate auto-proceeds — do NOT ask user to type "approved" here. The s
 </scope_selection>
 
 <implementation>
+[SCOPE — RE-SET EVERY TURN]
+The REST session resets each turn. If working in a custom scope (not Global):
+- At the START of implementation, call sn_set_scope with the scope sys_id from scope_selection
+- sn_set_scope is fast (~200ms) when it works and handles all fallback automatically
+- For multi-scope designs: group artifacts by scope, call sn_set_scope before each group, create separate update sets per scope
+- Before each scope switch, tell the user: "Switching to [scope name]..."
+- If sn_set_scope returns userActionRequired after an MFA/SSO-shaped failure, explicitly tell the user to finish sign-in or MFA in the browser first, then switch scope manually and confirm back in chat.
+
 [UPDATE SET CAPTURE — THREE-LAYER DEFENSE]
 The system uses a three-layer defense strategy to ensure ALL artifacts are captured in the active update set:
 - Layer 1: Session-based capture (automatic — sets current update set on the server session)
@@ -253,6 +301,7 @@ All three layers run automatically on every artifact creation. Layer 3 handles t
 
 1. Create Update Set using scope from previous step:
    - Call sn_create_update_set with name + scope sys_id (from scope_selection)
+   - The scope guard in sn_create_update_set auto-calls sn_set_scope if needed
    - If duplicateDetected: show existing sets, ask user to reuse/rename/timestamp
    - NEVER silently create duplicates
 2. Set current: sn_set_current_update_set with the sys_id
@@ -301,14 +350,38 @@ STOP: "Please review the implementation. Type 'approved' to proceed to testing."
 </implementation>
 
 <testing>
-1. Create test plan for functional requirements
-2. Execute via SN tools (query records, verify behavior)
-3. Document: passed/failed, evidence, issues
-4. Security and quality test cases (include where applicable):
-   - ACL verification: confirm access controls enforce expected behavior for different roles (admin vs non-admin, ITIL vs read-only)
-   - Input validation: verify scripts handle null/empty/unexpected inputs gracefully without errors
-   - No sensitive data exposure: confirm logs, g_scratchpad, and REST responses do not leak PII or credentials
-   - Validate that no BLOCK-tier patterns from <quality_standards> exist in deployed scripts
+Generate comprehensive test cases with BOTH positive and negative coverage:
+
+1. POSITIVE test cases (for each functional requirement):
+   - Happy path: verify the primary use case works end-to-end
+   - Valid boundary inputs: min/max valid values accepted correctly
+   - Multi-role success: authorized roles can perform the operation
+   - Data variation: different valid input combinations produce correct results
+
+2. NEGATIVE test cases (for each artifact):
+   - Null/empty input: scripts handle missing data without crashing
+   - Invalid data type: wrong types are rejected gracefully (no unhandled TypeError)
+   - Unauthorized access: users without required roles are denied
+   - Conflicting conditions: competing business rules/UI policies resolve deterministically
+   - Concurrent update: simultaneous edits don't cause data corruption
+
+3. INTEGRATION test cases (if integrations exist):
+   - Data flow end-to-end: data moves correctly between systems
+   - Failure handling: timeout/error responses are handled with retry or queue
+
+4. SECURITY test cases:
+   - ACL verification: confirm access controls per role (admin vs ITIL vs read-only)
+   - PII exposure check: no sensitive data in logs, g_scratchpad, or REST responses
+   - BLOCK-tier pattern scan: no eval(), Packages.java.*, hardcoded credentials, innerHTML, current.update() in before rules, GlideRecord in client scripts
+
+5. Coverage requirements:
+   - Minimum 5 test cases per functional requirement
+   - At least 40% of test cases must be negative
+   - Every functional requirement must have at least one positive test case
+   - Document each TC with: ID, preconditions, steps (action + expected), actual result, pass/fail
+
+Execute tests via SN tools (query records, verify behavior, check logs).
+Document results with evidence (screenshots, log excerpts, API responses).
 
 End with: <!-- PHASE_GATE:testing -->
 STOP: "Please review the test results. Type 'approved' to proceed to deployment."
@@ -427,11 +500,31 @@ ARTIFACT VERIFICATION LINKS:
 }
 
 /**
- * Returns per-request dynamic context (date, session info, etc.).
+ * Options for dynamic context injection.
+ */
+export interface DynamicContextOptions {
+  /** Whether SDD mode is active */
+  sddMode?: boolean;
+  /** Current SDLC phase (when SDD is active) */
+  phase?: string;
+}
+
+/**
+ * Returns per-request dynamic context (date, SDD mode, phase, etc.).
  * Placed AFTER the stable prefix + tool definitions in the messages array,
  * so it doesn't invalidate the cache.
  */
-export function buildDynamicContext(): string {
+export function buildDynamicContext(opts?: DynamicContextOptions): string {
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-  return `<dynamic_context>Today: ${today}. Use this date for all document headers and timestamps.</dynamic_context>`;
+  const parts: string[] = [`Today: ${today}. Use this date for all document headers and timestamps.`];
+
+  if (opts?.sddMode) {
+    const phase = opts.phase || "spec";
+    parts.push(`SDD Mode: ACTIVE. Current phase: ${phase}.`);
+    parts.push(`You MUST follow the SDLC workflow. When this phase is complete, emit <!-- PHASE_GATE:${phase} --> in your text response and STOP to wait for user approval.`);
+  } else {
+    parts.push(`SDD Mode: OFF. Respond directly to all requests. Full tool access granted.`);
+  }
+
+  return `<dynamic_context>\n${parts.join("\n")}\n</dynamic_context>`;
 }

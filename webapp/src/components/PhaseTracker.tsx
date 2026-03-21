@@ -10,6 +10,8 @@ interface Props {
   completedPhases: SDLCPhase[];
   /** The requirement ID being worked on */
   reqId: string | null;
+  /** Callback when user clicks a phase to navigate to it */
+  onPhaseClick?: (phase: SDLCPhase) => void;
 }
 
 /** Palantir-style phase index labels */
@@ -22,7 +24,7 @@ const PHASE_INDEX: Record<SDLCPhase, string> = {
   deployment: "/0.6",
 };
 
-export default function PhaseTracker({ currentPhase, completedPhases, reqId }: Props) {
+export default function PhaseTracker({ currentPhase, completedPhases, reqId, onPhaseClick }: Props) {
   if (!reqId || !currentPhase) return null;
 
   return (
@@ -57,11 +59,22 @@ export default function PhaseTracker({ currentPhase, completedPhases, reqId }: P
             <div
               className={`flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded transition-all ${
                 isCurrent ? "ring-1 ring-[rgba(76,125,255,0.3)]" : ""
-              }`}
+              } ${(isCompleted || isCurrent) && onPhaseClick ? "cursor-pointer hover:opacity-80" : ""}`}
               style={{
                 background: isCurrent ? "rgba(76,125,255,0.12)" : isCompleted ? "rgba(56,201,118,0.06)" : "transparent",
               }}
               title={hoverTitle}
+              onClick={() => {
+                if ((isCompleted || isCurrent) && onPhaseClick) onPhaseClick(phase.key);
+              }}
+              role={(isCompleted || isCurrent) && onPhaseClick ? "button" : undefined}
+              tabIndex={(isCompleted || isCurrent) && onPhaseClick ? 0 : undefined}
+              onKeyDown={(e) => {
+                if ((e.key === "Enter" || e.key === " ") && (isCompleted || isCurrent) && onPhaseClick) {
+                  e.preventDefault();
+                  onPhaseClick(phase.key);
+                }
+              }}
             >
               {/* Status dot */}
               <span

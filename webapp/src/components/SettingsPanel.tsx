@@ -5,6 +5,7 @@ import Image from "next/image";
 import type { Credentials, ConnectionResult, UsageInfo, TrialStatus, AIProvider, ModelOption } from "@/lib/types";
 import { ANTHROPIC_MODELS } from "@/lib/types";
 import { APP_LOGO } from "@/lib/branding";
+import { hasConnectableServiceNowAuth, normalizeServiceNowAuthMethod } from "@/lib/servicenow-auth";
 
 interface Props {
   credentials: Credentials;
@@ -12,6 +13,7 @@ interface Props {
   connected: boolean;
   connInfo: ConnectionResult | null;
   isConnecting: boolean;
+  connectingLabel?: string | null;
   connectionError?: string | null;
   onConnect: () => void;
   onReconnect?: () => void;
@@ -108,22 +110,59 @@ function UsageDisplay({ usage, onRefresh }: { usage: UsageInfo; onRefresh?: () =
 }
 
 export default function SettingsPanel({
-  credentials, setCredentials, connected, connInfo, isConnecting, connectionError, onConnect, onReconnect,
+  credentials, setCredentials, connected, connInfo, isConnecting, connectingLabel, connectionError, onConnect, onReconnect,
   serverApiKeyConfigured, serverOpenRouterKeyConfigured, serverSnCredsConfigured,
   usage, rateLimitHit, onApiKeyProvided,
   aiProvider, setAiProvider, selectedModel, setSelectedModel, modelOptions, modelsLoading = false,
   modelLocked, allowUserApiKeys = true, trialStatus, onRefreshUsage, onBack
 }: Props) {
-  const update = (field: keyof Credentials, value: string) =>
-    setCredentials({ ...credentials, [field]: value });
+  const update = (field: keyof Credentials, value: string) => {
+    const nextCredentials: Credentials = { ...credentials, [field]: value };
 
-  const canConnect = !!(credentials.instanceUrl && credentials.username && (credentials.password || serverSnCredsConfigured)) && !isConnecting;
+    if (field === "instanceUrl") {
+      nextCredentials.accessToken = "";
+      nextCredentials.refreshToken = "";
+      nextCredentials.sessionCookies = [];
+    }
+
+    if (field === "clientId") {
+      nextCredentials.accessToken = "";
+      nextCredentials.refreshToken = "";
+    }
+
+    setCredentials(nextCredentials);
+  };
+
+  const snAuthType = normalizeServiceNowAuthMethod(credentials.snAuthType);
+  const canConnect = hasConnectableServiceNowAuth(credentials, {
+    serverBasicConfigured: serverSnCredsConfigured,
+    requireUsernameForBasic: true,
+    allowInteractiveBootstrap: true,
+  }) && !isConnecting;
+  const usingServerBasicCreds = serverSnCredsConfigured && snAuthType === "basic";
+  const connectLabel = isConnecting
+    ? (connectingLabel || "Connecting...")
+    : snAuthType === "oauth_authorization_code"
+      ? (credentials.accessToken ? "Connect" : "Sign In with ServiceNow")
+      : snAuthType === "session"
+        ? ((credentials.sessionCookies?.length || 0) > 0 ? "Connect" : "Connect in Browser")
+        : "Connect";
 
   // Display models based on provider
   const displayModels = aiProvider === "openrouter" ? modelOptions : ANTHROPIC_MODELS;
 
   // All inputs disabled when connected or mid-connecting
   const fieldsDisabled = connected || isConnecting;
+
+  const setSnAuthType = (nextAuthType: Credentials["snAuthType"]) => {
+    setCredentials({
+      ...credentials,
+      snAuthType: nextAuthType,
+      accessToken: nextAuthType === "oauth_authorization_code" ? credentials.accessToken : "",
+      refreshToken: nextAuthType === "oauth_authorization_code" ? credentials.refreshToken : "",
+      sessionCookies: nextAuthType === "session" ? credentials.sessionCookies : [],
+    });
+  };
 
   return (
     <div className="p-4 h-full flex flex-col" style={{ background: "var(--surface-sidebar)" }}>
@@ -141,7 +180,7 @@ export default function SettingsPanel({
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
           </button>
         )}
-        <Image src={APP_LOGO} alt="App Logo" width={32} height={32} className="rounded-md" unoptimized />
+        <Image src={APP_LOGO} alt="App Logo" width={32} height={32} className="rounded-full" unoptimized priority />
         <div>
           <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Settings</h2>
           <p className="text-[10px]" style={{ color: "var(--text-disabled)", padding: 0 }}>Configure your connection</p>
@@ -159,7 +198,7 @@ export default function SettingsPanel({
           <div className="space-y-3">
             <div>
               <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Instance URL</label>
-              {serverSnCredsConfigured ? (
+              {usingServerBasicCreds ? (
                 <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
                   <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
                   <span className="text-[11px] truncate" style={{ color: "var(--color-success)" }}>{credentials.instanceUrl}</span>
@@ -169,8 +208,37 @@ export default function SettingsPanel({
               )}
             </div>
             <div>
-              <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Username</label>
-              {serverSnCredsConfigured ? (
+              <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Auth Method</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { key: "basic", label: "Basic", desc: "Username + password" },
+                  { key: "session", label: "Browser Session", desc: "Manual browser/MFA session" },
+                ].map((option) => {
+                  const selected = snAuthType === option.key;
+                  return (
+                    <button
+                      key={option.key}
+                      type="button"
+                      onClick={() => !fieldsDisabled && setSnAuthType(option.key as Credentials["snAuthType"])}
+                      disabled={fieldsDisabled}
+                      className={`px-3 py-2 rounded-md text-left transition-colors ${fieldsDisabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+                      style={{
+                        background: selected ? "rgba(76,125,255,0.1)" : "var(--surface-elevated)",
+                        border: `1px solid ${selected ? "rgba(76,125,255,0.3)" : "var(--border-emphasis)"}`,
+                      }}
+                    >
+                      <div className="text-[11px] font-medium" style={{ color: selected ? "var(--color-info)" : "var(--text-primary)" }}>{option.label}</div>
+                      <div className="text-[10px]" style={{ color: "var(--text-disabled)" }}>{option.desc}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>
+                Username
+              </label>
+              {usingServerBasicCreds ? (
                 <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
                   <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
                   <span className="text-[11px]" style={{ color: "var(--color-success)" }}>{credentials.username}</span>
@@ -179,17 +247,53 @@ export default function SettingsPanel({
                 <input type="text" placeholder="admin" value={credentials.username} onChange={(e) => update("username", e.target.value)} className={INPUT_CLS} style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }} disabled={fieldsDisabled} />
               )}
             </div>
-            <div>
-              <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Password</label>
-              {serverSnCredsConfigured ? (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
-                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
-                  <span className="text-[11px]" style={{ color: "var(--color-success)" }}>Provided by server</span>
+            {snAuthType === "basic" && (
+              <div>
+                <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Password</label>
+                {usingServerBasicCreds ? (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
+                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
+                    <span className="text-[11px]" style={{ color: "var(--color-success)" }}>Provided by server</span>
+                  </div>
+                ) : (
+                  <input type="password" placeholder="••••••••" value={credentials.password} onChange={(e) => update("password", e.target.value)} className={INPUT_CLS} style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }} disabled={fieldsDisabled} />
+                )}
+              </div>
+            )}
+            {(snAuthType === "oauth_client_credentials" || snAuthType === "oauth_authorization_code") && (
+              <>
+                <div>
+                  <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>OAuth Client ID</label>
+                  <input type="text" placeholder="OAuth client ID" value={credentials.clientId || ""} onChange={(e) => update("clientId", e.target.value)} className={INPUT_CLS} style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }} disabled={fieldsDisabled} />
                 </div>
-              ) : (
-                <input type="password" placeholder="••••••••" value={credentials.password} onChange={(e) => update("password", e.target.value)} className={INPUT_CLS} style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }} disabled={fieldsDisabled} />
-              )}
-            </div>
+                <div>
+                  <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>
+                    OAuth Client Secret {snAuthType === "oauth_authorization_code" ? "(optional)" : ""}
+                  </label>
+                  <input type="password" placeholder="OAuth client secret" value={credentials.clientSecret || ""} onChange={(e) => update("clientSecret", e.target.value)} className={INPUT_CLS} style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }} disabled={fieldsDisabled} />
+                </div>
+              </>
+            )}
+            {snAuthType === "session" && (
+              <div>
+                <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Password</label>
+                <input type="password" placeholder="Enter your ServiceNow password" value={credentials.password} onChange={(e) => update("password", e.target.value)} className={INPUT_CLS} style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }} disabled={fieldsDisabled} />
+              </div>
+            )}
+            {snAuthType === "oauth_authorization_code" && (
+              <div className="px-3 py-2 rounded-md text-[10px]" style={{ background: "rgba(76,125,255,0.06)", border: "1px solid rgba(76,125,255,0.15)", color: "var(--text-secondary)" }}>
+                {credentials.accessToken
+                  ? "OAuth sign-in completed in this browser session. Click Connect to validate the ServiceNow API session."
+                  : "OAuth Authorization Code opens a ServiceNow sign-in popup. Complete SSO/MFA there, then the app will exchange the code for an API token."}
+              </div>
+            )}
+            {snAuthType === "session" && (
+              <div className="px-3 py-2 rounded-md text-[10px]" style={{ background: "rgba(76,125,255,0.06)", border: "1px solid rgba(76,125,255,0.15)", color: "var(--text-secondary)" }}>
+                {(credentials.sessionCookies?.length || 0) > 0
+                  ? "A browser-backed ServiceNow session is ready. Click Connect to validate it."
+                  : "Browser Session opens a real browser using your ServiceNow username and password so you can finish SSO/MFA manually. The resulting ServiceNow session cookies stay in memory for this chat session only."}
+              </div>
+            )}
           </div>
         </div>{/* end Section 1 card */}
 
@@ -514,7 +618,7 @@ export default function SettingsPanel({
           <div className="font-medium mb-1" style={{ color: "var(--color-danger)" }}>
             Connection Failed
           </div>
-          <div className="text-[10px]" style={{ color: "var(--text-secondary)" }}>{connectionError}</div>
+          <div className="text-[10px] whitespace-pre-line" style={{ color: "var(--text-secondary)" }}>{connectionError}</div>
         </div>
       )}
 
@@ -542,9 +646,9 @@ export default function SettingsPanel({
             {isConnecting ? (
               <>
                 <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                Connecting...
+                {connectLabel}
               </>
-            ) : "Connect"}
+            ) : connectLabel}
           </button>
         )}
       </div>

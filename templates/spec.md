@@ -123,6 +123,16 @@
 
 ---
 
+## Platform References
+
+| # | Platform Feature | Documentation Area | Notes |
+|---|------------------|--------------------|-------|
+| 1 | | | |
+
+> These references identify the ServiceNow platform features that inform this specification.
+
+---
+
 ## Sign-Off
 
 | Role | Name | Date | Signature |
