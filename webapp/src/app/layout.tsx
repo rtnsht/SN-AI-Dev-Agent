@@ -3,6 +3,8 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { APP_NAME, APP_DESCRIPTION, CSS_VARS } from "@/lib/branding";
 import ThemeProvider from "@/components/ThemeProvider";
+import BannerDisplay from "@/components/BannerDisplay";
+import FeedbackFAB from "@/components/FeedbackFAB";
 
 
 const inter = Inter({
@@ -41,7 +43,9 @@ export default function RootLayout({
         className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}
       >
         <ThemeProvider>
+          <BannerDisplay />
           {children}
+          <FeedbackFAB />
         </ThemeProvider>
       </body>
     </html>

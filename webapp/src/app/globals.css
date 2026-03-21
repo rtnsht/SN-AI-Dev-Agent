@@ -498,7 +498,12 @@ body {
 
 /* ── Release dropdown ── */
 .release-dropdown {
-  animation: slideDown 0.15s ease-out;
+  animation: dropdownSlideDown 0.15s ease-out;
+}
+
+@keyframes dropdownSlideDown {
+  from { opacity: 0; transform: translateY(-0.5rem); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* ── Banner toast slide-in ── */
