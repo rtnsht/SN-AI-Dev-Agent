@@ -46,6 +46,9 @@ export async function testConnection(client: ServiceNowClient) {
       if (status.apis.addToUpdateSetHelper.basePath) {
         client.setHelperApiPath('addToUpdateSetHelper', status.apis.addToUpdateSetHelper.basePath);
       }
+      if (status.apis.scopeHelper.basePath) {
+        client.setHelperApiPath('scopeHelper', status.apis.scopeHelper.basePath);
+      }
 
       client.helperApisInitialized = true;
 
@@ -64,6 +67,10 @@ export async function testConnection(client: ServiceNowClient) {
           addToUpdateSetHelper: {
             deployed: status.apis.addToUpdateSetHelper.deployed,
             path: status.apis.addToUpdateSetHelper.basePath
+          },
+          scopeHelper: {
+            deployed: status.apis.scopeHelper.deployed,
+            path: status.apis.scopeHelper.basePath
           }
         }
       };
@@ -160,6 +167,7 @@ export async function initializeInstance(
     const uiPolicyPath = client.getHelperApiPath('uiPolicyActionHelper');
     const updateSetPath = client.getHelperApiPath('updateSetHelper');
     const addToUpdateSetPath = client.getHelperApiPath('addToUpdateSetHelper');
+    const scopeHelperPath = client.getHelperApiPath('scopeHelper');
     return {
       success: true,
       message: 'Instance already initialized',
@@ -167,7 +175,8 @@ export async function initializeInstance(
       helperApis: {
         uiPolicyActionHelper: { path: uiPolicyPath, deployed: !!uiPolicyPath },
         updateSetHelper: { path: updateSetPath, deployed: !!updateSetPath },
-        addToUpdateSetHelper: { path: addToUpdateSetPath, deployed: !!addToUpdateSetPath }
+        addToUpdateSetHelper: { path: addToUpdateSetPath, deployed: !!addToUpdateSetPath },
+        scopeHelper: { path: scopeHelperPath, deployed: !!scopeHelperPath }
       }
     };
   }
@@ -188,6 +197,9 @@ export async function initializeInstance(
     if (status.apis.addToUpdateSetHelper.basePath) {
       client.setHelperApiPath('addToUpdateSetHelper', status.apis.addToUpdateSetHelper.basePath);
     }
+    if (status.apis.scopeHelper.basePath) {
+      client.setHelperApiPath('scopeHelper', status.apis.scopeHelper.basePath);
+    }
 
     client.helperApisInitialized = true;
 
@@ -207,6 +219,10 @@ export async function initializeInstance(
         addToUpdateSetHelper: {
           deployed: status.apis.addToUpdateSetHelper.deployed,
           path: status.apis.addToUpdateSetHelper.basePath
+        },
+        scopeHelper: {
+          deployed: status.apis.scopeHelper.deployed,
+          path: status.apis.scopeHelper.basePath
         }
       }
     };

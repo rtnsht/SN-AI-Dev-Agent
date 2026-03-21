@@ -86,12 +86,19 @@ function redactSensitive(obj: unknown): unknown {
       lowerKey.includes("api_key") ||
       lowerKey.includes("secret") ||
       lowerKey.includes("credential") ||
+      lowerKey.includes("cookie") ||
+      lowerKey.includes("jsessionid") ||
+      lowerKey.includes("sessionid") ||
+      lowerKey.includes("session_id") ||
       // Auth tokens only — preserve metric fields like inputTokens, outputTokens
       lowerKey === "token" ||
       lowerKey.includes("sessiontoken") ||
       lowerKey.includes("authtoken") ||
       lowerKey.includes("accesstoken") ||
       lowerKey.includes("refreshtoken") ||
+      lowerKey.includes("id_token") ||
+      lowerKey.includes("authorizationcode") ||
+      lowerKey.includes("codeverifier") ||
       lowerKey.includes("bearertoken") ||
       lowerKey.includes("csrf")
     ) {

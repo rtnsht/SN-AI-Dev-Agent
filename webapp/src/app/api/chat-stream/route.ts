@@ -3,6 +3,8 @@ import { chatStream, type UserCredentials, type ChatMessage } from "@/lib/sn-eng
 import { checkAccess } from "@/lib/access-tier";
 import { logger, generateSessionId } from "@/lib/logger";
 import { getSupabase } from "@/lib/supabase";
+import { resolvePolicy, resolvePhase, isValidPhase, SDD_GLOBAL_DEFAULT } from "@/lib/sdd-policy";
+import { normalizeServiceNowAuthMethod, validateServiceNowCredentials } from "@/lib/servicenow-auth";
 
 export const maxDuration = 300;
 
@@ -12,23 +14,44 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { credentials, messages, model, aiProvider, sessionId: clientSessionId, phase } = body as {
+    const { credentials, messages, model, aiProvider, sessionId: clientSessionId, phase, sddMode: clientSddMode } = body as {
       credentials: UserCredentials;
       messages: ChatMessage[];
       model?: string;
       aiProvider?: "anthropic" | "openrouter";
       sessionId?: string;
       phase?: string;
+      sddMode?: boolean;
     };
+
+    // Reject invalid phase before policy resolution
+    if (phase && !isValidPhase(phase)) {
+      logger.warn(sessionId, "phase_violation", `Invalid phase value: ${phase}`, { sddMode: clientSddMode });
+      return new Response(
+        JSON.stringify({ error: "Invalid SDLC phase" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    const sddPolicy = resolvePolicy({
+      sessionOverride: clientSddMode ?? null,
+      globalDefault: SDD_GLOBAL_DEFAULT,
+    });
+    const effectivePhase = resolvePhase(sddPolicy, phase);
 
     // Use client-provided session ID to maintain same log file throughout chat session
     // Fall back to generating a new one if client didn't provide one
     sessionId = clientSessionId || generateSessionId();
 
-    // Fall back to server-side env vars for ServiceNow credentials
+    const authType = normalizeServiceNowAuthMethod(credentials.snAuthType);
+    credentials.snAuthType = authType;
+
+    // Fall back to server-side env vars only for the legacy basic-auth path.
     if (!credentials.instanceUrl) credentials.instanceUrl = process.env.SN_INSTANCE_URL || "";
-    if (!credentials.username) credentials.username = process.env.SN_USERNAME || "";
-    if (!credentials.password) credentials.password = process.env.SN_PASSWORD || "";
+    if (authType === "basic") {
+      if (!credentials.username) credentials.username = process.env.SN_USERNAME || "";
+      if (!credentials.password) credentials.password = process.env.SN_PASSWORD || "";
+    }
 
     // Set AI provider
     credentials.aiProvider = aiProvider || "anthropic";
@@ -38,10 +61,15 @@ export async function POST(request: NextRequest) {
     // using the client-provided sessionId, which ensures all logs for a browser
     // session go to the same file (filename is derived deterministically from sessionId).
 
-    if (!credentials.instanceUrl || !credentials.username || !credentials.password) {
-      logger.error(sessionId, "validation", "Missing credentials", { ip });
+    const snValidationError = validateServiceNowCredentials(credentials, {
+      serverBasicConfigured: authType === "basic" && Boolean(process.env.SN_PASSWORD),
+      requireUsernameForBasic: true,
+    });
+
+    if (snValidationError) {
+      logger.error(sessionId, "validation", "Missing credentials", { ip, authType });
       return new Response(
-        JSON.stringify({ error: "Missing credentials" }),
+        JSON.stringify({ error: snValidationError }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
@@ -141,6 +169,16 @@ export async function POST(request: NextRequest) {
       } catch { /* non-blocking */ }
     }
 
+    // Log SDD enforcement decision
+    if (sddPolicy.sddActive) {
+      logger.info(sessionId, "sdd_mode", "SDD enforcement active", {
+        clientPhase: phase || null,
+        effectivePhase,
+        enforcementLevel: sddPolicy.enforcementLevel,
+        reason: sddPolicy.reason,
+      });
+    }
+
     const imageCount = chatMessages.reduce((acc, m) => acc + (m.images?.length || 0), 0);
 
     // Log per-message timestamps for audit trail
@@ -199,7 +237,7 @@ export async function POST(request: NextRequest) {
         }, HEARTBEAT_INTERVAL_MS);
 
         try {
-          for await (const event of chatStream(credentials, chatMessages, selectedModel, 30, sessionId, phase, abortController.signal)) {
+          for await (const event of chatStream(credentials, chatMessages, selectedModel, 30, sessionId, effectivePhase, abortController.signal, sddPolicy.sddActive)) {
             if (event.type === "tool_end") toolCount++;
             const data = `data: ${JSON.stringify(event)}\n\n`;
             safeEnqueue(encoder.encode(data));

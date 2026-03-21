@@ -2,13 +2,42 @@
  * TypeScript types for MCP ServiceNow Server
  */
 
+export type SNAuthType =
+  | 'basic'
+  | 'bearer'
+  | 'oauth_client_credentials'
+  | 'oauth_authorization_code'
+  | 'session';
+
+export interface SNBrowserCookie {
+  name: string;
+  value: string;
+  domain: string;
+  path?: string;
+  expires?: number;
+  httpOnly?: boolean;
+  secure?: boolean;
+  sameSite?: 'Strict' | 'Lax' | 'None';
+}
+
 export interface SNConfig {
   instanceUrl: string;
-  username: string;
-  password: string;
+  username?: string;
+  password?: string;
   clientId?: string;
   clientSecret?: string;
   defaultScope?: string;
+  authType?: SNAuthType;
+  accessToken?: string;
+  refreshToken?: string;
+  authorizationCode?: string;
+  codeVerifier?: string;
+  redirectUri?: string;
+  tokenEndpoint?: string;
+  authorizationEndpoint?: string;
+  scope?: string;
+  sessionCookies?: SNBrowserCookie[];
+  sessionToken?: string;
 }
 
 export interface SNRecord {

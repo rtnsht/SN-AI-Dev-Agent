@@ -11,11 +11,11 @@ This document captures the issues, root causes, and fixes for the production pro
 - The route handler correctly implemented `POST`; the failure was at the gateway layer.
 
 ### Root cause
-- The Next.js **middleware** (`webapp/src/middleware.ts`) gates all non-public routes by session. Anonymous requests to `/api/enhance-prompt` were treated as unauthenticated and rejected with **401** (or surfaced as **405** depending on CDN/proxy behavior).
+- The Next.js **middleware** (`webapp/src/proxy.ts`) gates all non-public routes by session. Anonymous requests to `/api/enhance-prompt` were treated as unauthenticated and rejected with **401** (or surfaced as **405** depending on CDN/proxy behavior).
 - `/api/enhance-prompt` was **not** listed in `PUBLIC_PATHS`, so the middleware blocked it before the route handler ran.
 
 ### Fix
-- Add `/api/enhance-prompt` to the `PUBLIC_PATHS` array in `webapp/src/middleware.ts` so the endpoint is reachable without a session.
+- Add `/api/enhance-prompt` to the `PUBLIC_PATHS` array in `webapp/src/proxy.ts` so the endpoint is reachable without a session.
 
 ### Takeaway
 - When adding a new **public** API route (e.g. used from the landing/app page without login), always add it to `PUBLIC_PATHS` in the auth middleware.
@@ -77,7 +77,7 @@ Two separate problems caused OTP emails to fail: one in the **auth header**, one
 
 | Area | File | Change |
 |------|------|--------|
-| Middleware | `webapp/src/middleware.ts` | Added `/api/enhance-prompt` to `PUBLIC_PATHS`. |
+| Middleware | `webapp/src/proxy.ts` | Added `/api/enhance-prompt` to `PUBLIC_PATHS`. |
 | Email | `webapp/src/lib/email.ts` | Use `ZEPTOMAIL_API_KEY` directly for `Authorization`; removed `bounce_address` from payload and `BOUNCE_ADDRESS` constant; single read of response body for error logging. |
 | Auth (optional resilience) | `webapp/src/lib/auth.ts` | Legacy OTP token format fallback when `otp_code` column is missing (if applied). |
 | Request-access | `webapp/src/app/api/auth/request-access/route.ts` | e.g. `use_case` default, error handling (if applied). |

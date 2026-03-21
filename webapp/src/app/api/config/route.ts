@@ -51,6 +51,13 @@ export async function GET(request: NextRequest) {
     showLiveStatus: process.env.NEXT_PUBLIC_SHOW_LIVE_STATUS !== "false",
     // Whether users are allowed to provide their own Claude API key (default: true)
     allowUserApiKeys: process.env.ALLOW_USER_API_KEYS !== "false",
+    // Browser-assisted ServiceNow sign-in availability
+    browserScopeSwitchEnabled:
+      process.env.ENABLE_BROWSER_SCOPE_SWITCH === "true" ||
+      process.env.BROWSER_SCOPE_SWITCH_MODE === "headless" ||
+      process.env.BROWSER_SCOPE_SWITCH_MODE === "headed" ||
+      process.env.BROWSER_SCOPE_SWITCH_MODE === "cdp",
+    browserScopeSwitchMode: process.env.BROWSER_SCOPE_SWITCH_MODE || null,
   });
 }
 

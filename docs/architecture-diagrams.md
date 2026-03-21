@@ -208,7 +208,7 @@ It is deployed to **Render** with auto-scaling (1–5 instances) based on CPU an
 │                           NEXT.JS SERVER                                    │
 │                                     │                                       │
 │  ┌──────────────────────────────────▼──────────────────────────────────┐    │
-│  │                      middleware.ts (Auth Gate)                       │    │
+│  │                      proxy.ts (Auth Gate)                       │    │
 │  │         Session validation · Role checks · Header injection         │    │
 │  └──────┬──────────────────┬───────────────────────┬───────────────────┘    │
 │         │                  │                       │                        │

@@ -47,7 +47,7 @@ Add an invite-only access gate to the SN AI Agent webapp. Visitors must either r
 ┌─────────────┐       ┌──────────────────────────────────────────┐
 │   Browser   │◄─────►│  Next.js Webapp (existing)               │
 │             │       │  ┌──────────────────────────────────────┐ │
-│  - Login    │       │  │  middleware.ts (auth gate)           │ │
+│  - Login    │       │  │  proxy.ts (auth gate)           │ │
 │  - Request  │       │  │  ├── Public routes → pass through   │ │
 │  - App      │       │  │  ├── Protected → check session      │ │
 │  - Admin    │       │  │  └── Admin → check session + role   │ │

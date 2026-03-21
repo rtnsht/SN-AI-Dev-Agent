@@ -3,6 +3,8 @@ import { chat, type UserCredentials, type ChatMessage } from "@/lib/sn-engine";
 import { checkAccess } from "@/lib/access-tier";
 import { logger, generateSessionId } from "@/lib/logger";
 import { getSupabase } from "@/lib/supabase";
+import { resolvePolicy, resolvePhase, isValidPhase, SDD_GLOBAL_DEFAULT } from "@/lib/sdd-policy";
+import { normalizeServiceNowAuthMethod, validateServiceNowCredentials } from "@/lib/servicenow-auth";
 
 export const maxDuration = 300; // Allow up to 5 minutes for tool-use loops
 
@@ -12,22 +14,40 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { credentials, messages, model, aiProvider, sessionId: clientSessionId, phase } = body as {
+    const { credentials, messages, model, aiProvider, sessionId: clientSessionId, phase, sddMode: clientSddMode } = body as {
       credentials: UserCredentials;
       messages: ChatMessage[];
       model?: string;
       aiProvider?: "anthropic" | "openrouter";
       sessionId?: string;
       phase?: string;
+      sddMode?: boolean;
     };
+
+    // Reject invalid phase before policy resolution
+    if (phase && !isValidPhase(phase)) {
+      logger.warn(sessionId, "phase_violation", `Invalid phase value: ${phase}`, { sddMode: clientSddMode });
+      return NextResponse.json({ error: "Invalid SDLC phase" }, { status: 400 });
+    }
+
+    const sddPolicy = resolvePolicy({
+      sessionOverride: clientSddMode ?? null,
+      globalDefault: SDD_GLOBAL_DEFAULT,
+    });
+    const effectivePhase = resolvePhase(sddPolicy, phase);
 
     // Use client-provided session ID to maintain same log file throughout chat session
     sessionId = clientSessionId || generateSessionId();
 
-    // Fall back to server-side env vars for ServiceNow credentials
+    const authType = normalizeServiceNowAuthMethod(credentials.snAuthType);
+    credentials.snAuthType = authType;
+
+    // Fall back to server-side env vars only for legacy basic auth.
     if (!credentials.instanceUrl) credentials.instanceUrl = process.env.SN_INSTANCE_URL || "";
-    if (!credentials.username) credentials.username = process.env.SN_USERNAME || "";
-    if (!credentials.password) credentials.password = process.env.SN_PASSWORD || "";
+    if (authType === "basic") {
+      if (!credentials.username) credentials.username = process.env.SN_USERNAME || "";
+      if (!credentials.password) credentials.password = process.env.SN_PASSWORD || "";
+    }
 
     // Set AI provider
     credentials.aiProvider = aiProvider || "anthropic";
@@ -38,10 +58,15 @@ export async function POST(request: NextRequest) {
     // session go to the same file (filename is derived deterministically from sessionId).
 
     // Validate required fields
-    if (!credentials.instanceUrl || !credentials.username || !credentials.password) {
-      logger.error(sessionId, "validation", "Missing credentials", { ip });
+    const snValidationError = validateServiceNowCredentials(credentials, {
+      serverBasicConfigured: authType === "basic" && Boolean(process.env.SN_PASSWORD),
+      requireUsernameForBasic: true,
+    });
+
+    if (snValidationError) {
+      logger.error(sessionId, "validation", "Missing credentials", { ip, authType });
       return NextResponse.json(
-        { error: "Missing credentials. Provide instanceUrl, username, and password." },
+        { error: snValidationError },
         { status: 400 }
       );
     }
@@ -164,7 +189,7 @@ export async function POST(request: NextRequest) {
     });
 
     const startTime = Date.now();
-    const result = await chat(credentials, chatMessages, selectedModel, sessionId, phase);
+    const result = await chat(credentials, chatMessages, selectedModel, sessionId, effectivePhase);
     const durationMs = Date.now() - startTime;
 
     const responseTimestamp = new Date().toISOString();

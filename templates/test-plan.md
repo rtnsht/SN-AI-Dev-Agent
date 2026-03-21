@@ -46,14 +46,25 @@
 
 ## 3. Test Cases
 
-### TC-001: [Test Case Name]
+> Test cases are auto-generated from the spec and design documents.
+> Use `node scripts/generate-test-plan.cjs --req REQ-XXX` to regenerate.
+
+<!-- AUTO_TEST_CASES -->
+
+### 3.1 Positive Test Cases
+
+_Happy path, valid inputs, role-based success paths._
+
+### TC-P001: [Positive Test Case Name]
 
 | Field | Value |
 |-------|-------|
-| **ID** | TC-001 |
+| **ID** | TC-P001 |
+| **Category** | Positive |
 | **Priority** | High / Medium / Low |
-| **Type** | Functional / Integration / E2E |
+| **Type** | Functional |
 | **Automation** | Manual / ATF |
+| **Requirement** | REQ-XXX |
 
 **Preconditions:**
 - Condition 1
@@ -63,30 +74,50 @@
 | Step | Action | Expected Result |
 |------|--------|-----------------|
 | 1 | | |
-| 2 | | |
-| 3 | | |
-
-**Postconditions:**
-- State after test
 
 ---
 
-### TC-002: [Test Case Name]
+### 3.2 Negative Test Cases
+
+_Error handling, invalid inputs, boundary violations, unauthorized access._
+
+### TC-N001: [Negative Test Case Name]
 
 | Field | Value |
 |-------|-------|
-| **ID** | TC-002 |
-| **Priority** | |
-| **Type** | |
-| **Automation** | |
+| **ID** | TC-N001 |
+| **Category** | Negative |
+| **Priority** | High / Medium / Low |
+| **Type** | Error Handling / Security |
+| **Automation** | Manual / ATF |
 
 **Preconditions:**
-- 
+- Condition 1
 
 **Test Steps:**
 | Step | Action | Expected Result |
 |------|--------|-----------------|
 | 1 | | |
+
+---
+
+### 3.3 Integration Test Cases
+
+_Cross-artifact interactions, data flow, event propagation._
+
+---
+
+### 3.4 Security Test Cases
+
+_ACL verification, PII exposure checks, BLOCK-tier pattern validation._
+
+---
+
+### 3.5 Coverage Matrix
+
+| Requirement | Test Cases | Covered |
+|-------------|------------|---------|
+| REQ-XXX | TC-P001, TC-N001 | ✅ |
 
 ---
 

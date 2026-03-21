@@ -114,7 +114,7 @@ The AI creates a deployment record documenting what was deployed, when, by whom,
 
 **This phase auto-proceeds — no approval needed.**
 
-The result: every feature built through SN AI Agent has a complete audit trail — spec, design, implementation, test results, and deployment record — all linked together.
+The result: every feature built through SN AI Agent has a complete audit trail — spec, design, implementation, test results, and deployment record — all linked together. For the full design of these quality gates (configuration, sign-off rules, and validation), see [Quality Gate Design](quality-gate-design.md). For how the system handles custom application scopes and update set capture, see [Custom Scope Capture](custom-scope-capture.md).
 
 ---
 
