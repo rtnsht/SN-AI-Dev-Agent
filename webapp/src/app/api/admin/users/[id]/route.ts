@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
 import { deleteAllUserSessions } from "@/lib/auth";
+import { requireAdmin } from "@/lib/admin-auth";
 
 /** PATCH /api/admin/users/[id] — suspend or activate */
 export async function PATCH(
@@ -8,6 +9,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireAdmin(request);
+    if (!auth.ok) return auth.response;
+
     const { id } = await params;
     const { action } = await request.json();
 

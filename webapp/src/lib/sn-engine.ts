@@ -633,12 +633,21 @@ function summarizeToolInput(input: unknown): Record<string, unknown> {
     const lower = key.toLowerCase();
     return (
       lower.includes("password") ||
+      lower.includes("apikey") ||
+      lower.includes("api_key") ||
       lower.includes("secret") ||
-      lower.includes("token") ||
+      lower.includes("credential") ||
       lower.includes("cookie") ||
-      lower.includes("sessionid") ||
       lower.includes("jsessionid") ||
-      lower.includes("authorizationcode") ||
+      lower.includes("sessionid") ||
+      lower.includes("session_id") ||
+      lower.includes("authorization") ||
+      lower.includes("auth") ||
+      lower.includes("email") ||
+      lower.includes("username") ||
+      lower === "ip" ||
+      lower.includes("ip_address") ||
+      lower.includes("token") ||
       lower.includes("codeverifier")
     );
   };
@@ -1234,12 +1243,21 @@ export async function* chatStream(
   }
 
   const ROUNDS_WARNING_THRESHOLD = 3; // Warn Claude when this many rounds remain
+  const startTime = Date.now();
+  const MAX_EXECUTION_TIME_MS = 280_000; // 280s (leaves 20s buffer before 300s platform kill)
 
   while (rounds < adjustedMaxRounds) {
     // Abort signal check — bail early if client disconnected (saves API calls)
     if (signal?.aborted) {
       logger.info(sessionId, "chat_stream", "Aborted by client signal", { rounds, phase: phase || "none" });
       yield { type: "error", message: "Request aborted by client" };
+      return;
+    }
+
+    // Time limit check — bail early if approaching platform timeout
+    if (Date.now() - startTime > MAX_EXECUTION_TIME_MS) {
+      logger.warn(sessionId, "chat_stream", "Approaching platform time limit, aborting loop", { rounds, executionTime: Date.now() - startTime });
+      yield { type: "error", message: "Request took too long and was aborted to prevent platform timeout. Please try breaking your request into smaller steps." };
       return;
     }
 
@@ -1516,12 +1534,22 @@ async function* chatStreamOpenRouter(
     }
   }
 
+  const startTime = Date.now();
+  const MAX_EXECUTION_TIME_MS = 280_000; // 280s (leaves 20s buffer before 300s platform kill)
+
   while (rounds < adjustedMaxRounds) {
     if (signal?.aborted) {
       logger.info(sessionId, "chat_stream", "OpenRouter: Aborted by client signal", { rounds, phase: phase || "none" });
       yield { type: "error", message: "Request aborted by client" };
       return;
     }
+
+    if (Date.now() - startTime > MAX_EXECUTION_TIME_MS) {
+      logger.warn(sessionId, "chat_stream", "OpenRouter: Approaching platform time limit, aborting loop", { rounds, executionTime: Date.now() - startTime });
+      yield { type: "error", message: "Request took too long and was aborted to prevent platform timeout. Please try breaking your request into smaller steps." };
+      return;
+    }
+
     rounds++;
     yield { type: "status", message: `Round ${rounds}: Analyzing request...`, phase: "thinking" };
 

@@ -134,6 +134,15 @@ async function consumeAnon(ip: string, instanceUrl?: string): Promise<void> {
   const today = todayStr();
   const instVal = instanceUrl || null;
 
+  // Try atomic RPC first
+  const { error: rpcError } = await sb.rpc("increment_anon_request_count", {
+    p_ip_address: ip,
+    p_instance_url: instVal || "",
+    p_request_date: today
+  });
+
+  if (!rpcError) return;
+
   // Try upsert — increment request_count for existing row
   const { data: existing } = await sb
     .from("anon_request_log")
@@ -168,19 +177,28 @@ async function getAuthUsage(userId: string): Promise<number> {
     .select("request_count")
     .eq("user_id", userId)
     .eq("request_date", today)
-    .single();
+    .maybeSingle();
   return data?.request_count || 0;
 }
 
 async function consumeAuth(userId: string): Promise<void> {
   const sb = getSupabase();
   const today = todayStr();
+  
+  // Try atomic RPC first
+  const { error: rpcError } = await sb.rpc("increment_auth_request_count", {
+    p_user_id: userId,
+    p_request_date: today
+  });
+
+  if (!rpcError) return;
+
   const { data: existing } = await sb
     .from("request_log")
     .select("id, request_count")
     .eq("user_id", userId)
     .eq("request_date", today)
-    .single();
+    .maybeSingle();
 
   if (existing) {
     await sb.from("request_log").update({ request_count: existing.request_count + 1 }).eq("id", existing.id);

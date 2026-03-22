@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { checkAccess } from "@/lib/access-tier";
 
 const SYSTEM_PROMPTS: Record<string, string> = {
   grammar: `You are a grammar and spelling corrector. Fix any grammar, spelling, and punctuation errors in the user's text. Preserve the original meaning and tone. Return ONLY the corrected text with no explanation, preamble, or surrounding quotes.`,
@@ -7,6 +8,20 @@ const SYSTEM_PROMPTS: Record<string, string> = {
 
 export async function POST(request: NextRequest) {
   try {
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const userId = request.headers.get("x-user-id");
+
+    // Enforce rate limiting for enhance-prompt to prevent DoW
+    try {
+      const access = await checkAccess(ip, userId, false, "enhance-prompt");
+      if (!access.allowed) {
+        return NextResponse.json({ error: "Rate limit exceeded for prompt enhancement." }, { status: 429 });
+      }
+    } catch (accessErr) {
+      console.error("[enhance-prompt] Access check failed:", accessErr);
+      return NextResponse.json({ error: "Access verification unavailable." }, { status: 503 });
+    }
+
     const { text, mode } = await request.json();
 
     if (!text || typeof text !== "string" || !text.trim()) {

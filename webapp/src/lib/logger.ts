@@ -90,6 +90,12 @@ function redactSensitive(obj: unknown): unknown {
       lowerKey.includes("jsessionid") ||
       lowerKey.includes("sessionid") ||
       lowerKey.includes("session_id") ||
+      lowerKey.includes("authorization") ||
+      lowerKey.includes("auth") ||
+      lowerKey.includes("email") ||
+      lowerKey.includes("username") ||
+      lowerKey === "ip" ||
+      lowerKey.includes("ip_address") ||
       // Auth tokens only — preserve metric fields like inputTokens, outputTokens
       lowerKey === "token" ||
       lowerKey.includes("sessiontoken") ||

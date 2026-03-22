@@ -101,6 +101,19 @@ async function createSessionLog(
 ): Promise<void> {
   try {
     const db = getSupabase();
+
+    // Prevent IDOR: Check if session exists and belongs to a different user
+    const { data: existingSession } = await db
+      .from("session_logs")
+      .select("user_id")
+      .eq("session_id", sessionId)
+      .maybeSingle();
+
+    if (existingSession && existingSession.user_id !== (userId || null)) {
+      console.error(`[session-start] IDOR attempt detected: User ${userId} tried to overwrite session ${sessionId} belonging to ${existingSession.user_id}`);
+      return;
+    }
+
     const { error } = await db.from("session_logs").upsert(
       {
         session_id: sessionId,

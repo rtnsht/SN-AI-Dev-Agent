@@ -9,6 +9,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { endSession, log } from "@/lib/logger";
 import { getLogPersistence } from "@/lib/log-persistence";
 import { stopTelemetryStream } from "@/lib/telemetry-generator";
+import { validateSession, SESSION_COOKIE_NAME } from "@/lib/auth";
+import { getSupabase } from "@/lib/supabase";
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,6 +19,30 @@ export async function POST(request: NextRequest) {
 
     if (!sessionId) {
       return NextResponse.json({ error: "sessionId required" }, { status: 400 });
+    }
+
+    // Prevent IDOR: Check if session belongs to the current user
+    const sessionToken = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+    let userId: string | null = null;
+    if (sessionToken) {
+      try {
+        const authSession = await validateSession(sessionToken);
+        userId = authSession?.user?.id || null;
+      } catch {
+        userId = null;
+      }
+    }
+
+    const db = getSupabase();
+    const { data: existingSession } = await db
+      .from("session_logs")
+      .select("user_id")
+      .eq("session_id", sessionId)
+      .maybeSingle();
+
+    if (existingSession && existingSession.user_id !== userId) {
+      console.error(`[session-end] IDOR attempt detected: User ${userId} tried to end session ${sessionId} belonging to ${existingSession.user_id}`);
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
     log("info", sessionId, "session_end", "Session ended — client signaled end");

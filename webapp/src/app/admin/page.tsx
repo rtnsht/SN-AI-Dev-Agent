@@ -832,7 +832,7 @@ export default function AdminPage() {
                     textAlign: "center",
                     lineHeight: 1.5,
                   }}
-                  dangerouslySetInnerHTML={{ __html: editorRef.current?.innerHTML || "<em>Start typing content above...</em>" }}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(editorRef.current?.innerHTML || "<em>Start typing content above...</em>", { ALLOWED_TAGS: ["b", "i", "u", "em", "strong", "a", "br", "p", "span"], ALLOWED_URI_REGEXP: /^(?:(?:(?:https?|mailto|tel):)|(?:#))/i }) }}
                 />
               </div>
 
@@ -927,7 +927,7 @@ export default function AdminPage() {
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
                         }}
-                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(b.content_html || "", { ALLOWED_TAGS: ["b", "i", "u", "em", "strong", "a", "br", "p", "span"] }) }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(b.content_html || "", { ALLOWED_TAGS: ["b", "i", "u", "em", "strong", "a", "br", "p", "span"], ALLOWED_URI_REGEXP: /^(?:(?:(?:https?|mailto|tel):)|(?:#))/i }) }}
                       />
                     </td>
                     <td style={{ fontSize: "11px" }}>{b.pages.join(", ")}</td>

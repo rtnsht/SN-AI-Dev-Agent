@@ -158,14 +158,41 @@ export async function POST(request: NextRequest) {
 
     const selectedModel = model || "claude-sonnet-4-6";
 
+    // Prevent Cost Exhaustion: Whitelist models when using the server's OpenRouter key
+    if (credentials.aiProvider === "openrouter" && !userSuppliedKey) {
+      const allowedServerModels = [
+        "anthropic/claude-3.5-sonnet",
+        "anthropic/claude-3-haiku",
+        "google/gemini-1.5-flash",
+        "google/gemini-2.0-flash-001",
+        "meta-llama/llama-3.1-8b-instruct",
+        "meta-llama/llama-3.1-70b-instruct"
+      ];
+      if (!allowedServerModels.includes(selectedModel)) {
+        logger.error(sessionId, "validation", "Unauthorized model requested with server key", { model: selectedModel });
+        return new Response(
+          JSON.stringify({ error: "The requested model is not allowed when using the server's API key. Please provide your own OpenRouter key for this model." }),
+          { status: 403, headers: { "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     // Update session_logs.model to reflect the actual model used in this chat
     // (may differ from what was set at connect time if user changed the dropdown)
     if (sessionId && sessionId !== "unknown") {
       try {
-        void getSupabase().from("session_logs")
+        const query = getSupabase().from("session_logs")
           .update({ model: selectedModel, updated_at: new Date().toISOString() })
-          .eq("session_id", sessionId)
-          .then(() => {});
+          .eq("session_id", sessionId);
+        
+        // Prevent IDOR: ensure we only update if the session belongs to the caller
+        if (userId) {
+          query.eq("user_id", userId);
+        } else {
+          query.is("user_id", null);
+        }
+        
+        void query.then(() => {});
       } catch { /* non-blocking */ }
     }
 
@@ -186,7 +213,6 @@ export async function POST(request: NextRequest) {
       index: i,
       role: m.role,
       timestamp: m.timestamp || null,
-      contentPreview: m.content?.slice(0, 80) || "",
     }));
 
     logger.info(sessionId, "chat_stream", "Starting streaming chat request", {

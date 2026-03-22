@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
 import { createAuthToken } from "@/lib/auth";
 import { sendApprovalEmail } from "@/lib/email";
+import { requireAdmin } from "@/lib/admin-auth";
 
 /** PATCH /api/admin/requests/[id] — approve or reject */
 export async function PATCH(
@@ -9,6 +10,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireAdmin(request);
+    if (!auth.ok) return auth.response;
+
     const { id } = await params;
     const { action } = await request.json();
     const adminEmail = request.headers.get("x-user-email") || "admin";

@@ -1,14 +1,6 @@
 import axios from "axios";
 import { NextRequest, NextResponse } from "next/server";
-
-function isAllowedInstanceUrl(instanceUrl: string): boolean {
-  try {
-    const hostname = new URL(instanceUrl).hostname.toLowerCase();
-    return hostname.endsWith(".service-now.com") || hostname.endsWith(".servicenow.com");
-  } catch {
-    return false;
-  }
-}
+import { isAllowedInstanceUrl } from "@/lib/servicenow-auth";
 
 export async function POST(request: NextRequest) {
   try {

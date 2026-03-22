@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
+import { requireAdmin } from "@/lib/admin-auth";
 
 /** GET /api/admin/trials — list global config, all overrides, and usage stats */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (!auth.ok) return auth.response;
+
     const db = getSupabase();
 
     // Global config
@@ -90,6 +94,9 @@ export async function GET() {
 /** POST /api/admin/trials — create/update global config or add override */
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (!auth.ok) return auth.response;
+
     const body = await request.json();
     const { scope, scope_value, daily_limit, trial_days, is_active } = body;
 
@@ -197,6 +204,9 @@ export async function POST(request: NextRequest) {
 /** DELETE /api/admin/trials — remove an override by id */
 export async function DELETE(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (!auth.ok) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 

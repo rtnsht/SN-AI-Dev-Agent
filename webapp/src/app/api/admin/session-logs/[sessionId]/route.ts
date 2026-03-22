@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
+import { requireAdmin } from "@/lib/admin-auth";
 
 /**
  * GET /api/admin/session-logs/[sessionId]
@@ -7,10 +8,13 @@ import { getSupabase } from "@/lib/supabase";
  * Get full session log detail including log_entries and telemetry_summary.
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
+    const auth = await requireAdmin(request);
+    if (!auth.ok) return auth.response;
+
     const { sessionId } = await params;
 
     if (!sessionId) {
