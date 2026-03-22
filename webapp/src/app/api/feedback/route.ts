@@ -3,6 +3,7 @@ import { getSupabase } from "@/lib/supabase";
 import { checkFeedbackSubmission } from "@/lib/auth-rate-limiter";
 import { sendFeedbackNotification } from "@/lib/email";
 import crypto from "crypto";
+import { getClientIp } from "@/lib/client-ip";
 
 const ALLOWED_MIME_TYPES = new Set([
   "image/png",
@@ -27,10 +28,8 @@ function isValidEmail(email: string): boolean {
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      "unknown";
-    const rl = checkFeedbackSubmission(ip);
+    const ip = getClientIp(request);
+    const rl = await checkFeedbackSubmission(ip);
     if (!rl.allowed) {
       return NextResponse.json(
         { error: "Too many submissions. Please try again later." },

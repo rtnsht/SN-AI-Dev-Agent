@@ -112,6 +112,16 @@ async function getTodayUsage(userId: string): Promise<number> {
 async function getTotalUsage(userId: string): Promise<number> {
   const sb = getSupabase();
 
+  // Try RPC first
+  const { data: rpcData, error: rpcError } = await sb.rpc("get_total_usage", {
+    p_user_id: userId
+  });
+
+  if (!rpcError && rpcData !== null) {
+    return Number(rpcData);
+  }
+
+  // Fallback to in-memory aggregation if RPC doesn't exist
   const { data } = await sb
     .from("request_log")
     .select("request_count")
@@ -189,13 +199,21 @@ export async function consumeTrialRequest(
   const sb = getSupabase();
   const today = new Date().toISOString().split("T")[0];
 
-  // Upsert: increment if exists, create with count=1 if not
+  // Try atomic RPC first
+  const { error: rpcError } = await sb.rpc("increment_auth_request_count", {
+    p_user_id: userId,
+    p_request_date: today
+  });
+
+  if (!rpcError) return;
+
+  // Fallback to read-modify-write if RPC doesn't exist
   const { data: existing } = await sb
     .from("request_log")
     .select("id, request_count")
     .eq("user_id", userId)
     .eq("request_date", today)
-    .single();
+    .maybeSingle();
 
   if (existing) {
     await sb

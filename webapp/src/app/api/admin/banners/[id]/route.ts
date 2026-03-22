@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
 import { sanitizeBannerHtml } from "@/lib/sanitize-html";
 import { requireAdmin } from "@/lib/admin-auth";
+import { parseBannerPatchBody } from "@/lib/request-validation";
 
 /** PATCH /api/admin/banners/:id — update banner (toggle active, edit, etc.) */
 export async function PATCH(
@@ -13,7 +14,9 @@ export async function PATCH(
 
   try {
     const { id } = await params;
-    const body = await request.json();
+    const parsed = parseBannerPatchBody(await request.json());
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    const body = parsed.data;
     const db = getSupabase();
 
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };

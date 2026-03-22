@@ -9,14 +9,45 @@ import { NextRequest, NextResponse } from "next/server";
 import { endSession, log } from "@/lib/logger";
 import { getLogPersistence } from "@/lib/log-persistence";
 import { stopTelemetryStream } from "@/lib/telemetry-generator";
+import { validateSession, SESSION_COOKIE_NAME } from "@/lib/auth";
+import { getSupabase } from "@/lib/supabase";
+import { parseSessionEndBody } from "@/lib/request-validation";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { sessionId } = body;
+    const parsed = parseSessionEndBody(body);
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
+    }
+    const { sessionId } = parsed.data;
 
-    if (!sessionId) {
-      return NextResponse.json({ error: "sessionId required" }, { status: 400 });
+    // Prevent IDOR: Check if session belongs to the current user
+    const sessionToken = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+    let userId: string | null = null;
+    if (sessionToken) {
+      try {
+        const authSession = await validateSession(sessionToken);
+        userId = authSession?.user?.id || null;
+      } catch {
+        userId = null;
+      }
+    }
+
+    const db = getSupabase();
+    const { data: existingSession } = await db
+      .from("session_logs")
+      .select("user_id")
+      .eq("session_id", sessionId)
+      .maybeSingle();
+
+    if (!existingSession) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+
+    if (existingSession.user_id !== userId) {
+      console.error(`[session-end] IDOR attempt detected: User ${userId} tried to end session ${sessionId} belonging to ${existingSession.user_id}`);
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
     log("info", sessionId, "session_end", "Session ended — client signaled end");
@@ -35,13 +66,14 @@ export async function POST(request: NextRequest) {
       }
     } catch (flushErr) {
       console.error("[session-end] finalizeSession error:", flushErr);
+      return NextResponse.json({ success: false, error: "Failed to finalize session" }, { status: 503 });
     }
 
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("[session-end] Error:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : String(err) },
+      { error: "Failed to end session" },
       { status: 500 }
     );
   }

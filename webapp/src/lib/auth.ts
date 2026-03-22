@@ -194,24 +194,22 @@ export async function consumeAuthToken(
   expectedType?: TokenType
 ): Promise<{ email: string; userId: string | null; type: TokenType } | null> {
   const db = getSupabase();
+  const nowIso = new Date().toISOString();
 
   let query = db
     .from("auth_tokens")
-    .select("id, email, user_id, type")
+    .update({ used_at: nowIso })
     .eq("token", token)
     .is("used_at", null)
-    .gt("expires_at", new Date().toISOString());
+    .gt("expires_at", nowIso);
 
   if (expectedType) query = query.eq("type", expectedType);
 
-  const { data, error } = await query.single();
-  if (error || !data) return null;
+  const { data, error } = await query
+    .select("email, user_id, type")
+    .maybeSingle();
 
-  // Mark as used
-  await db
-    .from("auth_tokens")
-    .update({ used_at: new Date().toISOString() })
-    .eq("id", data.id);
+  if (error || !data) return null;
 
   return { email: data.email, userId: data.user_id, type: data.type as TokenType };
 }
@@ -280,20 +278,16 @@ export async function consumeOTPToken(
 
   const { data, error } = await db
     .from("auth_tokens")
-    .select("id, email")
+    .update({ used_at: nowIso })
     .eq("email", normalizedEmail)
     .eq("otp_code", otp)
     .eq("type", "email_verify")
     .is("used_at", null)
     .gt("expires_at", nowIso)
-    .single();
+    .select("email")
+    .maybeSingle();
 
   if (data) {
-    await db
-      .from("auth_tokens")
-      .update({ used_at: new Date().toISOString() })
-      .eq("id", data.id);
-
     return { email: data.email };
   }
 
@@ -305,20 +299,16 @@ export async function consumeOTPToken(
   const legacyPrefix = `${buildLegacyOtpTokenPrefix(normalizedEmail, otp)}%`;
   const { data: legacyData, error: legacyError } = await db
     .from("auth_tokens")
-    .select("id, email")
+    .update({ used_at: nowIso })
     .eq("email", normalizedEmail)
     .eq("type", "email_verify")
     .is("used_at", null)
     .gt("expires_at", nowIso)
     .like("token", legacyPrefix)
-    .single();
+    .select("email")
+    .maybeSingle();
 
   if (legacyError || !legacyData) return null;
-
-  await db
-    .from("auth_tokens")
-    .update({ used_at: new Date().toISOString() })
-    .eq("id", legacyData.id);
 
   return { email: legacyData.email };
 }
@@ -352,12 +342,14 @@ export function buildSetCookieHeader(token: string, expiresAt: Date): string {
 }
 
 export function buildClearCookieHeader(): string {
+  const secure = process.env.NODE_ENV === "production";
   return [
     `${SESSION_COOKIE_NAME}=`,
     `Path=/`,
     `HttpOnly`,
     `SameSite=Lax`,
     `Max-Age=0`,
+    ...(secure ? ["Secure"] : []),
   ].join("; ");
 }
 

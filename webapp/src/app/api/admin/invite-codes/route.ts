@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
 import { generateInviteCode } from "@/lib/auth";
+import { requireAdmin } from "@/lib/admin-auth";
+import { parseInviteCreateBody } from "@/lib/request-validation";
 
 /** GET /api/admin/invite-codes */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (!auth.ok) return auth.response;
+
     const db = getSupabase();
 
     const { data, error } = await db
@@ -27,12 +32,13 @@ export async function GET() {
 /** POST /api/admin/invite-codes — create a new invite code */
 export async function POST(request: NextRequest) {
   try {
-    const { label, max_uses, expires_in_days } = await request.json();
-    const adminUserId = request.headers.get("x-user-id");
+    const auth = await requireAdmin(request);
+    if (!auth.ok) return auth.response;
 
-    if (!adminUserId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const parsed = parseInviteCreateBody(await request.json());
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    const { label, max_uses, expires_in_days } = parsed.data;
+    const adminUserId = auth.session.user.id;
 
     const code = generateInviteCode();
     const expiresAt = expires_in_days

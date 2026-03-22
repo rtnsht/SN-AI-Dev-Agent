@@ -3,6 +3,8 @@ import { getSupabase } from "@/lib/supabase";
 import { createOTPToken } from "@/lib/auth";
 import { sendOTPEmail } from "@/lib/email";
 import { checkRequestAccess } from "@/lib/auth-rate-limiter";
+import { getClientIp } from "@/lib/client-ip";
+import { parseRequestAccessBody } from "@/lib/request-validation";
 
 /** Helper: send OTP and check result */
 async function sendOTPAndCheck(name: string, email: string, otp: string): Promise<{ success: boolean; error?: string }> {
@@ -15,17 +17,15 @@ async function sendOTPAndCheck(name: string, email: string, otp: string): Promis
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, email, company, use_case } = await request.json();
-
-    if (!name || !email) {
-      return NextResponse.json({ error: "Name and email are required" }, { status: 400 });
-    }
+    const parsed = parseRequestAccessBody(await request.json());
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    const { name, email, company, use_case } = parsed.data;
 
     const normalizedEmail = email.toLowerCase().trim();
 
     // Rate limit by IP
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-    const rl = checkRequestAccess(ip);
+    const ip = getClientIp(request);
+    const rl = await checkRequestAccess(ip);
     if (!rl.allowed) {
       return NextResponse.json(
         { error: "Too many requests. Please try again later." },

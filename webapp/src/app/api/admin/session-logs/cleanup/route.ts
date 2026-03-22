@@ -1,5 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
+import { requireAdmin } from "@/lib/admin-auth";
+import { parseCleanupBody } from "@/lib/request-validation";
 
 const LOG_RETENTION_DAYS = parseInt(process.env.LOG_RETENTION_DAYS || "90", 10);
 
@@ -10,15 +12,17 @@ const LOG_RETENTION_DAYS = parseInt(process.env.LOG_RETENTION_DAYS || "90", 10);
  * Pass { "retentionDays": N } in body to override the default.
  * Returns the count of deleted rows.
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (!auth.ok) return auth.response;
+
     let retentionDays = LOG_RETENTION_DAYS;
 
     try {
-      const body = await request.json();
-      if (typeof body.retentionDays === "number" && body.retentionDays > 0) {
-        retentionDays = body.retentionDays;
-      }
+      const parsed = parseCleanupBody(await request.json());
+      if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+      if (typeof parsed.data.retentionDays === "number") retentionDays = parsed.data.retentionDays;
     } catch {
       // No body or invalid JSON — use default
     }

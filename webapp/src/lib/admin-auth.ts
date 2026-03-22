@@ -14,6 +14,25 @@ export type AdminAuthResult =
  * Require a valid non-temporary session whose user has role `admin`.
  */
 export async function requireAdmin(request: NextRequest): Promise<AdminAuthResult> {
+  // Respect BYPASS_AUTH for local development
+  if (process.env.NODE_ENV !== "production" && process.env.BYPASS_AUTH === "true") {
+    return {
+      ok: true,
+      session: {
+        session_id: "bypass-session",
+        user: {
+          id: "bypass-user",
+          email: "bypass@example.com",
+          name: "Bypass Admin",
+          role: "admin",
+          status: "active",
+          must_set_password: false,
+        },
+        is_temporary: false,
+      }
+    };
+  }
+
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   if (!token) {
     return { ok: false, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };

@@ -7,7 +7,7 @@ import { OpenRouterModel } from "./types";
 import { fetchWithTimeout } from "./fetch-with-timeout";
 
 const OPENROUTER_API_BASE = "https://openrouter.ai/api/v1";
-const FETCH_TIMEOUT_MS = 30_000;
+const FETCH_TIMEOUT_MS = 120_000; // Increased to 120s to support reasoning models (o1, Claude 3.7)
 
 export interface OpenRouterConfig {
   apiKey: string;

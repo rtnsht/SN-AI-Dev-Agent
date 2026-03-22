@@ -102,12 +102,26 @@ function getClient(): ServiceNowClient {
 
 // Handle tool listing
 server.setRequestHandler(ListToolsRequestSchema, async () => {
+  const isReadOnly = process.env.SN_READONLY_MODE === 'true';
+  if (isReadOnly) {
+    // Only expose tools that start with sn_get or sn_search
+    return { tools: ALL_TOOLS.filter(t => t.name.startsWith('sn_get') || t.name.startsWith('sn_search')) };
+  }
   return { tools: ALL_TOOLS };
 });
 
 // Handle tool execution
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+  
+  const isReadOnly = process.env.SN_READONLY_MODE === 'true';
+  if (isReadOnly && !name.startsWith('sn_get') && !name.startsWith('sn_search')) {
+    return {
+      content: [{ type: 'text', text: JSON.stringify({ success: false, error: `Tool ${name} is disabled in readonly mode.` }, null, 2) }],
+      isError: true
+    };
+  }
+
   const snClient = getClient();
 
   try {

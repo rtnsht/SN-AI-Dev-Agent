@@ -15,6 +15,15 @@ export function hasSessionCookies(cookies?: BrowserSessionCookie[]): boolean {
   return Array.isArray(cookies) && cookies.length > 0;
 }
 
+export function isAllowedInstanceUrl(instanceUrl: string): boolean {
+  try {
+    const hostname = new URL(instanceUrl).hostname.toLowerCase();
+    return hostname.endsWith(".service-now.com") || hostname.endsWith(".servicenow.com");
+  } catch {
+    return false;
+  }
+}
+
 export function hasConnectableServiceNowAuth(
   credentials: Partial<Credentials>,
   options?: {
@@ -71,6 +80,10 @@ export function validateServiceNowCredentials(
 
   if (!credentials.instanceUrl) {
     return "Please provide the ServiceNow instance URL.";
+  }
+
+  if (!isAllowedInstanceUrl(credentials.instanceUrl)) {
+    return "Instance URL is not in the allowed ServiceNow domain list.";
   }
 
   switch (authType) {

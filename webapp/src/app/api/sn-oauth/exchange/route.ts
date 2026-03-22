@@ -1,33 +1,19 @@
 import axios from "axios";
 import { NextRequest, NextResponse } from "next/server";
-
-function isAllowedInstanceUrl(instanceUrl: string): boolean {
-  try {
-    const hostname = new URL(instanceUrl).hostname.toLowerCase();
-    return hostname.endsWith(".service-now.com") || hostname.endsWith(".servicenow.com");
-  } catch {
-    return false;
-  }
-}
+import { isAllowedInstanceUrl } from "@/lib/servicenow-auth";
+import { parseSnOAuthExchangeBody } from "@/lib/request-validation";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json() as {
-      instanceUrl?: string;
-      clientId?: string;
-      clientSecret?: string;
-      code?: string;
-      codeVerifier?: string;
-      redirectUri?: string;
-    };
-
-    const instanceUrl = body.instanceUrl?.replace(/\/$/, "") || "";
-    if (!instanceUrl || !body.clientId || !body.code || !body.codeVerifier || !body.redirectUri) {
+    const parsed = parseSnOAuthExchangeBody(await request.json());
+    if (!parsed.ok) {
       return NextResponse.json(
-        { success: false, message: "Missing required fields for ServiceNow OAuth exchange." },
+        { success: false, message: parsed.error },
         { status: 400 },
       );
     }
+    const body = parsed.data;
+    const instanceUrl = body.instanceUrl.replace(/\/$/, "");
 
     if (!isAllowedInstanceUrl(instanceUrl)) {
       return NextResponse.json(

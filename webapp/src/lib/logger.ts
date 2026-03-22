@@ -71,6 +71,43 @@ function getLogFilename(sessionId: string): string {
   return `session-${sessionId.replace(/[^a-zA-Z0-9]/g, '-')}.txt`;
 }
 
+/**
+ * Keys that likely carry secrets or PII in structured logs.
+ * Do not use broad `includes("auth")` — it matches diagnostic fields like `authType` / `authtype`.
+ */
+export function isSensitiveLogKey(key: string): boolean {
+  const lowerKey = key.toLowerCase();
+  return (
+    lowerKey.includes("password") ||
+    lowerKey.includes("apikey") ||
+    lowerKey.includes("api_key") ||
+    lowerKey.includes("secret") ||
+    lowerKey.includes("credential") ||
+    lowerKey.includes("cookie") ||
+    lowerKey.includes("jsessionid") ||
+    lowerKey.includes("sessionid") ||
+    lowerKey.includes("session_id") ||
+    lowerKey.includes("authorization") ||
+    lowerKey.includes("email") ||
+    lowerKey.includes("username") ||
+    lowerKey === "ip" ||
+    lowerKey.includes("ip_address") ||
+    // Auth tokens only — preserve metric fields like inputTokens, outputTokens
+    lowerKey === "token" ||
+    lowerKey.includes("sessiontoken") ||
+    lowerKey.includes("authtoken") ||
+    lowerKey.includes("auth_token") ||
+    lowerKey.includes("oauth_token") ||
+    lowerKey.includes("accesstoken") ||
+    lowerKey.includes("refreshtoken") ||
+    lowerKey.includes("id_token") ||
+    lowerKey.includes("authorizationcode") ||
+    lowerKey.includes("codeverifier") ||
+    lowerKey.includes("bearertoken") ||
+    lowerKey.includes("csrf")
+  );
+}
+
 // Redact sensitive data from objects
 function redactSensitive(obj: unknown): unknown {
   if (obj === null || obj === undefined) return obj;
@@ -79,29 +116,7 @@ function redactSensitive(obj: unknown): unknown {
 
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-    const lowerKey = key.toLowerCase();
-    if (
-      lowerKey.includes("password") ||
-      lowerKey.includes("apikey") ||
-      lowerKey.includes("api_key") ||
-      lowerKey.includes("secret") ||
-      lowerKey.includes("credential") ||
-      lowerKey.includes("cookie") ||
-      lowerKey.includes("jsessionid") ||
-      lowerKey.includes("sessionid") ||
-      lowerKey.includes("session_id") ||
-      // Auth tokens only — preserve metric fields like inputTokens, outputTokens
-      lowerKey === "token" ||
-      lowerKey.includes("sessiontoken") ||
-      lowerKey.includes("authtoken") ||
-      lowerKey.includes("accesstoken") ||
-      lowerKey.includes("refreshtoken") ||
-      lowerKey.includes("id_token") ||
-      lowerKey.includes("authorizationcode") ||
-      lowerKey.includes("codeverifier") ||
-      lowerKey.includes("bearertoken") ||
-      lowerKey.includes("csrf")
-    ) {
+    if (isSensitiveLogKey(key)) {
       result[key] = "[REDACTED]";
     } else if (typeof value === "object") {
       result[key] = redactSensitive(value);

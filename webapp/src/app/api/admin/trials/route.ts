@@ -1,37 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
+import { requireAdmin } from "@/lib/admin-auth";
+import { parseTrialBody } from "@/lib/request-validation";
 
 /** GET /api/admin/trials — list global config, all overrides, and usage stats */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (!auth.ok) return auth.response;
+
     const db = getSupabase();
-
-    // Global config
-    const { data: globalConfig } = await db
-      .from("trial_config")
-      .select("*")
-      .eq("scope", "global")
-      .single();
-
-    // All overrides
-    const { data: overrides } = await db
-      .from("trial_config")
-      .select("*")
-      .neq("scope", "global")
-      .order("created_at", { ascending: false });
-
-    // Usage stats: join request_log with users + trial_start
-    const { data: usageData } = await db
-      .from("request_log")
-      .select("user_id, request_date, request_count");
-
-    const { data: trialStarts } = await db
-      .from("trial_start")
-      .select("user_id, started_at");
-
-    const { data: users } = await db
-      .from("users")
-      .select("id, email, name");
+    const [
+      { data: globalConfig },
+      { data: overrides },
+      { data: usageData },
+      { data: trialStarts },
+      { data: users },
+    ] = await Promise.all([
+      db.from("trial_config").select("*").eq("scope", "global").single(),
+      db.from("trial_config").select("*").neq("scope", "global").order("created_at", { ascending: false }),
+      db.from("request_log").select("user_id, request_date, request_count"),
+      db.from("trial_start").select("user_id, started_at"),
+      db.from("users").select("id, email, name"),
+    ]);
 
     // Build per-user stats
     const userMap = new Map<string, { email: string; name: string }>();
@@ -90,21 +81,12 @@ export async function GET() {
 /** POST /api/admin/trials — create/update global config or add override */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { scope, scope_value, daily_limit, trial_days, is_active } = body;
+    const auth = await requireAdmin(request);
+    if (!auth.ok) return auth.response;
 
-    if (!scope || !["global", "user", "instance"].includes(scope)) {
-      return NextResponse.json({ error: "Invalid scope" }, { status: 400 });
-    }
-    if (scope !== "global" && !scope_value) {
-      return NextResponse.json({ error: "scope_value required for non-global scope" }, { status: 400 });
-    }
-    if (typeof daily_limit !== "number" || daily_limit < 1) {
-      return NextResponse.json({ error: "daily_limit must be a positive number" }, { status: 400 });
-    }
-    if (typeof trial_days !== "number" || trial_days < 1) {
-      return NextResponse.json({ error: "trial_days must be a positive number" }, { status: 400 });
-    }
+    const parsed = parseTrialBody(await request.json());
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    const { scope, scope_value, daily_limit, trial_days, is_active } = parsed.data;
 
     const db = getSupabase();
 
@@ -197,6 +179,9 @@ export async function POST(request: NextRequest) {
 /** DELETE /api/admin/trials — remove an override by id */
 export async function DELETE(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (!auth.ok) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 

@@ -3,10 +3,29 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+const INTERNAL_REDIRECT_ORIGIN = "https://sn-ai-agent.local";
+
+function getSafeRedirectPath(value: string | null): string {
+  if (!value) return "/app";
+
+  try {
+    const decoded = decodeURIComponent(value);
+    if (!decoded.startsWith("/") || decoded.startsWith("//") || decoded.startsWith("/\\")) {
+      return "/app";
+    }
+
+    const parsed = new URL(decoded, INTERNAL_REDIRECT_ORIGIN);
+    if (parsed.origin !== INTERNAL_REDIRECT_ORIGIN) return "/app";
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return "/app";
+  }
+}
+
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/app";
+  const redirect = getSafeRedirectPath(searchParams.get("redirect"));
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

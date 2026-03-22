@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
 import { checkEmailLookup } from "@/lib/auth-rate-limiter";
 import { createAuthHintValue, getAuthHintSetCookie, isAuthHintConfigured } from "@/lib/auth-hint";
+import { getClientIp } from "@/lib/client-ip";
+import { parseEmailBody } from "@/lib/request-validation";
 
 /**
  * POST /api/auth/check-email
@@ -17,15 +19,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Authentication service unavailable" }, { status: 503 });
     }
 
-    const { email } = await request.json();
-
-    if (!email || typeof email !== "string") {
-      return NextResponse.json({ error: "Email is required" }, { status: 400 });
-    }
+    const parsed = parseEmailBody(await request.json());
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    const { email } = parsed.data;
 
     // Rate limit by IP
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-    const rl = checkEmailLookup(ip);
+    const ip = getClientIp(request);
+    const rl = await checkEmailLookup(ip);
     if (!rl.allowed) {
       return NextResponse.json(
         { error: "Too many attempts. Please try again later." },

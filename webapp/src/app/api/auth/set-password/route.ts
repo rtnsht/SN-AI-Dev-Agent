@@ -8,14 +8,13 @@ import {
   buildSetCookieHeader,
   SESSION_COOKIE_NAME,
 } from "@/lib/auth";
+import { parseSetPasswordBody } from "@/lib/request-validation";
 
 export async function POST(request: NextRequest) {
   try {
-    const { password } = await request.json();
-
-    if (!password) {
-      return NextResponse.json({ error: "Password is required" }, { status: 400 });
-    }
+    const parsed = parseSetPasswordBody(await request.json());
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    const { password } = parsed.data;
 
     // Validate password strength
     const strength = validatePasswordStrength(password);

@@ -70,6 +70,17 @@ export class ServiceNowClient {
       ...config,
       instanceUrl: config.instanceUrl.replace(/\/$/, '')
     };
+    
+    // Defense in depth: validate instance URL
+    try {
+      const hostname = new URL(this.config.instanceUrl).hostname.toLowerCase();
+      if (!hostname.endsWith('.service-now.com') && !hostname.endsWith('.servicenow.com')) {
+        throw new Error('Invalid ServiceNow instance URL domain');
+      }
+    } catch (e) {
+      throw new Error(`Invalid ServiceNow instance URL: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
+
     this.jar = new CookieJar();
     this.accessToken = config.accessToken || null;
     this.refreshToken = config.refreshToken || null;

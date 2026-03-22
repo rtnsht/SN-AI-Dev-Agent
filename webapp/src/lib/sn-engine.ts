@@ -17,7 +17,7 @@ import { processFileAttachments } from "./file-parser";
 import path from "node:path";
 import { buildSystemPrompt, buildDynamicContext, type DynamicContextOptions } from "./system-prompt";
 import { parsePhaseGate, type BrowserSessionCookie, type ServiceNowAuthMethod } from "./types";
-import { logger } from "./logger";
+import { isSensitiveLogKey, logger } from "./logger";
 import { chatCompletion, OpenRouterRequest, OpenRouterMessage, OpenRouterContentBlock, OpenRouterTool } from "./openrouter";
 import { getSessionCache, SessionCache } from "./session-cache";
 import { APP_NAME } from "./branding";
@@ -629,30 +629,14 @@ function toOpenRouterTools(anthropicTools: Anthropic.Tool[]): OpenRouterTool[] {
  * Keeps full keys but truncates long string values.
  */
 function summarizeToolInput(input: unknown): Record<string, unknown> {
-  const isSensitiveKey = (key: string): boolean => {
-    const lower = key.toLowerCase();
-    return (
-      lower.includes("password") ||
-      lower.includes("secret") ||
-      lower.includes("token") ||
-      lower.includes("cookie") ||
-      lower.includes("sessionid") ||
-      lower.includes("jsessionid") ||
-      lower.includes("authorizationcode") ||
-      lower.includes("codeverifier")
-    );
-  };
-
   if (input === null || input === undefined || typeof input !== "object") {
     return { _raw: typeof input === "string" && input.length > 200 ? input.slice(0, 200) + "..." : input };
   }
   const obj = input as Record<string, unknown>;
   const summary: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(obj)) {
-    if (isSensitiveKey(k)) {
-      summary[k] = "[REDACTED]";
-    } else if (Array.isArray(v) && isSensitiveKey(k)) {
-      summary[k] = `[REDACTED:${v.length}]`;
+    if (isSensitiveLogKey(k)) {
+      summary[k] = Array.isArray(v) ? `[REDACTED:${v.length}]` : "[REDACTED]";
     } else if (typeof v === "string" && v.length > 200) {
       summary[k] = v.slice(0, 200) + `... [${v.length} chars]`;
     } else if (v && typeof v === "object") {
@@ -707,6 +691,24 @@ async function executeAndLogTool(
     resultJson: truncateToolResult(output),
     success,
   };
+}
+
+function toPublicToolExecution(execution: ToolExecution): ToolExecution {
+  const outputObject = execution.output as Record<string, unknown> | null;
+  const hasError = typeof outputObject === "object" && outputObject !== null && "error" in outputObject;
+  return {
+    toolName: execution.toolName,
+    input: summarizeToolInput(execution.input),
+    output: hasError
+      ? { error: outputObject?.error ?? "Tool execution failed" }
+      : { summary: truncateToolResult(execution.output) },
+    durationMs: execution.durationMs,
+  };
+}
+
+function toPublicToolExecutions(toolExecutions: ToolExecution[]): ToolExecution[] {
+  if (process.env.EXPOSE_FULL_TOOL_EXECUTIONS === "true") return toolExecutions;
+  return toolExecutions.map(toPublicToolExecution);
 }
 
 /**
@@ -834,12 +836,15 @@ export async function chat(
         totalRounds: rounds,
         stopReason: response.stop_reason,
       });
-      return { reply: textParts.join("\n"), toolExecutions };
+      return { reply: textParts.join("\n"), toolExecutions: toPublicToolExecutions(toolExecutions) };
     }
   }
 
   logger.warn(sessionId, "chat", "Max tool rounds reached", { rounds: maxToolRounds, toolCount: toolExecutions.length });
-  return { reply: "I reached the maximum number of tool execution rounds. Please try a more specific request.", toolExecutions };
+  return {
+    reply: "I reached the maximum number of tool execution rounds. Please try a more specific request.",
+    toolExecutions: toPublicToolExecutions(toolExecutions),
+  };
 }
 
 /**
@@ -908,12 +913,15 @@ async function chatOpenRouter(
       }
     } else {
       logger.info(sessionId, "chat", "OpenRouter chat completed", { toolCount: toolExecutions.length });
-      return { reply: message.content || "", toolExecutions };
+      return { reply: message.content || "", toolExecutions: toPublicToolExecutions(toolExecutions) };
     }
   }
 
   logger.warn(sessionId, "chat", "Max tool rounds reached (OpenRouter)", { rounds: maxToolRounds });
-  return { reply: "I reached the maximum number of tool execution rounds. Please try a more specific request.", toolExecutions };
+  return {
+    reply: "I reached the maximum number of tool execution rounds. Please try a more specific request.",
+    toolExecutions: toPublicToolExecutions(toolExecutions),
+  };
 }
 
 /**
@@ -1234,12 +1242,21 @@ export async function* chatStream(
   }
 
   const ROUNDS_WARNING_THRESHOLD = 3; // Warn Claude when this many rounds remain
+  const startTime = Date.now();
+  const MAX_EXECUTION_TIME_MS = 280_000; // 280s (leaves 20s buffer before 300s platform kill)
 
   while (rounds < adjustedMaxRounds) {
     // Abort signal check — bail early if client disconnected (saves API calls)
     if (signal?.aborted) {
       logger.info(sessionId, "chat_stream", "Aborted by client signal", { rounds, phase: phase || "none" });
       yield { type: "error", message: "Request aborted by client" };
+      return;
+    }
+
+    // Time limit check — bail early if approaching platform timeout
+    if (Date.now() - startTime > MAX_EXECUTION_TIME_MS) {
+      logger.warn(sessionId, "chat_stream", "Approaching platform time limit, aborting loop", { rounds, executionTime: Date.now() - startTime });
+      yield { type: "error", message: "Request took too long and was aborted to prevent platform timeout. Please try breaking your request into smaller steps." };
       return;
     }
 
@@ -1388,7 +1405,7 @@ export async function* chatStream(
         logger.info(sessionId, "phase_gate", `Phase gate detected between rounds: ${gateInToolRound}`, {
           phase: gateInToolRound, round: rounds, toolCount: toolExecutions.length,
         });
-        yield { type: "done", reply: textInToolResponse, toolExecutions };
+        yield { type: "done", reply: textInToolResponse, toolExecutions: toPublicToolExecutions(toolExecutions) };
         return;
       }
     } else {
@@ -1408,7 +1425,7 @@ export async function* chatStream(
         totalRounds: rounds,
         stopReason: response.stop_reason,
       });
-      yield { type: "done", reply, toolExecutions };
+      yield { type: "done", reply, toolExecutions: toPublicToolExecutions(toolExecutions) };
       return;
     }
   }
@@ -1425,7 +1442,7 @@ export async function* chatStream(
   yield {
     type: "max_rounds_reached",
     reply: `[Reached ${adjustedMaxRounds} tool rounds in ${phase || "unknown"} phase. Resuming automatically to continue work...]`,
-    toolExecutions,
+    toolExecutions: toPublicToolExecutions(toolExecutions),
     resumeAfterMs: RESUME_DELAY_MS,
     phase: phase || undefined,
   } as StreamEvent;
@@ -1516,12 +1533,22 @@ async function* chatStreamOpenRouter(
     }
   }
 
+  const startTime = Date.now();
+  const MAX_EXECUTION_TIME_MS = 280_000; // 280s (leaves 20s buffer before 300s platform kill)
+
   while (rounds < adjustedMaxRounds) {
     if (signal?.aborted) {
       logger.info(sessionId, "chat_stream", "OpenRouter: Aborted by client signal", { rounds, phase: phase || "none" });
       yield { type: "error", message: "Request aborted by client" };
       return;
     }
+
+    if (Date.now() - startTime > MAX_EXECUTION_TIME_MS) {
+      logger.warn(sessionId, "chat_stream", "OpenRouter: Approaching platform time limit, aborting loop", { rounds, executionTime: Date.now() - startTime });
+      yield { type: "error", message: "Request took too long and was aborted to prevent platform timeout. Please try breaking your request into smaller steps." };
+      return;
+    }
+
     rounds++;
     yield { type: "status", message: `Round ${rounds}: Analyzing request...`, phase: "thinking" };
 
@@ -1606,7 +1633,7 @@ async function* chatStreamOpenRouter(
           logger.info(sessionId, "phase_gate", `OpenRouter: Phase gate detected between rounds: ${gateInToolRound}`, {
             phase: gateInToolRound, round: rounds, toolCount: toolExecutions.length,
           });
-          yield { type: "done", reply: message.content, toolExecutions };
+          yield { type: "done", reply: message.content, toolExecutions: toPublicToolExecutions(toolExecutions) };
           return;
         }
       }
@@ -1619,7 +1646,7 @@ async function* chatStreamOpenRouter(
           phase: gateInFinal, round: rounds, toolCount: toolExecutions.length,
         });
       }
-      yield { type: "done", reply, toolExecutions };
+      yield { type: "done", reply, toolExecutions: toPublicToolExecutions(toolExecutions) };
       return;
     }
   }
@@ -1631,7 +1658,7 @@ async function* chatStreamOpenRouter(
   yield {
     type: "max_rounds_reached",
     reply: `[Reached ${maxToolRounds} tool rounds in ${phase || "unknown"} phase. Resuming automatically to continue work...]`,
-    toolExecutions,
+    toolExecutions: toPublicToolExecutions(toolExecutions),
     resumeAfterMs: RESUME_DELAY_MS,
     phase: phase || undefined,
   };

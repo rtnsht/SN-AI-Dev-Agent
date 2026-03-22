@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
+import { requireAdmin } from "@/lib/admin-auth";
 
 /**
  * GET /api/admin/session-logs
@@ -9,6 +10,9 @@ import { getSupabase } from "@/lib/supabase";
  */
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (!auth.ok) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const username = searchParams.get("username");
     const status = searchParams.get("status");

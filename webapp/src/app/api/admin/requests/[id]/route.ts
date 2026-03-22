@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
 import { createAuthToken } from "@/lib/auth";
 import { sendApprovalEmail } from "@/lib/email";
+import { requireAdmin } from "@/lib/admin-auth";
+import { parseActionBody } from "@/lib/request-validation";
 
 /** PATCH /api/admin/requests/[id] — approve or reject */
 export async function PATCH(
@@ -9,13 +11,14 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
-    const { action } = await request.json();
-    const adminEmail = request.headers.get("x-user-email") || "admin";
+    const auth = await requireAdmin(request);
+    if (!auth.ok) return auth.response;
 
-    if (!action || !["approve", "reject"].includes(action)) {
-      return NextResponse.json({ error: "Action must be 'approve' or 'reject'" }, { status: 400 });
-    }
+    const { id } = await params;
+    const parsed = parseActionBody(await request.json(), ["approve", "reject"]);
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    const { action } = parsed.data;
+    const adminEmail = auth.session.user.email || "admin";
 
     const db = getSupabase();
 
