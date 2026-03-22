@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-03-22T06:04:20.100Z",
+  "summary": {
+    "passed": 0,
+    "warnings": 0,
+    "violations": 0,
+    "status": "PASSED"
+  },
+  "violations": [],
+  "warnings": [],
+  "passed": []
+}

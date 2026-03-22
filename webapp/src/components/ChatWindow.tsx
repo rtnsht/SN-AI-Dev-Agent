@@ -1599,29 +1599,26 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
             </div>
           </div>
 
-          {/* TOC toggle */}
+          {/* TOC rail — Perplexity-style hover-to-open navigation */}
           {messages.length > 3 && (
-            <div className="absolute top-3 right-3 z-10">
+            <div
+              className="chat-toc-rail-wrapper"
+              onMouseEnter={() => setShowTOC(true)}
+              onMouseLeave={() => setShowTOC(false)}
+            >
               <button
+                className="chat-toc-rail"
                 onClick={() => setShowTOC(!showTOC)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-all shadow-sm"
-                style={{
-                  background: showTOC ? "var(--color-primary)" : "var(--surface-elevated)",
-                  color: showTOC ? "#fff" : "var(--text-secondary)",
-                  border: `1px solid ${showTOC ? "var(--color-primary)" : "var(--border-default)"}`,
-                }}
-                onMouseEnter={e => { if (!showTOC) { e.currentTarget.style.background = "var(--surface-secondary)"; e.currentTarget.style.color = "var(--text-primary)"; }}}
-                onMouseLeave={e => { if (!showTOC) { e.currentTarget.style.background = "var(--surface-elevated)"; e.currentTarget.style.color = "var(--text-secondary)"; }}}
                 title="Chat navigation"
+                aria-label="Open chat navigation"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                 </svg>
-                <span className="hidden sm:inline">Navigate</span>
               </button>
+              <ChatTOC messages={messages} isOpen={showTOC} onClose={() => setShowTOC(false)} />
             </div>
           )}
-          <ChatTOC messages={messages} isOpen={showTOC} onClose={() => setShowTOC(false)} />
 
           {/* Scroll-to-bottom FAB */}
           {!isNearBottom && messages.length > 0 && (
