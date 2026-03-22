@@ -154,6 +154,8 @@ export default function Home() {
   const isResizingLeft = useRef(false);
   const isResizingRight = useRef(false);
   const rafRef = useRef<number | null>(null);
+  /** True after we auto-enter focus mode once; prevents re-entry when user exits while conditions still hold */
+  const focusModeAutoTriggeredRef = useRef(false);
   const [serverApiKeyConfigured, setServerApiKeyConfigured] = useState(false);
   const [serverOpenRouterKeyConfigured, setServerOpenRouterKeyConfigured] = useState(false);
   const [serverSnCredsConfigured, setServerSnCredsConfigured] = useState(false);
@@ -362,15 +364,17 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Focus Mode: auto-collapse sidebars when deep in conversation (one-shot enter) ──
+  // ── Focus Mode: auto-collapse sidebars when deep in conversation (one-shot auto-enter only) ──
   useEffect(() => {
+    if (focusModeAutoTriggeredRef.current) return;
     const msgCount = messages.filter((m) => m.role !== "system").length;
-    if (connected && msgCount >= 10 && !focusMode && currentPhase === "implementation") {
+    if (connected && msgCount >= 10 && currentPhase === "implementation") {
+      focusModeAutoTriggeredRef.current = true;
       setFocusMode(true);
       setShowSettings(false);
       setShowRightPanel(false);
     }
-  }, [messages, connected, currentPhase, focusMode]);
+  }, [messages, connected, currentPhase]);
 
   // ── Welcome modal for first-time users ──
   useEffect(() => {
@@ -1622,6 +1626,8 @@ export default function Home() {
     setCurrentPhase(null);
     setCompletedPhases([]);
     setSddMode(false);
+    setFocusMode(false);
+    focusModeAutoTriggeredRef.current = false;
     setModelLocked(false);
     setPendingRetry(null);
     setActivityLog([]);
