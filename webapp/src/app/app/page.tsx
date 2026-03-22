@@ -1899,6 +1899,7 @@ export default function Home() {
               {showRelease && (() => {
                 const released = changelogEntries.filter(e => e.status === "released");
                 const upcoming = changelogEntries.filter(e => e.status === "upcoming" || e.status === "planned");
+                const CATEGORY_ORDER = ["added", "improved", "fixed", "security", "removed", "deprecated"] as const;
                 const categoryLabel: Record<string, string> = { added: "Added", improved: "Improved", fixed: "Fixed", security: "Security", removed: "Removed", deprecated: "Deprecated" };
                 const categoryDot: Record<string, string> = { added: "var(--color-success)", improved: "var(--color-primary)", fixed: "var(--color-warning, #f59e0b)", security: "var(--color-accent)", removed: "var(--text-disabled)", deprecated: "var(--text-disabled)" };
                 const groupByCategory = (items: typeof released) => {
@@ -1911,6 +1912,7 @@ export default function Home() {
                   return groups;
                 };
                 const releasedGroups = groupByCategory(released);
+                const sortedCategories = CATEGORY_ORDER.filter(c => releasedGroups[c]);
                 return (
                   <div
                     className="release-dropdown absolute right-0 mt-1.5 rounded-lg overflow-hidden"
@@ -1926,7 +1928,7 @@ export default function Home() {
                         )}
                       </div>
                       <div className="text-[10px] mt-0.5" style={{ color: "var(--text-disabled)" }}>
-                        {currentRelease ? `${currentRelease.title} \u00b7 ${new Date(currentRelease.release_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : "Latest updates and upcoming features"}
+                        {currentRelease ? (() => { const [y, m, d] = currentRelease.release_date.split("-").map(Number); return `${currentRelease.title} \u00b7 ${new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`; })() : "Latest updates and upcoming features"}
                       </div>
                     </div>
                     <div className="p-3 space-y-3 max-h-[380px] overflow-y-auto">
@@ -1934,7 +1936,9 @@ export default function Home() {
                         <div className="text-center py-4 text-[11px]" style={{ color: "var(--text-disabled)" }}>No updates available</div>
                       ) : (
                         <>
-                          {Object.entries(releasedGroups).map(([cat, items]) => (
+                          {sortedCategories.map(cat => {
+                            const items = releasedGroups[cat];
+                            return (
                             <div key={cat} className="space-y-1.5">
                               <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-disabled)" }}>
                                 {categoryLabel[cat] || cat}
@@ -1951,7 +1955,8 @@ export default function Home() {
                                 )}
                               </div>
                             </div>
-                          ))}
+                            );
+                          })}
                           {upcoming.length > 0 && (
                             <>
                               {released.length > 0 && <div style={{ borderTop: "1px solid var(--border-default)", margin: "0 -12px", padding: "0" }} />}

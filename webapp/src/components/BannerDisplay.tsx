@@ -66,6 +66,7 @@ export default function BannerDisplay() {
     return () => clearInterval(interval);
   }, [fetchBanners]);
 
+  /** Cap at 2 stacked banners — more than two feels cluttered and pushes content down */
   const MAX_BANNERS = 2;
 
   const visibleBanners = banners

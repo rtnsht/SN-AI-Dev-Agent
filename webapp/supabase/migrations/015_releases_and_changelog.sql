@@ -27,3 +27,5 @@ ALTER TABLE changelog
   ADD COLUMN IF NOT EXISTS description text,
   ADD COLUMN IF NOT EXISTS display_order integer DEFAULT 0,
   ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
+
+CREATE INDEX IF NOT EXISTS idx_changelog_release_id ON changelog (release_id);

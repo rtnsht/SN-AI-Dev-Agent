@@ -977,7 +977,7 @@ export default function AdminPage() {
                       />
                     </td>
                     <td style={{ fontSize: "11px" }}>
-                      <span className={`admin-status admin-status-${b.variant === "critical" ? "rejected" : b.variant === "warning" ? "pending" : "active"}`}>
+                      <span className={`admin-status admin-variant-${b.variant || "info"}`}>
                         {b.variant || "info"}
                       </span>
                       {!b.dismissible && <span style={{ display: "block", fontSize: "10px", color: "var(--text-disabled)", marginTop: "2px" }}>pinned</span>}

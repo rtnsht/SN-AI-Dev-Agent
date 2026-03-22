@@ -2454,6 +2454,11 @@ textarea.auth-input {
 .admin-status-active { background: rgba(56, 201, 118, 0.15); color: var(--color-success); }
 .admin-status-suspended { background: rgba(249, 115, 115, 0.15); color: var(--color-danger); }
 
+.admin-variant-info { background: rgba(76, 125, 255, 0.15); color: var(--color-info); }
+.admin-variant-success { background: rgba(56, 201, 118, 0.15); color: var(--color-success); }
+.admin-variant-warning { background: rgba(245, 196, 81, 0.15); color: var(--color-warning); }
+.admin-variant-critical { background: rgba(249, 115, 115, 0.15); color: var(--color-danger); }
+
 .admin-actions {
   display: flex;
   gap: 0.35rem;
