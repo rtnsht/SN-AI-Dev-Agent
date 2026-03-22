@@ -52,7 +52,7 @@ export function parseChatBody(body: unknown): ValidationResult<ParsedChatBody> {
   if ("sessionId" in body && body.sessionId !== undefined && !isValidSessionId(body.sessionId)) {
     return { ok: false, error: "sessionId has invalid format" };
   }
-  if ("phase" in body && body.phase !== undefined && typeof body.phase !== "string") {
+  if ("phase" in body && body.phase !== undefined && body.phase !== null && typeof body.phase !== "string") {
     return { ok: false, error: "phase must be a string" };
   }
   if ("sddMode" in body && body.sddMode !== undefined && typeof body.sddMode !== "boolean") {

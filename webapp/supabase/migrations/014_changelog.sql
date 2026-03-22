@@ -12,5 +12,8 @@ CREATE TABLE IF NOT EXISTS changelog (
 -- Enable RLS (consistent with all other tables in this project)
 ALTER TABLE changelog ENABLE ROW LEVEL SECURITY;
 
--- Allow read access via service_role (server-side API route)
--- No public/anon access needed — the API route uses the service key
+-- Allow public read access — changelog is non-sensitive public data
+-- This enables both service_role and anon key to read entries
+CREATE POLICY "Allow public read access to changelog"
+  ON changelog FOR SELECT
+  USING (true);
