@@ -170,3 +170,25 @@ services:
         value: "90"
       - key: LOG_FLUSH_INTERVAL_MS
         value: "30000"
+
+      # ── Log Storage Sync (Object Storage Upload) ──────────────────
+      - key: LOG_STORAGE_ENABLED
+        value: "false"
+      - key: LOG_STORAGE_PROVIDERS
+        value: "s3"
+      - key: LOG_STORAGE_ENDPOINT
+        sync: false
+      - key: LOG_STORAGE_BUCKET
+        sync: false
+      - key: LOG_STORAGE_ACCESS_KEY
+        sync: false
+      - key: LOG_STORAGE_SECRET_KEY
+        sync: false
+      - key: LOG_STORAGE_REGION
+        value: "us-east-1"
+      - key: LOG_STORAGE_PREFIX
+        value: "logs/"
+      - key: LOG_STORAGE_INTERVAL_MS
+        value: "300000"
+      - key: LOG_STORAGE_METADATA_BACKEND
+        value: "auto"
