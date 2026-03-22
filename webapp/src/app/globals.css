@@ -958,6 +958,13 @@ body {
   gap: 2px;
   overflow-x: auto;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  min-width: 0;
+  padding-bottom: 2px;
+  mask-image: linear-gradient(to right, transparent 0, black 4px, black calc(100% - 16px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, black 4px, black calc(100% - 16px), transparent 100%);
 }
 .sp-tabs::-webkit-scrollbar { display: none; }
 .sp-tab {
@@ -966,6 +973,8 @@ body {
   gap: 4px;
   padding: 4px 8px;
   border-radius: 14px;
+  scroll-snap-align: start;
+  scroll-margin-inline-start: 4px;
   font-size: 11px;
   font-weight: 450;
   color: var(--text-disabled);
@@ -1071,6 +1080,63 @@ body {
   color: var(--text-disabled);
   text-align: right;
   padding-top: 2px;
+}
+
+/* ── Chat TOC rail (Perplexity-style hover navigation) ── */
+.chat-toc-rail-wrapper {
+  position: absolute;
+  top: 12px;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: flex-start;
+  gap: 4px;
+}
+.chat-toc-rail {
+  width: 28px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px 0 0 6px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-default);
+  border-right: none;
+  color: var(--text-disabled);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+.chat-toc-rail:hover,
+.chat-toc-rail-wrapper:hover .chat-toc-rail {
+  opacity: 1;
+  color: var(--text-primary);
+  background: var(--surface-secondary);
+}
+.chat-toc-flyout {
+  width: 272px;
+  max-height: 65vh;
+  border-radius: 10px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-default);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: tocSlideIn 0.15s ease-out;
+  margin-right: 4px;
+}
+@keyframes tocSlideIn {
+  from { opacity: 0; transform: translateX(8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@media (max-width: 640px) {
+  .chat-toc-flyout {
+    width: 240px;
+    max-height: 50vh;
+  }
 }
 
 /* ── Update set expandable rows ── */
