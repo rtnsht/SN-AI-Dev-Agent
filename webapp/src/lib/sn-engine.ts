@@ -17,7 +17,7 @@ import { processFileAttachments } from "./file-parser";
 import path from "node:path";
 import { buildSystemPrompt, buildDynamicContext, type DynamicContextOptions } from "./system-prompt";
 import { parsePhaseGate, type BrowserSessionCookie, type ServiceNowAuthMethod } from "./types";
-import { logger } from "./logger";
+import { isSensitiveLogKey, logger } from "./logger";
 import { chatCompletion, OpenRouterRequest, OpenRouterMessage, OpenRouterContentBlock, OpenRouterTool } from "./openrouter";
 import { getSessionCache, SessionCache } from "./session-cache";
 import { APP_NAME } from "./branding";
@@ -629,39 +629,14 @@ function toOpenRouterTools(anthropicTools: Anthropic.Tool[]): OpenRouterTool[] {
  * Keeps full keys but truncates long string values.
  */
 function summarizeToolInput(input: unknown): Record<string, unknown> {
-  const isSensitiveKey = (key: string): boolean => {
-    const lower = key.toLowerCase();
-    return (
-      lower.includes("password") ||
-      lower.includes("apikey") ||
-      lower.includes("api_key") ||
-      lower.includes("secret") ||
-      lower.includes("credential") ||
-      lower.includes("cookie") ||
-      lower.includes("jsessionid") ||
-      lower.includes("sessionid") ||
-      lower.includes("session_id") ||
-      lower.includes("authorization") ||
-      lower.includes("auth") ||
-      lower.includes("email") ||
-      lower.includes("username") ||
-      lower === "ip" ||
-      lower.includes("ip_address") ||
-      lower.includes("token") ||
-      lower.includes("codeverifier")
-    );
-  };
-
   if (input === null || input === undefined || typeof input !== "object") {
     return { _raw: typeof input === "string" && input.length > 200 ? input.slice(0, 200) + "..." : input };
   }
   const obj = input as Record<string, unknown>;
   const summary: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(obj)) {
-    if (isSensitiveKey(k)) {
-      summary[k] = "[REDACTED]";
-    } else if (Array.isArray(v) && isSensitiveKey(k)) {
-      summary[k] = `[REDACTED:${v.length}]`;
+    if (isSensitiveLogKey(k)) {
+      summary[k] = Array.isArray(v) ? `[REDACTED:${v.length}]` : "[REDACTED]";
     } else if (typeof v === "string" && v.length > 200) {
       summary[k] = v.slice(0, 200) + `... [${v.length} chars]`;
     } else if (v && typeof v === "object") {
