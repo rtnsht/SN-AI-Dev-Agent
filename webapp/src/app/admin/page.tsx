@@ -47,6 +47,8 @@ interface Banner {
   pages: string[];
   bg_color: string;
   text_color: string;
+  variant: string | null;
+  dismissible: boolean;
   is_active: boolean;
   start_at: string | null;
   end_at: string | null;
@@ -83,6 +85,11 @@ const PAGE_OPTIONS = [
   { value: "/request-access", label: "Request Access" },
 ];
 
+/** Access requests awaiting admin approve/reject (pre- or post-email verification). */
+function canModerateRequest(status: string): boolean {
+  return status === "pending" || status === "pending_verification";
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("requests");
@@ -107,6 +114,8 @@ export default function AdminPage() {
   const [bannerBgColor, setBannerBgColor] = useState("#1e40af");
   const [bannerTextColor, setBannerTextColor] = useState("#ffffff");
   const [bannerPages, setBannerPages] = useState<string[]>(["all"]);
+  const [bannerVariant, setBannerVariant] = useState<string>("info");
+  const [bannerDismissible, setBannerDismissible] = useState(true);
   const [bannerStartAt, setBannerStartAt] = useState("");
   const [bannerEndAt, setBannerEndAt] = useState("");
   const editorRef = useRef<HTMLDivElement>(null);
@@ -150,7 +159,7 @@ export default function AdminPage() {
   const [expandedSessionDetail, setExpandedSessionDetail] = useState<any | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  const pendingCount = requests.filter((r) => r.status === "pending").length;
+  const pendingCount = requests.filter((r) => canModerateRequest(r.status)).length;
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -339,6 +348,8 @@ export default function AdminPage() {
     setBannerBgColor("#1e40af");
     setBannerTextColor("#ffffff");
     setBannerPages(["all"]);
+    setBannerVariant("info");
+    setBannerDismissible(true);
     setBannerStartAt("");
     setBannerEndAt("");
     setEditingBanner(null);
@@ -352,6 +363,8 @@ export default function AdminPage() {
       setBannerBgColor(banner.bg_color);
       setBannerTextColor(banner.text_color);
       setBannerPages(banner.pages);
+      setBannerVariant(banner.variant || "info");
+      setBannerDismissible(banner.dismissible !== false);
       setBannerStartAt(banner.start_at ? banner.start_at.slice(0, 16) : "");
       setBannerEndAt(banner.end_at ? banner.end_at.slice(0, 16) : "");
       // Set editor HTML after DOM renders
@@ -409,6 +422,8 @@ export default function AdminPage() {
         title: bannerTitle.trim(),
         content_html: contentHtml,
         pages: bannerPages,
+        variant: bannerVariant,
+        dismissible: bannerDismissible,
         bg_color: bannerBgColor,
         text_color: bannerTextColor,
         start_at: bannerStartAt ? new Date(bannerStartAt).toISOString() : null,
@@ -600,7 +615,7 @@ export default function AdminPage() {
                   <td><span className={`admin-status admin-status-${r.status}`}>{r.status}</span></td>
                   <td>{fmt(r.created_at)}</td>
                   <td>
-                    {r.status === "pending" && (
+                    {canModerateRequest(r.status) && (
                       <div className="admin-actions">
                         <button className="admin-btn admin-btn-approve" disabled={actionLoading === r.id} onClick={() => handleRequestAction(r.id, "approve")}>Approve</button>
                         <button className="admin-btn admin-btn-reject" disabled={actionLoading === r.id} onClick={() => handleRequestAction(r.id, "reject")}>Reject</button>
@@ -817,6 +832,37 @@ export default function AdminPage() {
                 </div>
               </div>
 
+              {/* Variant + Dismissible */}
+              <div style={{ display: "flex", gap: "16px", marginBottom: "12px", flexWrap: "wrap", alignItems: "flex-end" }}>
+                <div>
+                  <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}>
+                    Variant
+                  </label>
+                  <select
+                    className="auth-input"
+                    value={bannerVariant}
+                    onChange={(e) => setBannerVariant(e.target.value)}
+                    style={{ fontSize: "12px", minWidth: "130px" }}
+                  >
+                    <option value="info">Info</option>
+                    <option value="success">Success</option>
+                    <option value="warning">Warning</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", paddingBottom: "4px" }}>
+                  <input
+                    type="checkbox"
+                    checked={!bannerDismissible}
+                    onChange={(e) => setBannerDismissible(!e.target.checked)}
+                    style={{ width: "16px", height: "16px", accentColor: "var(--color-primary)" }}
+                  />
+                  <span style={{ color: "var(--text-secondary)", fontSize: "12px", fontWeight: 500 }}>
+                    Non-dismissible (pinned)
+                  </span>
+                </label>
+              </div>
+
               {/* Live preview */}
               <div style={{ marginBottom: "12px" }}>
                 <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}>
@@ -908,7 +954,7 @@ export default function AdminPage() {
           <div className="admin-table-wrap">
             <table className="admin-table">
               <thead>
-                <tr><th>Title</th><th>Preview</th><th>Pages</th><th>Schedule</th><th>Active</th><th>Actions</th></tr>
+                <tr><th>Title</th><th>Preview</th><th>Type</th><th>Pages</th><th>Schedule</th><th>Active</th><th>Actions</th></tr>
               </thead>
               <tbody>
                 {banners.map((b) => (
@@ -929,6 +975,12 @@ export default function AdminPage() {
                         }}
                         dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(b.content_html || "", { ALLOWED_TAGS: ["b", "i", "u", "em", "strong", "a", "br", "p", "span"], ALLOWED_URI_REGEXP: /^(?:(?:(?:https?|mailto|tel):)|(?:#))/i }) }}
                       />
+                    </td>
+                    <td style={{ fontSize: "11px" }}>
+                      <span className={`admin-status admin-status-${b.variant === "critical" ? "rejected" : b.variant === "warning" ? "pending" : "active"}`}>
+                        {b.variant || "info"}
+                      </span>
+                      {!b.dismissible && <span style={{ display: "block", fontSize: "10px", color: "var(--text-disabled)", marginTop: "2px" }}>pinned</span>}
                     </td>
                     <td style={{ fontSize: "11px" }}>{b.pages.join(", ")}</td>
                     <td style={{ fontSize: "11px" }}>
@@ -956,7 +1008,7 @@ export default function AdminPage() {
                     </td>
                   </tr>
                 ))}
-                {banners.length === 0 && <tr><td colSpan={6} className="admin-empty">No banners</td></tr>}
+                {banners.length === 0 && <tr><td colSpan={7} className="admin-empty">No banners</td></tr>}
               </tbody>
             </table>
           </div>

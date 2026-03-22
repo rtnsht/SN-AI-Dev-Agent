@@ -33,6 +33,8 @@ export async function PATCH(
       if (body.pages !== undefined) updates.pages = body.pages;
       if (body.bg_color !== undefined) updates.bg_color = body.bg_color;
       if (body.text_color !== undefined) updates.text_color = body.text_color;
+      if (body.variant !== undefined) updates.variant = body.variant;
+      if (body.dismissible !== undefined) updates.dismissible = body.dismissible;
       if (body.start_at !== undefined) updates.start_at = body.start_at || null;
       if (body.end_at !== undefined) updates.end_at = body.end_at || null;
       if (body.is_active !== undefined) updates.is_active = body.is_active;

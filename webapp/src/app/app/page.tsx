@@ -150,7 +150,8 @@ export default function Home() {
   const [showRelease, setShowRelease] = useState(false);
   const releaseRef = useRef<HTMLDivElement>(null);
   const [showFeedback, setShowFeedback] = useState(false);
-  const [changelogEntries, setChangelogEntries] = useState<{ id: string; title: string; status: string; created_at: string }[]>([]);
+  const [changelogEntries, setChangelogEntries] = useState<{ id: string; title: string; status: string; category?: string; description?: string; created_at: string }[]>([]);
+  const [currentRelease, setCurrentRelease] = useState<{ version: string; title: string; release_date: string } | null>(null);
   const isResizingLeft = useRef(false);
   const isResizingRight = useRef(false);
   const rafRef = useRef<number | null>(null);
@@ -460,9 +461,12 @@ export default function Home() {
   useEffect(() => {
     if (!showRelease) return;
     fetch("/api/changelog")
-      .then((r) => (r.ok ? r.json() : { entries: [] }))
-      .then((d) => setChangelogEntries(Array.isArray(d.entries) ? d.entries : []))
-      .catch(() => setChangelogEntries([]));
+      .then((r) => (r.ok ? r.json() : { currentRelease: null, entries: [] }))
+      .then((d) => {
+        setChangelogEntries(Array.isArray(d.entries) ? d.entries : []);
+        setCurrentRelease(d.currentRelease ?? null);
+      })
+      .catch(() => { setChangelogEntries([]); setCurrentRelease(null); });
     const handleClick = (e: MouseEvent) => {
       if (releaseRef.current && !releaseRef.current.contains(e.target as Node)) setShowRelease(false);
     };
@@ -1895,42 +1899,68 @@ export default function Home() {
               {showRelease && (() => {
                 const released = changelogEntries.filter(e => e.status === "released");
                 const upcoming = changelogEntries.filter(e => e.status === "upcoming" || e.status === "planned");
+                const categoryLabel: Record<string, string> = { added: "Added", improved: "Improved", fixed: "Fixed", security: "Security", removed: "Removed", deprecated: "Deprecated" };
+                const categoryDot: Record<string, string> = { added: "var(--color-success)", improved: "var(--color-primary)", fixed: "var(--color-warning, #f59e0b)", security: "var(--color-accent)", removed: "var(--text-disabled)", deprecated: "var(--text-disabled)" };
+                const groupByCategory = (items: typeof released) => {
+                  const groups: Record<string, typeof released> = {};
+                  for (const item of items) {
+                    const cat = item.category || "added";
+                    if (!groups[cat]) groups[cat] = [];
+                    groups[cat].push(item);
+                  }
+                  return groups;
+                };
+                const releasedGroups = groupByCategory(released);
                 return (
                   <div
                     className="release-dropdown absolute right-0 mt-1.5 rounded-lg overflow-hidden"
-                    style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-default)", width: 300, zIndex: 50, boxShadow: "var(--shadow-lg)" }}
+                    style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-default)", width: 340, zIndex: 50, boxShadow: "var(--shadow-lg)" }}
                   >
                     <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--border-default)" }}>
-                      <div className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>What&apos;s New</div>
-                      <div className="text-[10px] mt-0.5" style={{ color: "var(--text-disabled)" }}>Latest updates and upcoming features</div>
+                      <div className="flex items-center justify-between">
+                        <div className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>What&apos;s New</div>
+                        {currentRelease && (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: "var(--surface-secondary)", color: "var(--text-secondary)" }}>
+                            v{currentRelease.version}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] mt-0.5" style={{ color: "var(--text-disabled)" }}>
+                        {currentRelease ? `${currentRelease.title} \u00b7 ${new Date(currentRelease.release_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : "Latest updates and upcoming features"}
+                      </div>
                     </div>
-                    <div className="p-3 space-y-3 max-h-[320px] overflow-y-auto">
+                    <div className="p-3 space-y-3 max-h-[380px] overflow-y-auto">
                       {changelogEntries.length === 0 ? (
                         <div className="text-center py-4 text-[11px]" style={{ color: "var(--text-disabled)" }}>No updates available</div>
                       ) : (
                         <>
-                          {released.length > 0 && (
-                            <div className="space-y-2">
-                              <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-disabled)" }}>Recent</div>
-                              <div className="space-y-1.5">
-                                {released.map(entry => (
+                          {Object.entries(releasedGroups).map(([cat, items]) => (
+                            <div key={cat} className="space-y-1.5">
+                              <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-disabled)" }}>
+                                {categoryLabel[cat] || cat}
+                              </div>
+                              <div className="space-y-1">
+                                {items.slice(0, 8).map(entry => (
                                   <div key={entry.id} className="flex items-start gap-2 text-[12px]" style={{ color: "var(--text-secondary)" }}>
-                                    <span className="w-1 h-1 rounded-full mt-1.5 flex-shrink-0" style={{ background: "var(--color-success)" }} />
-                                    {entry.title}
+                                    <span className="w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0" style={{ background: categoryDot[cat] || "var(--color-success)" }} />
+                                    <span>{entry.title}</span>
                                   </div>
                                 ))}
+                                {items.length > 8 && (
+                                  <div className="text-[10px] pl-3.5" style={{ color: "var(--text-disabled)" }}>+{items.length - 8} more</div>
+                                )}
                               </div>
                             </div>
-                          )}
+                          ))}
                           {upcoming.length > 0 && (
                             <>
                               {released.length > 0 && <div style={{ borderTop: "1px solid var(--border-default)", margin: "0 -12px", padding: "0" }} />}
-                              <div className="space-y-2">
+                              <div className="space-y-1.5">
                                 <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-disabled)" }}>Coming Soon</div>
-                                <div className="space-y-1.5">
+                                <div className="space-y-1">
                                   {upcoming.map(entry => (
                                     <div key={entry.id} className="flex items-start gap-2 text-[12px]" style={{ color: "var(--text-disabled)" }}>
-                                      <span className="w-1 h-1 rounded-full mt-1.5 flex-shrink-0" style={{ background: "var(--status-progress)" }} />
+                                      <span className="w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0" style={{ background: "var(--status-progress)" }} />
                                       {entry.title}
                                     </div>
                                   ))}

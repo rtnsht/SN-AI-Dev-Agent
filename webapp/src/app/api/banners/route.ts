@@ -8,20 +8,19 @@ export async function GET() {
     const db = getSupabase();
     const now = new Date().toISOString();
 
-    // Try with variant column first; fall back without it only if that column is missing
     let data;
-    const withVariant = await db
+    const result = await db
       .from("banners")
-      .select("id, content_html, pages, bg_color, text_color, variant")
+      .select("id, content_html, pages, bg_color, text_color, variant, dismissible")
       .eq("is_active", true)
       .or(`start_at.is.null,start_at.lte.${now}`)
       .or(`end_at.is.null,end_at.gte.${now}`)
       .order("created_at", { ascending: false });
 
-    if (withVariant.error) {
-      if (!isMissingColumnError(withVariant.error)) {
-        console.error("[banners] GET error (with variant):", withVariant.error);
-        throw withVariant.error;
+    if (result.error) {
+      if (!isMissingColumnError(result.error)) {
+        console.error("[banners] GET error:", result.error);
+        throw result.error;
       }
       const fallback = await db
         .from("banners")
@@ -33,7 +32,7 @@ export async function GET() {
       if (fallback.error) throw fallback.error;
       data = fallback.data;
     } else {
-      data = withVariant.data;
+      data = result.data;
     }
 
     return NextResponse.json({ banners: data || [] });

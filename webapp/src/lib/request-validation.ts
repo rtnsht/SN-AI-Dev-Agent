@@ -418,6 +418,7 @@ export interface ParsedBannerCreateBody {
   bg_color?: string;
   text_color?: string;
   variant?: string;
+  dismissible?: boolean;
   start_at?: string | null;
   end_at?: string | null;
 }
@@ -443,6 +444,8 @@ export interface ParsedBannerPatchBody {
   pages?: string[];
   bg_color?: string;
   text_color?: string;
+  variant?: string;
+  dismissible?: boolean;
   start_at?: string | null;
   end_at?: string | null;
   is_active?: boolean;

@@ -32,23 +32,23 @@ export async function POST(request: NextRequest) {
   try {
     const parsed = parseBannerCreateBody(await request.json());
     if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
-    const { title, content_html, pages, bg_color, text_color, variant, start_at, end_at } = parsed.data;
+    const { title, content_html, pages, bg_color, text_color, variant, dismissible, start_at, end_at } = parsed.data;
 
     const db = getSupabase();
     const sanitizedHtml = sanitizeBannerHtml(content_html.trim());
 
-    // Build the insert payload; only include variant if the column exists
     const payload: Record<string, unknown> = {
       title: title.trim(),
       content_html: sanitizedHtml,
       pages: pages && pages.length > 0 ? pages : ["all"],
       bg_color: bg_color || "#1e40af",
       text_color: text_color || "#ffffff",
+      variant: variant || "info",
+      dismissible: dismissible !== false,
       start_at: start_at || null,
       end_at: end_at || null,
       created_by: auth.session.user.id,
     };
-    if (variant) payload.variant = variant;
 
     const { data, error } = await db
       .from("banners")

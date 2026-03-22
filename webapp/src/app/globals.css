@@ -220,13 +220,18 @@ body {
 .app-banner {
   flex-shrink: 0;
   width: 100%;
+  position: relative;
   border-bottom: 1px solid var(--border-default);
+}
+.app-banner-pinned .app-banner-inner {
+  font-weight: 500;
 }
 .app-banner-inner {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.625rem;
-  padding: 0.5rem 1rem 0.5rem 1.25rem;
+  padding: 0.5rem 1rem;
   font-size: 0.8125rem;
   line-height: 1.5;
 }
@@ -236,7 +241,6 @@ body {
   height: 1rem;
 }
 .app-banner-text {
-  flex: 1;
   color: var(--text-primary);
   min-width: 0;
 }
@@ -246,7 +250,10 @@ body {
   text-underline-offset: 2px;
 }
 .app-banner-dismiss {
-  flex-shrink: 0;
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -363,7 +370,6 @@ body {
 [data-theme="light"] .app-banner-inner {
   padding-top: 0.625rem;
   padding-bottom: 0.625rem;
-  padding-left: 1.125rem;
 }
 
 [data-theme="light"] .app-banner .app-banner-dismiss {
