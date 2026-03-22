@@ -10,10 +10,16 @@ import { log } from "@/lib/logger";
 import { startTelemetryStream, stopTelemetryStream } from "@/lib/telemetry-generator";
 import { validateSession, SESSION_COOKIE_NAME } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
+import { getClientIp } from "@/lib/client-ip";
+import { parseSessionStartBody } from "@/lib/request-validation";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    const parsed = parseSessionStartBody(body);
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
+    }
     const {
       sessionId,
       instanceUrl,
@@ -24,15 +30,9 @@ export async function POST(request: NextRequest) {
       hasAdmin,
       hasSecurityAdmin,
       nodeVersion,
-    } = body;
+    } = parsed.data;
 
-    if (!sessionId) {
-      return NextResponse.json({ error: "sessionId required" }, { status: 400 });
-    }
-
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-      || request.headers.get("x-real-ip")
-      || "unknown";
+    const ip = getClientIp(request);
     const userAgent = request.headers.get("user-agent") || "unknown";
 
     // Log the session connect event (level first, then sessionId)
@@ -58,8 +58,8 @@ export async function POST(request: NextRequest) {
 
     // Auto-capture instance in user_instances table (non-blocking)
     const userId = await resolveUserId(request);
-    if (instanceUrl) {
-      captureInstance(request, instanceUrl, username).catch(() => { /* non-critical */ });
+    if (instanceUrl && userId) {
+      captureInstance(userId, instanceUrl, username).catch(() => { /* non-critical */ });
     }
 
     // Persist session metadata to Supabase (awaited to guarantee row creation)
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     console.error("[session-start] Error:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : String(err) },
+      { error: "Failed to start session" },
       { status: 500 }
     );
   }
@@ -138,15 +138,8 @@ async function createSessionLog(
 }
 
 /** Upsert the connected instance into user_instances for admin visibility */
-async function captureInstance(request: NextRequest, instanceUrl: string, snUsername?: string) {
+async function captureInstance(userId: string, instanceUrl: string, snUsername?: string) {
   try {
-    const sessionToken = request.cookies.get(SESSION_COOKIE_NAME)?.value;
-    if (!sessionToken) return;
-
-    const session = await validateSession(sessionToken);
-    if (!session) return;
-
-    const userId = session.user.id;
     const normalizedUrl = instanceUrl.replace(/\/+$/, "").toLowerCase();
 
     // Derive short instance name from URL (e.g. "https://dev181312.service-now.com" → "dev181312")

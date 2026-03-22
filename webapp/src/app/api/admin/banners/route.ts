@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
 import { sanitizeBannerHtml } from "@/lib/sanitize-html";
 import { requireAdmin } from "@/lib/admin-auth";
+import { parseBannerCreateBody } from "@/lib/request-validation";
 
 /** GET /api/admin/banners — list all banners */
 export async function GET(request: NextRequest) {
@@ -29,16 +30,9 @@ export async function POST(request: NextRequest) {
   if (!auth.ok) return auth.response;
 
   try {
-    const body = await request.json();
-
-    const { title, content_html, pages, bg_color, text_color, variant, start_at, end_at } = body;
-
-    if (!title || !title.trim()) {
-      return NextResponse.json({ error: "Title is required" }, { status: 400 });
-    }
-    if (!content_html || !content_html.trim()) {
-      return NextResponse.json({ error: "Banner content is required" }, { status: 400 });
-    }
+    const parsed = parseBannerCreateBody(await request.json());
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    const { title, content_html, pages, bg_color, text_color, variant, start_at, end_at } = parsed.data;
 
     const db = getSupabase();
     const sanitizedHtml = sanitizeBannerHtml(content_html.trim());

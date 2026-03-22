@@ -718,6 +718,24 @@ async function executeAndLogTool(
   };
 }
 
+function toPublicToolExecution(execution: ToolExecution): ToolExecution {
+  const outputObject = execution.output as Record<string, unknown> | null;
+  const hasError = typeof outputObject === "object" && outputObject !== null && "error" in outputObject;
+  return {
+    toolName: execution.toolName,
+    input: summarizeToolInput(execution.input),
+    output: hasError
+      ? { error: outputObject?.error ?? "Tool execution failed" }
+      : { summary: truncateToolResult(execution.output) },
+    durationMs: execution.durationMs,
+  };
+}
+
+function toPublicToolExecutions(toolExecutions: ToolExecution[]): ToolExecution[] {
+  if (process.env.EXPOSE_FULL_TOOL_EXECUTIONS === "true") return toolExecutions;
+  return toolExecutions.map(toPublicToolExecution);
+}
+
 /**
  * Run one full AI tool-use conversation loop (supports Anthropic and OpenRouter).
  * Returns the assistant's final text reply plus all tool executions.
@@ -843,12 +861,15 @@ export async function chat(
         totalRounds: rounds,
         stopReason: response.stop_reason,
       });
-      return { reply: textParts.join("\n"), toolExecutions };
+      return { reply: textParts.join("\n"), toolExecutions: toPublicToolExecutions(toolExecutions) };
     }
   }
 
   logger.warn(sessionId, "chat", "Max tool rounds reached", { rounds: maxToolRounds, toolCount: toolExecutions.length });
-  return { reply: "I reached the maximum number of tool execution rounds. Please try a more specific request.", toolExecutions };
+  return {
+    reply: "I reached the maximum number of tool execution rounds. Please try a more specific request.",
+    toolExecutions: toPublicToolExecutions(toolExecutions),
+  };
 }
 
 /**
@@ -917,12 +938,15 @@ async function chatOpenRouter(
       }
     } else {
       logger.info(sessionId, "chat", "OpenRouter chat completed", { toolCount: toolExecutions.length });
-      return { reply: message.content || "", toolExecutions };
+      return { reply: message.content || "", toolExecutions: toPublicToolExecutions(toolExecutions) };
     }
   }
 
   logger.warn(sessionId, "chat", "Max tool rounds reached (OpenRouter)", { rounds: maxToolRounds });
-  return { reply: "I reached the maximum number of tool execution rounds. Please try a more specific request.", toolExecutions };
+  return {
+    reply: "I reached the maximum number of tool execution rounds. Please try a more specific request.",
+    toolExecutions: toPublicToolExecutions(toolExecutions),
+  };
 }
 
 /**
@@ -1406,7 +1430,7 @@ export async function* chatStream(
         logger.info(sessionId, "phase_gate", `Phase gate detected between rounds: ${gateInToolRound}`, {
           phase: gateInToolRound, round: rounds, toolCount: toolExecutions.length,
         });
-        yield { type: "done", reply: textInToolResponse, toolExecutions };
+        yield { type: "done", reply: textInToolResponse, toolExecutions: toPublicToolExecutions(toolExecutions) };
         return;
       }
     } else {
@@ -1426,7 +1450,7 @@ export async function* chatStream(
         totalRounds: rounds,
         stopReason: response.stop_reason,
       });
-      yield { type: "done", reply, toolExecutions };
+      yield { type: "done", reply, toolExecutions: toPublicToolExecutions(toolExecutions) };
       return;
     }
   }
@@ -1443,7 +1467,7 @@ export async function* chatStream(
   yield {
     type: "max_rounds_reached",
     reply: `[Reached ${adjustedMaxRounds} tool rounds in ${phase || "unknown"} phase. Resuming automatically to continue work...]`,
-    toolExecutions,
+    toolExecutions: toPublicToolExecutions(toolExecutions),
     resumeAfterMs: RESUME_DELAY_MS,
     phase: phase || undefined,
   } as StreamEvent;
@@ -1634,7 +1658,7 @@ async function* chatStreamOpenRouter(
           logger.info(sessionId, "phase_gate", `OpenRouter: Phase gate detected between rounds: ${gateInToolRound}`, {
             phase: gateInToolRound, round: rounds, toolCount: toolExecutions.length,
           });
-          yield { type: "done", reply: message.content, toolExecutions };
+          yield { type: "done", reply: message.content, toolExecutions: toPublicToolExecutions(toolExecutions) };
           return;
         }
       }
@@ -1647,7 +1671,7 @@ async function* chatStreamOpenRouter(
           phase: gateInFinal, round: rounds, toolCount: toolExecutions.length,
         });
       }
-      yield { type: "done", reply, toolExecutions };
+      yield { type: "done", reply, toolExecutions: toPublicToolExecutions(toolExecutions) };
       return;
     }
   }
@@ -1659,7 +1683,7 @@ async function* chatStreamOpenRouter(
   yield {
     type: "max_rounds_reached",
     reply: `[Reached ${maxToolRounds} tool rounds in ${phase || "unknown"} phase. Resuming automatically to continue work...]`,
-    toolExecutions,
+    toolExecutions: toPublicToolExecutions(toolExecutions),
     resumeAfterMs: RESUME_DELAY_MS,
     phase: phase || undefined,
   };

@@ -1,5 +1,7 @@
 # VAPT Assessment & Remediation Report
 
+**Name Tag:** opus
+
 ## Executive Summary
 A comprehensive Vulnerability Assessment and Penetration Testing (VAPT) review was conducted across the SN AI Agent codebase using specialized AI sub-agents. The assessment identified several critical and high-severity vulnerabilities spanning network security, authentication, authorization, data privacy, and LLM integration.
 

@@ -1,23 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectViaBrowser } from "@/lib/browser-scope-switcher";
 import { checkAccess } from "@/lib/access-tier";
+import { getClientIp } from "@/lib/client-ip";
+import { parseBrowserConnectBody } from "@/lib/request-validation";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json() as {
-      instanceUrl?: string;
-      username?: string;
-      password?: string;
-    };
-
-    if (!body.instanceUrl) {
+    const parsed = parseBrowserConnectBody(await request.json());
+    if (!parsed.ok) {
       return NextResponse.json(
-        { success: false, message: "Please provide the ServiceNow instance URL." },
+        { success: false, message: parsed.error },
         { status: 400 },
       );
     }
+    const body = parsed.data;
 
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const ip = getClientIp(request);
     const userId = request.headers.get("x-user-id");
     try {
       const access = await checkAccess(ip, userId, false, body.instanceUrl);

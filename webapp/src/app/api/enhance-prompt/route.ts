@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkAccess } from "@/lib/access-tier";
+import { getClientIp } from "@/lib/client-ip";
+import { parseEnhancePromptBody } from "@/lib/request-validation";
 
 const SYSTEM_PROMPTS: Record<string, string> = {
   grammar: `You are a grammar and spelling corrector. Fix any grammar, spelling, and punctuation errors in the user's text. Preserve the original meaning and tone. Return ONLY the corrected text with no explanation, preamble, or surrounding quotes.`,
@@ -8,7 +10,7 @@ const SYSTEM_PROMPTS: Record<string, string> = {
 
 export async function POST(request: NextRequest) {
   try {
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const ip = getClientIp(request);
     const userId = request.headers.get("x-user-id");
 
     // Enforce rate limiting for enhance-prompt to prevent DoW
@@ -22,16 +24,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Access verification unavailable." }, { status: 503 });
     }
 
-    const { text, mode } = await request.json();
-
-    if (!text || typeof text !== "string" || !text.trim()) {
-      return NextResponse.json({ error: "Text is required" }, { status: 400 });
-    }
+    const parsed = parseEnhancePromptBody(await request.json());
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    const { text, mode } = parsed.data;
 
     const systemPrompt = SYSTEM_PROMPTS[mode];
-    if (!systemPrompt) {
-      return NextResponse.json({ error: "Mode must be 'grammar' or 'enhance'" }, { status: 400 });
-    }
 
     const apiKey = process.env.CLAUDE_API_KEY || "";
     if (!apiKey) {

@@ -11,15 +11,16 @@ import { getLogPersistence } from "@/lib/log-persistence";
 import { stopTelemetryStream } from "@/lib/telemetry-generator";
 import { validateSession, SESSION_COOKIE_NAME } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
+import { parseSessionEndBody } from "@/lib/request-validation";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { sessionId } = body;
-
-    if (!sessionId) {
-      return NextResponse.json({ error: "sessionId required" }, { status: 400 });
+    const parsed = parseSessionEndBody(body);
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
+    const { sessionId } = parsed.data;
 
     // Prevent IDOR: Check if session belongs to the current user
     const sessionToken = request.cookies.get(SESSION_COOKIE_NAME)?.value;
@@ -61,13 +62,14 @@ export async function POST(request: NextRequest) {
       }
     } catch (flushErr) {
       console.error("[session-end] finalizeSession error:", flushErr);
+      return NextResponse.json({ success: false, error: "Failed to finalize session" }, { status: 503 });
     }
 
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("[session-end] Error:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : String(err) },
+      { error: "Failed to end session" },
       { status: 500 }
     );
   }

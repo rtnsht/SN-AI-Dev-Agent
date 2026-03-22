@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
 import { invalidateTierCache } from "@/lib/access-tier";
 import { requireAdmin } from "@/lib/admin-auth";
+import { parseAccessTiersBody } from "@/lib/request-validation";
 
 /**
  * GET /api/admin/access-tiers — return current tier limits and usage stats
@@ -12,29 +13,13 @@ export async function GET(request: NextRequest) {
     if (!auth.ok) return auth.response;
 
     const db = getSupabase();
-
-    // Get tier config
-    const { data: config } = await db
-      .from("access_tier_config")
-      .select("*")
-      .single();
-
     const today = new Date().toISOString().split("T")[0];
-
-    // Authenticated usage (from request_log)
-    const { data: usageData } = await db
-      .from("request_log")
-      .select("user_id, request_date, request_count")
-      .eq("request_date", today);
-
-    // Anonymous usage (from anon_request_log)
-    const { data: anonData } = await db
-      .from("anon_request_log")
-      .select("ip_address, instance_url, request_date, request_count")
-      .eq("request_date", today);
-
-    // Get users for enrichment
-    const { data: users } = await db.from("users").select("id, email, name");
+    const [{ data: config }, { data: usageData }, { data: anonData }, { data: users }] = await Promise.all([
+      db.from("access_tier_config").select("*").single(),
+      db.from("request_log").select("user_id, request_date, request_count").eq("request_date", today),
+      db.from("anon_request_log").select("ip_address, instance_url, request_date, request_count").eq("request_date", today),
+      db.from("users").select("id, email, name"),
+    ]);
     const userMap = new Map<string, { email: string; name: string }>();
     for (const u of users || []) userMap.set(u.id, { email: u.email, name: u.name });
 
@@ -70,15 +55,9 @@ export async function POST(request: NextRequest) {
     const auth = await requireAdmin(request);
     if (!auth.ok) return auth.response;
 
-    const body = await request.json();
-    const { anon_daily_limit, auth_daily_limit } = body;
-
-    if (typeof anon_daily_limit !== "number" || anon_daily_limit < 1) {
-      return NextResponse.json({ error: "anon_daily_limit must be a positive number" }, { status: 400 });
-    }
-    if (typeof auth_daily_limit !== "number" || auth_daily_limit < 1) {
-      return NextResponse.json({ error: "auth_daily_limit must be a positive number" }, { status: 400 });
-    }
+    const parsed = parseAccessTiersBody(await request.json());
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    const { anon_daily_limit, auth_daily_limit } = parsed.data;
 
     const db = getSupabase();
 

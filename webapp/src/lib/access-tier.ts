@@ -232,8 +232,10 @@ export async function checkAccess(
 
   // Tier 2: Authenticated user — combined anon + auth budget
   if (userId) {
-    const authUsed = await getAuthUsage(userId);
-    const anonUsed = await getAnonUsage(ip, instanceUrl);
+    const [authUsed, anonUsed] = await Promise.all([
+      getAuthUsage(userId),
+      getAnonUsage(ip, instanceUrl),
+    ]);
     const combinedUsed = authUsed + anonUsed;
 
     if (combinedUsed >= limits.authDailyLimit) {
@@ -302,8 +304,10 @@ export async function getAccessStatus(
   const limits = await getTierLimits();
 
   if (userId) {
-    const authUsed = await getAuthUsage(userId);
-    const anonUsed = await getAnonUsage(ip, instanceUrl);
+    const [authUsed, anonUsed] = await Promise.all([
+      getAuthUsage(userId),
+      getAnonUsage(ip, instanceUrl),
+    ]);
     const combinedUsed = authUsed + anonUsed;
     return {
       allowed: combinedUsed < limits.authDailyLimit,

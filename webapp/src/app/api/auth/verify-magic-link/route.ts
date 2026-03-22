@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
 import { consumeAuthToken, createSession, buildSetCookieHeader } from "@/lib/auth";
+import { getClientIp } from "@/lib/client-ip";
+import { parseTokenBody } from "@/lib/request-validation";
 
 export async function POST(request: NextRequest) {
   try {
-    const { token } = await request.json();
-
-    if (!token) {
-      return NextResponse.json({ error: "Token is required" }, { status: 400 });
-    }
+    const parsed = parseTokenBody(await request.json());
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    const { token } = parsed.data;
 
     // Accept both magic_link and password_reset tokens
     const result = await consumeAuthToken(token);
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid or expired link" }, { status: 400 });
     }
 
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const ip = getClientIp(request);
     const ua = request.headers.get("user-agent") || "";
 
     // If user needs to set password, create temporary session

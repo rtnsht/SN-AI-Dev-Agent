@@ -2,14 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
 import { consumeAuthToken } from "@/lib/auth";
 import { sendAdminNotification } from "@/lib/email";
+import { parseTokenBody } from "@/lib/request-validation";
 
 export async function POST(request: NextRequest) {
   try {
-    const { token } = await request.json();
-
-    if (!token) {
-      return NextResponse.json({ error: "Token is required" }, { status: 400 });
-    }
+    const parsed = parseTokenBody(await request.json());
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    const { token } = parsed.data;
 
     // Consume the email verification token
     const result = await consumeAuthToken(token, "email_verify");

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAccessStatus, getTierLimits } from "@/lib/access-tier";
+import { getClientIp } from "@/lib/client-ip";
 
 /** GET /api/trial-status — return current access tier status with anon/auth breakdown */
 export async function GET(request: NextRequest) {
   try {
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const ip = getClientIp(request);
     const userId = request.headers.get("x-user-id") || null;
     const instanceUrl = request.nextUrl.searchParams.get("instanceUrl") || undefined;
 

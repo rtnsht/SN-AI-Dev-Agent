@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error("[openrouter-models] Error:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to fetch models" },
+      { error: "Failed to fetch models" },
       { status: 500 }
     );
   }

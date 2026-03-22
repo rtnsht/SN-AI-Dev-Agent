@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAccessStatus, getTierLimits } from "@/lib/access-tier";
+import { SESSION_COOKIE_NAME, validateSession } from "@/lib/auth";
+import { getClientIp } from "@/lib/client-ip";
 
 /**
  * GET /api/config — returns public app configuration.
@@ -17,9 +19,11 @@ export async function GET(request: NextRequest) {
   const serverSnCredsConfigured = !!(snUrl && snUser && snPass);
 
   // Get caller IP and user ID for access status
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  const userId = request.headers.get("x-user-id") || null;
-  const userRole = request.headers.get("x-user-role");
+  const ip = getClientIp(request);
+  const sessionToken = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+  const session = sessionToken ? await validateSession(sessionToken) : null;
+  const userId = session?.user.id || null;
+  const userRole = session?.user.role;
   const isAuthenticated = !!userId;
   const isAdmin = userRole === "admin";
 

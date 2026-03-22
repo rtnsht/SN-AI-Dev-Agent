@@ -1,28 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
-import { chat, type UserCredentials, type ChatMessage } from "@/lib/sn-engine";
+import { chat, type ChatMessage } from "@/lib/sn-engine";
 import { checkAccess } from "@/lib/access-tier";
 import { logger, generateSessionId } from "@/lib/logger";
 import { getSupabase } from "@/lib/supabase";
 import { resolvePolicy, resolvePhase, isValidPhase, SDD_GLOBAL_DEFAULT } from "@/lib/sdd-policy";
 import { normalizeServiceNowAuthMethod, validateServiceNowCredentials } from "@/lib/servicenow-auth";
+import { requireAdmin } from "@/lib/admin-auth";
+import { getClientIp } from "@/lib/client-ip";
+import { parseChatBody } from "@/lib/request-validation";
 
 export const maxDuration = 300; // Allow up to 5 minutes for tool-use loops
 
 export async function POST(request: NextRequest) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const ip = getClientIp(request);
   let sessionId = "unknown";
 
   try {
     const body = await request.json();
-    const { credentials, messages, model, aiProvider, sessionId: clientSessionId, phase, sddMode: clientSddMode } = body as {
-      credentials: UserCredentials;
-      messages: ChatMessage[];
-      model?: string;
-      aiProvider?: "anthropic" | "openrouter";
-      sessionId?: string;
-      phase?: string;
-      sddMode?: boolean;
-    };
+    const parsed = parseChatBody(body);
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
+    }
+    const {
+      credentials,
+      messages,
+      model,
+      aiProvider,
+      sessionId: clientSessionId,
+      phase,
+      sddMode: clientSddMode,
+    } = parsed.data;
 
     // Reject invalid phase before policy resolution
     if (phase && !isValidPhase(phase)) {
@@ -42,9 +49,25 @@ export async function POST(request: NextRequest) {
     const authType = normalizeServiceNowAuthMethod(credentials.snAuthType);
     credentials.snAuthType = authType;
 
-    // Fall back to server-side env vars only for legacy basic auth.
-    if (!credentials.instanceUrl) credentials.instanceUrl = process.env.SN_INSTANCE_URL || "";
-    if (authType === "basic") {
+    const wantsServerBasicFallback =
+      authType === "basic" &&
+      (!credentials.instanceUrl || !credentials.username || !credentials.password);
+
+    let canUseServerCreds = false;
+    if (wantsServerBasicFallback) {
+      const adminAuth = await requireAdmin(request);
+      if (!adminAuth.ok) {
+        return NextResponse.json(
+          { error: "Admin authorization required for server credentials" },
+          { status: 403 }
+        );
+      }
+      canUseServerCreds = true;
+    }
+
+    // Fall back to server-side env vars only for admin-approved legacy basic auth.
+    if (!credentials.instanceUrl && canUseServerCreds) credentials.instanceUrl = process.env.SN_INSTANCE_URL || "";
+    if (authType === "basic" && canUseServerCreds) {
       if (!credentials.username) credentials.username = process.env.SN_USERNAME || "";
       if (!credentials.password) credentials.password = process.env.SN_PASSWORD || "";
     }
@@ -59,7 +82,7 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     const snValidationError = validateServiceNowCredentials(credentials, {
-      serverBasicConfigured: authType === "basic" && Boolean(process.env.SN_PASSWORD),
+      serverBasicConfigured: canUseServerCreds && Boolean(process.env.SN_PASSWORD),
       requireUsernameForBasic: true,
     });
 
@@ -257,10 +280,10 @@ export async function POST(request: NextRequest) {
     // Detect specific error types
     if (message.includes("authentication") || message.includes("401") || message.includes("invalid x-api-key")) {
       logger.error(sessionId, "auth", "Authentication failed", { error: message });
-      return NextResponse.json({ error: `Authentication failed: ${message}` }, { status: 401 });
+      return NextResponse.json({ error: "Authentication failed" }, { status: 401 });
     }
 
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 

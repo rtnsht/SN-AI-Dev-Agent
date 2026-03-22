@@ -1,28 +1,38 @@
 import { NextRequest } from "next/server";
-import { chatStream, type UserCredentials, type ChatMessage } from "@/lib/sn-engine";
+import { chatStream, type ChatMessage } from "@/lib/sn-engine";
 import { checkAccess } from "@/lib/access-tier";
 import { logger, generateSessionId } from "@/lib/logger";
 import { getSupabase } from "@/lib/supabase";
 import { resolvePolicy, resolvePhase, isValidPhase, SDD_GLOBAL_DEFAULT } from "@/lib/sdd-policy";
 import { normalizeServiceNowAuthMethod, validateServiceNowCredentials } from "@/lib/servicenow-auth";
+import { requireAdmin } from "@/lib/admin-auth";
+import { getClientIp } from "@/lib/client-ip";
+import { parseChatBody } from "@/lib/request-validation";
 
 export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const ip = getClientIp(request);
   let sessionId: string = 'unknown'; // Declare outside try block for error handler access
 
   try {
     const body = await request.json();
-    const { credentials, messages, model, aiProvider, sessionId: clientSessionId, phase, sddMode: clientSddMode } = body as {
-      credentials: UserCredentials;
-      messages: ChatMessage[];
-      model?: string;
-      aiProvider?: "anthropic" | "openrouter";
-      sessionId?: string;
-      phase?: string;
-      sddMode?: boolean;
-    };
+    const parsed = parseChatBody(body);
+    if (!parsed.ok) {
+      return new Response(
+        JSON.stringify({ error: parsed.error }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    const {
+      credentials,
+      messages,
+      model,
+      aiProvider,
+      sessionId: clientSessionId,
+      phase,
+      sddMode: clientSddMode,
+    } = parsed.data;
 
     // Reject invalid phase before policy resolution
     if (phase && !isValidPhase(phase)) {
@@ -46,9 +56,25 @@ export async function POST(request: NextRequest) {
     const authType = normalizeServiceNowAuthMethod(credentials.snAuthType);
     credentials.snAuthType = authType;
 
-    // Fall back to server-side env vars only for the legacy basic-auth path.
-    if (!credentials.instanceUrl) credentials.instanceUrl = process.env.SN_INSTANCE_URL || "";
-    if (authType === "basic") {
+    const wantsServerBasicFallback =
+      authType === "basic" &&
+      (!credentials.instanceUrl || !credentials.username || !credentials.password);
+
+    let canUseServerCreds = false;
+    if (wantsServerBasicFallback) {
+      const adminAuth = await requireAdmin(request);
+      if (!adminAuth.ok) {
+        return new Response(
+          JSON.stringify({ error: "Admin authorization required for server credentials" }),
+          { status: 403, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      canUseServerCreds = true;
+    }
+
+    // Fall back to server-side env vars only for admin-approved legacy basic auth.
+    if (!credentials.instanceUrl && canUseServerCreds) credentials.instanceUrl = process.env.SN_INSTANCE_URL || "";
+    if (authType === "basic" && canUseServerCreds) {
       if (!credentials.username) credentials.username = process.env.SN_USERNAME || "";
       if (!credentials.password) credentials.password = process.env.SN_PASSWORD || "";
     }
@@ -62,7 +88,7 @@ export async function POST(request: NextRequest) {
     // session go to the same file (filename is derived deterministically from sessionId).
 
     const snValidationError = validateServiceNowCredentials(credentials, {
-      serverBasicConfigured: authType === "basic" && Boolean(process.env.SN_PASSWORD),
+      serverBasicConfigured: canUseServerCreds && Boolean(process.env.SN_PASSWORD),
       requireUsernameForBasic: true,
     });
 
@@ -278,7 +304,7 @@ export async function POST(request: NextRequest) {
 
           const errorEvent = `data: ${JSON.stringify({
             type: "error",
-            message: errorMsg,
+            message: "Stream request failed",
           })}\n\n`;
           safeEnqueue(encoder.encode(errorEvent));
           // Don't end session on stream error - client may retry
@@ -305,7 +331,7 @@ export async function POST(request: NextRequest) {
     });
 
     return new Response(
-      JSON.stringify({ error: errorMsg }),
+      JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }

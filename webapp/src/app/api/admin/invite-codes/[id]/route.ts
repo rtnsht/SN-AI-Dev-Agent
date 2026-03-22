@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
 import { requireAdmin } from "@/lib/admin-auth";
+import { parseActionBody } from "@/lib/request-validation";
 
 /** PATCH /api/admin/invite-codes/[id] — revoke an invite code */
 export async function PATCH(
@@ -12,11 +13,8 @@ export async function PATCH(
     if (!auth.ok) return auth.response;
 
     const { id } = await params;
-    const { action } = await request.json();
-
-    if (action !== "revoke") {
-      return NextResponse.json({ error: "Action must be 'revoke'" }, { status: 400 });
-    }
+    const parsed = parseActionBody(await request.json(), ["revoke"]);
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
     const db = getSupabase();
 

@@ -3,6 +3,7 @@ import { getSupabase } from "@/lib/supabase";
 import { createAuthToken } from "@/lib/auth";
 import { sendApprovalEmail } from "@/lib/email";
 import { requireAdmin } from "@/lib/admin-auth";
+import { parseActionBody } from "@/lib/request-validation";
 
 /** PATCH /api/admin/requests/[id] — approve or reject */
 export async function PATCH(
@@ -14,12 +15,10 @@ export async function PATCH(
     if (!auth.ok) return auth.response;
 
     const { id } = await params;
-    const { action } = await request.json();
+    const parsed = parseActionBody(await request.json(), ["approve", "reject"]);
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    const { action } = parsed.data;
     const adminEmail = request.headers.get("x-user-email") || "admin";
-
-    if (!action || !["approve", "reject"].includes(action)) {
-      return NextResponse.json({ error: "Action must be 'approve' or 'reject'" }, { status: 400 });
-    }
 
     const db = getSupabase();
 

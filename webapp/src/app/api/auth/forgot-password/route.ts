@@ -3,19 +3,18 @@ import { getSupabase } from "@/lib/supabase";
 import { createAuthToken } from "@/lib/auth";
 import { sendPasswordResetEmail } from "@/lib/email";
 import { checkForgotPassword } from "@/lib/auth-rate-limiter";
+import { parseEmailBody } from "@/lib/request-validation";
 
 export async function POST(request: NextRequest) {
   try {
-    const { email } = await request.json();
-
-    if (!email) {
-      return NextResponse.json({ error: "Email is required" }, { status: 400 });
-    }
+    const parsed = parseEmailBody(await request.json());
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    const { email } = parsed.data;
 
     const normalizedEmail = email.toLowerCase().trim();
 
     // Rate limit
-    const rl = checkForgotPassword(normalizedEmail);
+    const rl = await checkForgotPassword(normalizedEmail);
     if (!rl.allowed) {
       return NextResponse.json(
         { error: "Too many requests. Please try again later." },

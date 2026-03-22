@@ -7,21 +7,23 @@ import {
   buildSetCookieHeader,
 } from "@/lib/auth";
 import { checkInviteRegister } from "@/lib/auth-rate-limiter";
+import { getClientIp } from "@/lib/client-ip";
+import { parseRegisterInviteBody } from "@/lib/request-validation";
 
 export async function POST(request: NextRequest) {
   try {
-    const { code, name, email, password } = await request.json();
-
-    if (!code || !name || !email || !password) {
+    const parsed = parseRegisterInviteBody(await request.json());
+    if (!parsed.ok) {
       return NextResponse.json(
-        { error: "All fields are required" },
+        { error: parsed.error },
         { status: 400 }
       );
     }
+    const { code, name, email, password } = parsed.data;
 
     // Rate limit by IP
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-    const rl = checkInviteRegister(ip);
+    const ip = getClientIp(request);
+    const rl = await checkInviteRegister(ip);
     if (!rl.allowed) {
       return NextResponse.json(
         { error: "Too many attempts. Please try again later." },

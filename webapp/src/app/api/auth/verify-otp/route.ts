@@ -2,20 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
 import { consumeOTPToken, createSession, buildSetCookieHeader } from "@/lib/auth";
 import { checkOTPVerify } from "@/lib/auth-rate-limiter";
+import { getClientIp } from "@/lib/client-ip";
+import { parseVerifyOtpBody } from "@/lib/request-validation";
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, otp } = await request.json();
-
-    if (!email || !otp) {
-      return NextResponse.json({ error: "Email and verification code are required" }, { status: 400 });
-    }
+    const parsed = parseVerifyOtpBody(await request.json());
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    const { email, otp } = parsed.data;
 
     const normalizedEmail = email.toLowerCase().trim();
     const normalizedOTP = otp.trim();
 
     // Rate limit OTP attempts per email
-    const rl = checkOTPVerify(normalizedEmail);
+    const rl = await checkOTPVerify(normalizedEmail);
     if (!rl.allowed) {
       return NextResponse.json(
         { error: "Too many attempts. Please request a new code." },
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create temporary session for password setup
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const ip = getClientIp(request);
     const userAgent = request.headers.get("user-agent") || undefined;
     const { token, expiresAt } = await createSession(userId, {
       ip,

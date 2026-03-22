@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
 import { deleteAllUserSessions } from "@/lib/auth";
 import { requireAdmin } from "@/lib/admin-auth";
+import { parseActionBody } from "@/lib/request-validation";
 
 /** PATCH /api/admin/users/[id] — suspend or activate */
 export async function PATCH(
@@ -13,16 +14,14 @@ export async function PATCH(
     if (!auth.ok) return auth.response;
 
     const { id } = await params;
-    const { action } = await request.json();
-
-    if (!action || !["suspend", "activate"].includes(action)) {
-      return NextResponse.json({ error: "Action must be 'suspend' or 'activate'" }, { status: 400 });
-    }
+    const parsed = parseActionBody(await request.json(), ["suspend", "activate"]);
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    const { action } = parsed.data;
 
     const db = getSupabase();
 
     // Don't allow suspending yourself
-    const currentUserId = request.headers.get("x-user-id");
+    const currentUserId = auth.session.user.id;
     if (id === currentUserId) {
       return NextResponse.json({ error: "Cannot suspend yourself" }, { status: 400 });
     }
