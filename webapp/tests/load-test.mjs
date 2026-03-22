@@ -522,6 +522,124 @@ async function scenario7() {
   return results;
 }
 
+async function scenario8() {
+  console.log("\n╔══════════════════════════════════════════════════════════╗");
+  console.log("║  SCENARIO 8: BYOK Premium Models (User-Supplied Keys)  ║");
+  console.log("╚══════════════════════════════════════════════════════════╝");
+
+  const userKeys = [
+    process.env.OPENROUTER_USER_KEY_1,
+    process.env.OPENROUTER_USER_KEY_2,
+  ].filter(Boolean);
+
+  if (userKeys.length === 0) {
+    console.log("\n  ⚠️  Skipped: Set OPENROUTER_USER_KEY_1 and OPENROUTER_USER_KEY_2 env vars");
+    console.log("     Example: OPENROUTER_USER_KEY_1=sk-or-v1-xxx node tests/load-test.mjs --scenario 8\n");
+    return;
+  }
+
+  console.log(`  🔑 ${userKeys.length} user-supplied OpenRouter key(s) available\n`);
+
+  const results = [];
+
+  const PREMIUM_MODELS = [
+    { id: "qwen/qwen3.5-plus-02-15", label: "Qwen 3.5 Plus" },
+    { id: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro" },
+    { id: "anthropic/claude-opus-4", label: "Claude Opus 4" },
+    { id: "openai/gpt-5.4-pro", label: "GPT-5.4 Pro" },
+  ];
+
+  // Phase A: Individual premium model tests (BYOK — bypasses cost guard)
+  console.log("  📊 Phase A: Premium model chat with user-supplied keys\n");
+
+  for (const model of PREMIUM_MODELS) {
+    for (const n of [3, 5]) {
+      results.push(
+        await runConcurrent(`BYOK: ${model.label}`, n, (i) => {
+          const key = userKeys[i % userKeys.length];
+          const sid = `sess_${Date.now()}_byok${String(i).padStart(4, "0")}`;
+          return makeRequest(`${BASE_URL}/api/chat-stream`, {
+            method: "POST",
+            body: {
+              credentials: {
+                ...SN_CREDS,
+                openRouterApiKey: key,
+                aiProvider: "openrouter",
+              },
+              messages: [{ role: "user", content: "Hello, briefly introduce yourself in one sentence.", timestamp: new Date().toISOString() }],
+              model: model.id,
+              aiProvider: "openrouter",
+              phase: null,
+              sddMode: false,
+              sessionId: sid,
+            },
+            timeout: 120000,
+          });
+        })
+      );
+    }
+  }
+
+  // Phase B: Mixed premium model burst — all 4 models, 2 keys, simultaneous
+  console.log("\n  📊 Phase B: Mixed premium model burst (4 models × 2 keys)\n");
+
+  results.push(
+    await runConcurrent("BYOK mixed premium burst", 20, (i) => {
+      const model = PREMIUM_MODELS[i % PREMIUM_MODELS.length];
+      const key = userKeys[i % userKeys.length];
+      const sid = `sess_${Date.now()}_pmix${String(i).padStart(4, "0")}`;
+      return makeRequest(`${BASE_URL}/api/chat-stream`, {
+        method: "POST",
+        body: {
+          credentials: {
+            ...SN_CREDS,
+            openRouterApiKey: key,
+            aiProvider: "openrouter",
+          },
+          messages: [{ role: "user", content: "Say hello in one word.", timestamp: new Date().toISOString() }],
+          model: model.id,
+          aiProvider: "openrouter",
+          phase: null,
+          sddMode: false,
+          sessionId: sid,
+        },
+        timeout: 120000,
+      });
+    })
+  );
+
+  // Phase C: Sustained BYOK premium chat — 30 seconds
+  console.log("\n  📊 Phase C: Sustained BYOK premium chat (30s)\n");
+
+  results.push(
+    await runSustained("BYOK sustained premium chat", 4, 30, (i) => {
+      const model = PREMIUM_MODELS[i % PREMIUM_MODELS.length];
+      const key = userKeys[i % userKeys.length];
+      const sid = `sess_${Date.now()}_bsus${String(i).padStart(4, "0")}`;
+      return makeRequest(`${BASE_URL}/api/chat-stream`, {
+        method: "POST",
+        body: {
+          credentials: {
+            ...SN_CREDS,
+            openRouterApiKey: key,
+            aiProvider: "openrouter",
+          },
+          messages: [{ role: "user", content: "Reply with just OK.", timestamp: new Date().toISOString() }],
+          model: model.id,
+          aiProvider: "openrouter",
+          phase: null,
+          sddMode: false,
+          sessionId: sid,
+        },
+        timeout: 120000,
+      });
+    })
+  );
+
+  allResults.push({ scenario: "Scenario 8: BYOK Premium Models (User-Supplied Keys)", results });
+  return results;
+}
+
 /* ── Main ── */
 async function main() {
   console.log("╔══════════════════════════════════════════════════════════╗");
@@ -539,7 +657,7 @@ async function main() {
   }
   console.log(`✅ Server healthy (${health.latency.toFixed(0)}ms)`);
 
-  const scenarios = [scenario1, scenario2, scenario3, scenario4, scenario5, scenario6, scenario7];
+  const scenarios = [scenario1, scenario2, scenario3, scenario4, scenario5, scenario6, scenario7, scenario8];
 
   for (let i = 0; i < scenarios.length; i++) {
     if (SCENARIO_FILTER !== null && SCENARIO_FILTER !== i + 1) continue;

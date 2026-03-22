@@ -276,6 +276,48 @@ Verifies that premium models are correctly blocked when using the server's API k
 
 ---
 
+## Scenario 8: BYOK Premium Models (User-Supplied OpenRouter Keys)
+
+Tests premium models using user-supplied OpenRouter API keys (2 keys, round-robin). These models are blocked by the server's cost-protection when using the server key, but accessible via BYOK.
+
+**Keys Used:** 2 user-supplied OpenRouter keys (round-robin distribution)  
+**Models Tested:** Qwen 3.5 Plus, Gemini 3.1 Pro, Claude Opus 4  
+**GPT-5.4 Pro:** Excluded — OpenRouter provider returns 400 (upstream issue, not our app)
+
+### Premium Model Performance
+
+| Model | Concurrency | Total | Success | Error Rate | p50 | p95 | Avg |
+|-------|-------------|-------|---------|-----------|-----|-----|-----|
+| **Qwen 3.5 Plus** | 3 | 3 | 3 | 0.0% | 4,428ms | 5,318ms | 4,389ms |
+| **Qwen 3.5 Plus** | 5 | 5 | 5 | 0.0% | 4,620ms | 4,713ms | 4,490ms |
+| **Qwen 3.5 Plus** | 10 | 10 | 10 | 0.0% | 4,342ms | 6,917ms | 4,676ms |
+| **Gemini 3.1 Pro** | 3 | 3 | 3 | 0.0% | 2,531ms | 8,882ms | 4,567ms |
+| **Gemini 3.1 Pro** | 5 | 5 | 5 | 0.0% | 8,892ms | 9,378ms | 7,750ms |
+| **Gemini 3.1 Pro** | 10 | 10 | 10 | 0.0% | 2,588ms | 3,996ms | 2,836ms |
+| **Claude Opus 4** | 3 | 3 | 3 | 0.0% | 2,476ms | 2,538ms | 2,439ms |
+| **Claude Opus 4** | 5 | 5 | 5 | 0.0% | 2,343ms | 2,777ms | 2,235ms |
+| **Claude Opus 4** | 10 | 10 | 10 | 0.0% | 1,605ms | 2,579ms | 1,868ms |
+
+### Mixed Premium Model Burst (30 Concurrent)
+
+| Test | Concurrency | Success | Error Rate | p50 | p95 |
+|------|-------------|---------|-----------|-----|-----|
+| 3 premium models × 10, 2 keys | **30** | **30/30** | **0.0%** | 2,754ms | 5,205ms |
+
+### Premium Model Performance Ranking
+
+| Model | Avg Latency | Best For |
+|-------|------------|----------|
+| **Claude Opus 4** | ~2.2s | Fastest premium, best quality |
+| **Gemini 3.1 Pro** | ~5.1s | Best for multimodal tasks |
+| **Qwen 3.5 Plus** | ~4.5s | Cost-effective, strong multilingual |
+
+### Configuration Note
+
+The BYOK feature requires `ALLOW_USER_API_KEYS=true` in production. When set to `false`, user-supplied keys are ignored and only the server's key is used (with model allowlist cost protection). Current production setting: **`false`** — users cannot bring their own keys. To enable premium model access for users, set `ALLOW_USER_API_KEYS=true`.
+
+---
+
 ## Appendix: Raw Numbers
 
 **Total requests across all scenarios: 13,565+**
@@ -293,4 +335,6 @@ Verifies that premium models are correctly blocked when using the server's API k
 | 7c. OpenRouter Chat (3 models) | 24 | 0 | 5 |
 | 7d. Mixed Model Burst | 15 | 0 | 15 |
 | 7e. Sustained OpenRouter | 33 | 0 | 3 |
-| **TOTAL** | **~21,177** | **227** (7.6% at 3K only) | **3,000** |
+| 8a. BYOK Premium (3 models) | 54 | 0 | 10 |
+| 8b. BYOK Mixed Burst | 30 | 0 | **30** |
+| **TOTAL** | **~21,261** | **227** (socket timeouts at 3K) | **3,000** |

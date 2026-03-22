@@ -101,6 +101,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Resolve API key based on provider
+    // ALLOW_USER_API_KEYS controls whether users can supply their own API keys.
+    // Default: true (users can bring their own keys for unlimited access).
     const allowUserKeys = process.env.ALLOW_USER_API_KEYS !== "false";
     let userSuppliedKey = false;
 
