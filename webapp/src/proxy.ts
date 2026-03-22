@@ -34,6 +34,7 @@ const PUBLIC_PATHS = [
   "/api/openrouter-models",
   "/api/feedback",
   "/api/banners",
+  "/api/changelog",
   "/api/chat",            // open for anonymous access (rate-limited server-side)
   "/api/chat-stream",     // open for anonymous access (rate-limited server-side)
   "/api/trial-status",    // trial status check (works for anon too)
