@@ -1626,6 +1626,8 @@ export default function Home() {
     setCurrentPhase(null);
     setCompletedPhases([]);
     setSddMode(false);
+    setFocusMode(false);
+    focusModeAutoTriggeredRef.current = false;
     setModelLocked(false);
     setPendingRetry(null);
     setActivityLog([]);
