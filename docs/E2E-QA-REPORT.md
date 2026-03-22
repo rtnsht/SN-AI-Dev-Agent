@@ -67,6 +67,8 @@ A comprehensive 7-phase quality assessment was performed across the SN AI Agent 
 | 3 | ChatTOC "Navigate" button takes space, not discoverable | P2 | Redesigned as Perplexity-style hover-rail with flyout | `ChatWindow.tsx`, `ChatTOC.tsx`, `globals.css` |
 | 4 | Changelog table has no migration file | P1 | Created `014_changelog.sql` with proper schema + RLS | `webapp/supabase/migrations/014_changelog.sql` |
 | 5 | No "upcoming"/"planned" changelog entries for testing | P3 | Seeded 2 entries via Supabase SQL | Direct DB insert |
+| 6 | Chat API rejects `phase: null` ("phase must be a string") | P0 | Allow `null` in phase validation | `webapp/src/lib/request-validation.ts` |
+| 7 | Changelog RLS blocks anon reads (dropdown shows hardcoded fallbacks) | P1 | Added public SELECT RLS policy on changelog table | `014_changelog.sql`, Supabase |
 
 ---
 
@@ -269,6 +271,50 @@ Current implementation re-fetches on every dropdown open. No WebSocket or pollin
 
 ---
 
+## 9. Runtime Test Results
+
+### 9.1 Additional Bug Found and Fixed During Runtime Testing
+
+| # | Issue | Severity | Fix | Files |
+|---|-------|----------|-----|-------|
+| 6 | Chat API rejects `phase: null` with "phase must be a string" | P0 | Allow `null` in validation (client sends `null` when no SDLC phase active) | `webapp/src/lib/request-validation.ts` |
+| 7 | Changelog dropdown shows hardcoded fallbacks (Supabase RLS blocks anon reads) | P1 | Added RLS policy `USING (true)` for public SELECT on changelog | `014_changelog.sql`, Supabase migration |
+
+### 9.2 API Smoke Tests
+
+| Endpoint | Method | Status | Response Summary |
+|----------|--------|--------|------------------|
+| `/api/config` | GET | ✅ 200 | `serverApiKeyConfigured: true`, `accessStatus.allowed: true` |
+| `/api/changelog` | GET | ✅ 200 | 7 entries (5 released + 1 upcoming + 1 planned) |
+| `/api/test-connection` (valid SN creds) | POST | ✅ 200 | `success: true`, 209 roles, 4 helper APIs deployed |
+| `/api/test-connection` (bad URL) | POST | ✅ 200 | `success: false`, `ENOTFOUND` error |
+| `/api/openrouter-models` | GET | ✅ 200 | Returns filtered model list |
+| `/api/chat-stream` (phase: null) | POST | ✅ 200 | Streaming response (previously 400 "phase must be a string") |
+
+### 9.3 Visual UI Verification (Browser)
+
+| Step | Feature | Verdict | Evidence |
+|------|---------|---------|----------|
+| 1 | App page loads, welcome modal, dark theme | **PASS** | Full layout renders: sidebar, header, hero, chat input |
+| 2 | ServiceNow connection | **PASS** | Connected in ~2s, green status, 209 roles, helper APIs deployed |
+| 3 | Release/Changelog dropdown (Supabase) | **PASS** | "Recent": 5 DB entries. "Coming Soon": 2 DB entries (Multi-instance, Flow Designer) |
+| 4 | Chat message (bug fix verified) | **PASS** | Message sent, AI processing, no "phase must be a string" error |
+| 5 | Second message + queue behavior | **PASS** | Queued badge shows, 4+ messages trigger ChatTOC rail threshold |
+| 6 | ChatTOC hover rail + flyout | **PASS** | 28x32px rail visible at right edge. Hover → flyout with "Navigate — 4 items". Click entry → smooth scroll |
+| 7 | SuggestionPanel tabs | **PASS** | All 5 tabs visible (For you, Build, Explore, Quick, Latest Updates). Tab switching works, instance-aware suggestions load |
+
+### 9.4 ServiceNow Connection Details
+
+```
+Instance:    dev181312.service-now.com
+User:        System Administrator (admin)
+Roles:       209 roles (admin + security_admin confirmed)
+Helper APIs: 4 deployed (uiPolicyActionHelper, updateSetHelper,
+             addToUpdateSetHelper, scopeHelper)
+```
+
+---
+
 ## Appendix A: Files Changed in This PR
 
 | File | Change Type | Description |
@@ -278,7 +324,8 @@ Current implementation re-fetches on every dropdown open. No WebSocket or pollin
 | `webapp/src/app/globals.css` | Modified | sp-tabs scroll fixes + ChatTOC rail/flyout CSS |
 | `webapp/src/components/ChatTOC.tsx` | Modified | Hover-flyout pattern, removed backdrop |
 | `webapp/src/components/ChatWindow.tsx` | Modified | Rail wrapper with hover handlers |
-| `webapp/supabase/migrations/014_changelog.sql` | New | Changelog table migration + RLS |
+| `webapp/src/lib/request-validation.ts` | Modified | Allow `phase: null` in chat body validation |
+| `webapp/supabase/migrations/014_changelog.sql` | New | Changelog table migration + RLS policy |
 
 ## Appendix B: Test Evidence
 
