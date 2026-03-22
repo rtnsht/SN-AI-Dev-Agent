@@ -418,9 +418,12 @@ export interface ParsedBannerCreateBody {
   bg_color?: string;
   text_color?: string;
   variant?: string;
+  dismissible?: boolean;
   start_at?: string | null;
   end_at?: string | null;
 }
+
+const VALID_BANNER_VARIANTS = ["info", "success", "warning", "critical"];
 
 export function parseBannerCreateBody(body: unknown): ValidationResult<ParsedBannerCreateBody> {
   if (!isRecord(body)) return { ok: false, error: "Invalid request body" };
@@ -433,6 +436,12 @@ export function parseBannerCreateBody(body: unknown): ValidationResult<ParsedBan
   if ("pages" in body && body.pages !== undefined && !Array.isArray(body.pages)) {
     return { ok: false, error: "pages must be an array" };
   }
+  if ("variant" in body && body.variant !== undefined && (typeof body.variant !== "string" || !VALID_BANNER_VARIANTS.includes(body.variant))) {
+    return { ok: false, error: `variant must be one of: ${VALID_BANNER_VARIANTS.join(", ")}` };
+  }
+  if ("dismissible" in body && body.dismissible !== undefined && typeof body.dismissible !== "boolean") {
+    return { ok: false, error: "dismissible must be a boolean" };
+  }
   return { ok: true, data: body as unknown as ParsedBannerCreateBody };
 }
 
@@ -443,6 +452,8 @@ export interface ParsedBannerPatchBody {
   pages?: string[];
   bg_color?: string;
   text_color?: string;
+  variant?: string;
+  dismissible?: boolean;
   start_at?: string | null;
   end_at?: string | null;
   is_active?: boolean;
@@ -458,6 +469,12 @@ export function parseBannerPatchBody(body: unknown): ValidationResult<ParsedBann
   }
   if ("pages" in body && body.pages !== undefined && !Array.isArray(body.pages)) {
     return { ok: false, error: "pages must be an array" };
+  }
+  if ("variant" in body && body.variant !== undefined && (typeof body.variant !== "string" || !VALID_BANNER_VARIANTS.includes(body.variant))) {
+    return { ok: false, error: `variant must be one of: ${VALID_BANNER_VARIANTS.join(", ")}` };
+  }
+  if ("dismissible" in body && body.dismissible !== undefined && typeof body.dismissible !== "boolean") {
+    return { ok: false, error: "dismissible must be a boolean" };
   }
   return { ok: true, data: body as unknown as ParsedBannerPatchBody };
 }

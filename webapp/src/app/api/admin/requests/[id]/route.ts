@@ -33,7 +33,9 @@ export async function PATCH(
       return NextResponse.json({ error: "Request not found" }, { status: 404 });
     }
 
-    if (req.status !== "pending") {
+    const actionable =
+      req.status === "pending" || req.status === "pending_verification";
+    if (!actionable) {
       return NextResponse.json({ error: `Request is already ${req.status}` }, { status: 400 });
     }
 
@@ -82,13 +84,14 @@ export async function PATCH(
       userId = newUser.id;
     }
 
-    // Update request status
+    // Update request status (admin approval supersedes self-serve email verification)
     await db
       .from("access_requests")
       .update({
         status: "approved",
         reviewed_at: new Date().toISOString(),
         reviewed_by: adminEmail,
+        ...(req.status === "pending_verification" ? { email_verified: true } : {}),
       })
       .eq("id", id);
 

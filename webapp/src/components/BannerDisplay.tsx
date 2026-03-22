@@ -12,6 +12,7 @@ interface BannerData {
   content_html: string;
   pages: string[];
   variant?: BannerVariant;
+  dismissible?: boolean;
   bg_color?: string;
   text_color?: string;
 }
@@ -65,47 +66,56 @@ export default function BannerDisplay() {
     return () => clearInterval(interval);
   }, [fetchBanners]);
 
-  const visibleBanners = banners.filter((b) => {
-    if (dismissed.has(b.id)) return false;
-    if (b.pages.includes("all")) return true;
-    return b.pages.some((p) => pathname === p || pathname.startsWith(p + "/"));
-  });
+  /** Cap at 2 stacked banners — more than two feels cluttered and pushes content down */
+  const MAX_BANNERS = 2;
 
-  const topBanner = visibleBanners[0];
-  if (!topBanner) return null;
+  const visibleBanners = banners
+    .filter((b) => {
+      if (b.dismissible !== false && dismissed.has(b.id)) return false;
+      if (b.pages.includes("all")) return true;
+      return b.pages.some((p) => pathname === p || pathname.startsWith(p + "/"));
+    })
+    .slice(0, MAX_BANNERS);
 
-  const variant = resolveVariant(topBanner);
-  const Icon = VARIANT_ICON[variant];
-  const isCritical = variant === "critical";
+  if (visibleBanners.length === 0) return null;
 
-  const dismiss = () => {
-    const next = new Set(dismissed).add(topBanner.id);
+  const dismiss = (id: string) => {
+    const next = new Set(dismissed).add(id);
     setDismissed(next);
     saveDismissed(next);
   };
 
   return (
-    <div className={`app-banner app-banner-${variant}`}>
-      <div className="app-banner-inner">
-        <Icon size={16} className="app-banner-icon" />
-        <span
-          className="app-banner-text"
-          dangerouslySetInnerHTML={{
-            __html: DOMPurify.sanitize(topBanner.content_html || "", {
-              ALLOWED_TAGS: ["b", "i", "u", "em", "strong", "a", "br", "span"],
-            }),
-          }}
-        />
-        {!isCritical && (
-          <button
-            onClick={dismiss}
-            aria-label="Dismiss banner"
-            className="app-banner-dismiss"
-          >
-            <X size={14} />
-          </button>
-        )}
-      </div>
-    </div>
+    <>
+      {visibleBanners.map((banner) => {
+        const variant = resolveVariant(banner);
+        const Icon = VARIANT_ICON[variant];
+        const canDismiss = banner.dismissible !== false;
+        return (
+          <div key={banner.id} className={`app-banner app-banner-${variant}${!canDismiss ? " app-banner-pinned" : ""}`}>
+            <div className="app-banner-inner">
+              <Icon size={16} className="app-banner-icon" />
+              <span
+                className="app-banner-text"
+                dangerouslySetInnerHTML={{
+                  __html: DOMPurify.sanitize(banner.content_html || "", {
+                    ALLOWED_TAGS: ["b", "i", "u", "em", "strong", "a", "br", "span"],
+                  }),
+                }}
+              />
+              {canDismiss && (
+                <button
+                  onClick={() => dismiss(banner.id)}
+                  aria-label="Dismiss banner"
+                  className="app-banner-dismiss"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </>
   );
 }
