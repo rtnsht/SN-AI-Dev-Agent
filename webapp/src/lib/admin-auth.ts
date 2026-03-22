@@ -16,14 +16,20 @@ export type AdminAuthResult =
 export async function requireAdmin(request: NextRequest): Promise<AdminAuthResult> {
   // Respect BYPASS_AUTH for local development
   if (process.env.NODE_ENV !== "production" && process.env.BYPASS_AUTH === "true") {
-    return { 
-      ok: true, 
-      session: { 
-        id: "bypass-session", 
-        user: { id: "bypass-user", email: "bypass@example.com", name: "Bypass Admin", role: "admin", status: "active", created_at: new Date().toISOString() }, 
-        is_temporary: false, 
-        expires_at: new Date(Date.now() + 86400000).toISOString() 
-      } 
+    return {
+      ok: true,
+      session: {
+        session_id: "bypass-session",
+        user: {
+          id: "bypass-user",
+          email: "bypass@example.com",
+          name: "Bypass Admin",
+          role: "admin",
+          status: "active",
+          must_set_password: false,
+        },
+        is_temporary: false,
+      }
     };
   }
 

@@ -89,6 +89,8 @@ async function check(key: string, maxAttempts: number, windowMs: number): Promis
 
 const LOGIN_MAX = parseInt(process.env.LOGIN_MAX_ATTEMPTS || "5", 10) || 5;
 const LOGIN_WINDOW = (parseInt(process.env.LOGIN_WINDOW_MINUTES || "15", 10) || 15) * 60 * 1000;
+const SESSION_START_MAX = parseInt(process.env.SESSION_START_MAX_ATTEMPTS || "30", 10) || 30;
+const SESSION_START_WINDOW = (parseInt(process.env.SESSION_START_WINDOW_MINUTES || "60", 10) || 60) * 60 * 1000;
 
 /** Login: 5 attempts per email per 15 min */
 export async function checkLogin(email: string): Promise<RateLimitResult> {
@@ -123,5 +125,10 @@ export async function checkOTPVerify(email: string): Promise<RateLimitResult> {
 /** Feedback submission: 5 per IP per hour */
 export async function checkFeedbackSubmission(ip: string): Promise<RateLimitResult> {
   return check(`feedback:${ip}`, 5, 60 * 60 * 1000);
+}
+
+/** Session lifecycle start: 30 starts per IP per hour */
+export async function checkSessionStart(ip: string): Promise<RateLimitResult> {
+  return check(`sessionstart:${ip}`, SESSION_START_MAX, SESSION_START_WINDOW);
 }
 

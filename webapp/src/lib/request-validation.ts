@@ -4,6 +4,7 @@ import type { ChatMessage, UserCredentials } from "@/lib/sn-engine";
 type ValidationOk<T> = { ok: true; data: T };
 type ValidationErr = { ok: false; error: string };
 type ValidationResult<T> = ValidationOk<T> | ValidationErr;
+const SESSION_ID_PATTERN = /^sess_\d{13,20}_[A-Za-z0-9-]{6,64}$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -22,6 +23,10 @@ function isChatMessageArray(value: unknown): value is ChatMessage[] {
     if ("timestamp" in msg && msg.timestamp !== undefined && typeof msg.timestamp !== "string") return false;
     return true;
   });
+}
+
+function isValidSessionId(value: unknown): value is string {
+  return typeof value === "string" && value.length <= 128 && SESSION_ID_PATTERN.test(value);
 }
 
 export interface ParsedChatBody {
@@ -44,8 +49,8 @@ export function parseChatBody(body: unknown): ValidationResult<ParsedChatBody> {
   if ("aiProvider" in body && body.aiProvider !== undefined && body.aiProvider !== "anthropic" && body.aiProvider !== "openrouter") {
     return { ok: false, error: "aiProvider must be 'anthropic' or 'openrouter'" };
   }
-  if ("sessionId" in body && body.sessionId !== undefined && typeof body.sessionId !== "string") {
-    return { ok: false, error: "sessionId must be a string" };
+  if ("sessionId" in body && body.sessionId !== undefined && !isValidSessionId(body.sessionId)) {
+    return { ok: false, error: "sessionId has invalid format" };
   }
   if ("phase" in body && body.phase !== undefined && typeof body.phase !== "string") {
     return { ok: false, error: "phase must be a string" };
@@ -56,7 +61,7 @@ export function parseChatBody(body: unknown): ValidationResult<ParsedChatBody> {
   return {
     ok: true,
     data: {
-      credentials: body.credentials as UserCredentials,
+      credentials: body.credentials as unknown as UserCredentials,
       messages: body.messages as ChatMessage[],
       model: body.model as string | undefined,
       aiProvider: body.aiProvider as "anthropic" | "openrouter" | undefined,
@@ -71,7 +76,7 @@ export type ParsedTestConnectionBody = Partial<Credentials>;
 
 export function parseTestConnectionBody(body: unknown): ValidationResult<ParsedTestConnectionBody> {
   if (!isRecord(body)) return { ok: false, error: "Invalid request body" };
-  return { ok: true, data: body as Partial<Credentials> };
+  return { ok: true, data: body as unknown as Partial<Credentials> };
 }
 
 export interface ParsedInstancePromptsBody extends Partial<Credentials> {
@@ -84,7 +89,7 @@ export function parseInstancePromptsBody(body: unknown): ValidationResult<Parsed
   if ("seenHashes" in body && body.seenHashes !== undefined && !isStringArray(body.seenHashes)) {
     return { ok: false, error: "seenHashes must be a string array" };
   }
-  return { ok: true, data: body as ParsedInstancePromptsBody };
+  return { ok: true, data: body as unknown as ParsedInstancePromptsBody };
 }
 
 export interface ParsedSessionStartBody {
@@ -101,8 +106,8 @@ export interface ParsedSessionStartBody {
 
 export function parseSessionStartBody(body: unknown): ValidationResult<ParsedSessionStartBody> {
   if (!isRecord(body)) return { ok: false, error: "Invalid request body" };
-  if (typeof body.sessionId !== "string" || body.sessionId.trim() === "") {
-    return { ok: false, error: "sessionId required" };
+  if (!isValidSessionId(body.sessionId)) {
+    return { ok: false, error: "sessionId has invalid format" };
   }
   const stringFields = ["instanceUrl", "username", "userFullName", "model", "aiProvider", "nodeVersion"] as const;
   for (const key of stringFields) {
@@ -116,7 +121,7 @@ export function parseSessionStartBody(body: unknown): ValidationResult<ParsedSes
   if ("hasSecurityAdmin" in body && body.hasSecurityAdmin !== undefined && typeof body.hasSecurityAdmin !== "boolean") {
     return { ok: false, error: "hasSecurityAdmin must be a boolean" };
   }
-  return { ok: true, data: body as ParsedSessionStartBody };
+  return { ok: true, data: body as unknown as ParsedSessionStartBody };
 }
 
 export interface ParsedSessionEndBody {
@@ -125,8 +130,8 @@ export interface ParsedSessionEndBody {
 
 export function parseSessionEndBody(body: unknown): ValidationResult<ParsedSessionEndBody> {
   if (!isRecord(body)) return { ok: false, error: "Invalid request body" };
-  if (typeof body.sessionId !== "string" || body.sessionId.trim() === "") {
-    return { ok: false, error: "sessionId required" };
+  if (!isValidSessionId(body.sessionId)) {
+    return { ok: false, error: "sessionId has invalid format" };
   }
   return { ok: true, data: { sessionId: body.sessionId } };
 }
@@ -234,7 +239,7 @@ export function parseRegisterInviteBody(body: unknown): ValidationResult<ParsedR
       return { ok: false, error: "All fields are required" };
     }
   }
-  return { ok: true, data: body as ParsedRegisterInviteBody };
+  return { ok: true, data: body as unknown as ParsedRegisterInviteBody };
 }
 
 export interface ParsedSetPasswordBody {
@@ -318,7 +323,7 @@ export function parseSnOAuthExchangeBody(body: unknown): ValidationResult<Parsed
   if ("clientSecret" in body && body.clientSecret !== undefined && body.clientSecret !== null && typeof body.clientSecret !== "string") {
     return { ok: false, error: "clientSecret must be a string" };
   }
-  return { ok: true, data: body as ParsedSnOAuthExchangeBody };
+  return { ok: true, data: body as unknown as ParsedSnOAuthExchangeBody };
 }
 
 export interface ParsedActionBody {
@@ -428,7 +433,7 @@ export function parseBannerCreateBody(body: unknown): ValidationResult<ParsedBan
   if ("pages" in body && body.pages !== undefined && !Array.isArray(body.pages)) {
     return { ok: false, error: "pages must be an array" };
   }
-  return { ok: true, data: body as ParsedBannerCreateBody };
+  return { ok: true, data: body as unknown as ParsedBannerCreateBody };
 }
 
 export interface ParsedBannerPatchBody {
@@ -454,7 +459,7 @@ export function parseBannerPatchBody(body: unknown): ValidationResult<ParsedBann
   if ("pages" in body && body.pages !== undefined && !Array.isArray(body.pages)) {
     return { ok: false, error: "pages must be an array" };
   }
-  return { ok: true, data: body as ParsedBannerPatchBody };
+  return { ok: true, data: body as unknown as ParsedBannerPatchBody };
 }
 
 export interface ParsedInviteCreateBody {
@@ -478,5 +483,5 @@ export function parseInviteCreateBody(body: unknown): ValidationResult<ParsedInv
       return { ok: false, error: "expires_in_days must be a positive number" };
     }
   }
-  return { ok: true, data: body as ParsedInviteCreateBody };
+  return { ok: true, data: body as unknown as ParsedInviteCreateBody };
 }

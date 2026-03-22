@@ -10,10 +10,14 @@ const SYSTEM_PROMPTS: Record<string, string> = {
 
 export async function POST(request: NextRequest) {
   try {
+    const parsed = parseEnhancePromptBody(await request.json());
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    const { text, mode } = parsed.data;
+
     const ip = getClientIp(request);
     const userId = request.headers.get("x-user-id");
 
-    // Enforce rate limiting for enhance-prompt to prevent DoW
+    // Enforce rate limiting for valid enhance-prompt requests only.
     try {
       const access = await checkAccess(ip, userId, false, "enhance-prompt");
       if (!access.allowed) {
@@ -23,10 +27,6 @@ export async function POST(request: NextRequest) {
       console.error("[enhance-prompt] Access check failed:", accessErr);
       return NextResponse.json({ error: "Access verification unavailable." }, { status: 503 });
     }
-
-    const parsed = parseEnhancePromptBody(await request.json());
-    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
-    const { text, mode } = parsed.data;
 
     const systemPrompt = SYSTEM_PROMPTS[mode];
 

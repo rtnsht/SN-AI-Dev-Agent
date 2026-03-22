@@ -12,6 +12,7 @@ import { validateSession, SESSION_COOKIE_NAME } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
 import { getClientIp } from "@/lib/client-ip";
 import { parseSessionStartBody } from "@/lib/request-validation";
+import { checkSessionStart } from "@/lib/auth-rate-limiter";
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,23 +28,35 @@ export async function POST(request: NextRequest) {
       userFullName,
       model,
       aiProvider,
-      hasAdmin,
-      hasSecurityAdmin,
       nodeVersion,
     } = parsed.data;
 
     const ip = getClientIp(request);
     const userAgent = request.headers.get("user-agent") || "unknown";
+    const userId = await resolveUserId(request);
 
-    // Log the session connect event (level first, then sessionId)
+    const rateLimit = await checkSessionStart(ip);
+    if (!rateLimit.allowed) {
+      return NextResponse.json({ error: "Too many session starts. Please try again later." }, { status: 429 });
+    }
+
+    const ownership = await getExistingSessionOwner(sessionId);
+    if (ownership.exists && ownership.userId !== userId) {
+      console.error(`[session-start] IDOR attempt detected: User ${userId} tried to overwrite session ${sessionId} belonging to ${ownership.userId}`);
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    // Persist session metadata before logging/telemetry so unauthorized callers cannot poison an existing session.
+    await createSessionLog(sessionId, userId, {
+      instanceUrl, username, userFullName, aiProvider, model,
+    }, ip, userAgent);
+
     log("info", sessionId, "session_connect", "Session started — user connected to instance", {
       instanceUrl: instanceUrl || "",
       username: username || "",
       userFullName: userFullName || "",
       model: model || "",
       aiProvider: aiProvider || "",
-      hasAdmin: !!hasAdmin,
-      hasSecurityAdmin: !!hasSecurityAdmin,
       nodeVersion: nodeVersion || "",
       ip,
       userAgent,
@@ -57,15 +70,9 @@ export async function POST(request: NextRequest) {
     startTelemetryStream(sessionId);
 
     // Auto-capture instance in user_instances table (non-blocking)
-    const userId = await resolveUserId(request);
     if (instanceUrl && userId) {
       captureInstance(userId, instanceUrl, username).catch(() => { /* non-critical */ });
     }
-
-    // Persist session metadata to Supabase (awaited to guarantee row creation)
-    await createSessionLog(sessionId, userId, {
-      instanceUrl, username, userFullName, aiProvider, model,
-    }, ip, userAgent);
 
     return NextResponse.json({ success: true, sessionId });
   } catch (err) {
@@ -92,6 +99,18 @@ async function resolveUserId(request: NextRequest): Promise<string | null> {
 /** Write session metadata directly to session_logs table.
  *  Uses getSupabase() directly (not through LogPersistence) to guarantee
  *  the row is created. Checks and logs Supabase errors instead of swallowing them. */
+async function getExistingSessionOwner(sessionId: string): Promise<{ exists: boolean; userId: string | null }> {
+  const db = getSupabase();
+  const { data } = await db
+    .from("session_logs")
+    .select("user_id")
+    .eq("session_id", sessionId)
+    .maybeSingle();
+
+  if (!data) return { exists: false, userId: null };
+  return { exists: true, userId: data.user_id || null };
+}
+
 async function createSessionLog(
   sessionId: string,
   userId: string | null,
@@ -101,18 +120,6 @@ async function createSessionLog(
 ): Promise<void> {
   try {
     const db = getSupabase();
-
-    // Prevent IDOR: Check if session exists and belongs to a different user
-    const { data: existingSession } = await db
-      .from("session_logs")
-      .select("user_id")
-      .eq("session_id", sessionId)
-      .maybeSingle();
-
-    if (existingSession && existingSession.user_id !== (userId || null)) {
-      console.error(`[session-start] IDOR attempt detected: User ${userId} tried to overwrite session ${sessionId} belonging to ${existingSession.user_id}`);
-      return;
-    }
 
     const { error } = await db.from("session_logs").upsert(
       {

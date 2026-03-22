@@ -41,7 +41,11 @@ export async function POST(request: NextRequest) {
       .eq("session_id", sessionId)
       .maybeSingle();
 
-    if (existingSession && existingSession.user_id !== userId) {
+    if (!existingSession) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+
+    if (existingSession.user_id !== userId) {
       console.error(`[session-end] IDOR attempt detected: User ${userId} tried to end session ${sessionId} belonging to ${existingSession.user_id}`);
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }

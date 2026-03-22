@@ -18,7 +18,7 @@ export async function PATCH(
     const parsed = parseActionBody(await request.json(), ["approve", "reject"]);
     if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
     const { action } = parsed.data;
-    const adminEmail = request.headers.get("x-user-email") || "admin";
+    const adminEmail = auth.session.user.email || "admin";
 
     const db = getSupabase();
 
