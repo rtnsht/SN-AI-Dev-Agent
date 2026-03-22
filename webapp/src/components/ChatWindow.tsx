@@ -737,10 +737,11 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [speechSupported, setSpeechSupported] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const maxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Accumulates finalized transcript segments across onresult events
+  const voiceErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const finalTranscriptRef = useRef("");
 
   /* ── Prompt enhance state ── */
@@ -783,6 +784,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
       recognitionRef.current?.abort();
       if (timerRef.current) clearInterval(timerRef.current);
       if (maxTimerRef.current) clearTimeout(maxTimerRef.current);
+      if (voiceErrorTimerRef.current) clearTimeout(voiceErrorTimerRef.current);
     };
   }, []);
 
@@ -874,7 +876,20 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.warn("SpeechRecognition error:", event.error);
-      // "no-speech" and "aborted" are non-fatal — just stop gracefully
+      const NON_FATAL = new Set(["no-speech", "aborted"]);
+      if (!NON_FATAL.has(event.error)) {
+        const messages: Record<string, string> = {
+          "not-allowed": "Microphone access denied. Please allow microphone in your browser settings.",
+          "service-not-allowed": "Microphone blocked by browser policy.",
+          "network": "Network error — speech recognition requires an internet connection.",
+          "audio-capture": "No microphone detected. Please check your audio input device.",
+          "language-not-supported": "Language not supported by your browser's speech recognition.",
+        };
+        const msg = messages[event.error] || `Voice input failed: ${event.error}`;
+        setVoiceError(msg);
+        if (voiceErrorTimerRef.current) clearTimeout(voiceErrorTimerRef.current);
+        voiceErrorTimerRef.current = setTimeout(() => setVoiceError(null), 5000);
+      }
       stopRecording();
     };
 
@@ -886,13 +901,21 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
       if (maxTimerRef.current) { clearTimeout(maxTimerRef.current); maxTimerRef.current = null; }
     };
 
-    recognition.start();
+    try {
+      recognition.start();
+    } catch (err) {
+      console.warn("SpeechRecognition start failed:", err);
+      setVoiceError("Could not start voice input. Please check microphone permissions.");
+      if (voiceErrorTimerRef.current) clearTimeout(voiceErrorTimerRef.current);
+      voiceErrorTimerRef.current = setTimeout(() => setVoiceError(null), 5000);
+      return;
+    }
+
+    setVoiceError(null);
     setIsRecording(true);
     setRecordingSeconds(0);
 
-    // Elapsed timer (1s ticks)
     timerRef.current = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
-    // Hard cap at 2 minutes
     maxTimerRef.current = setTimeout(() => stopRecording(), MAX_RECORDING_MS);
   }, [input, stopRecording]);
 
@@ -1332,6 +1355,21 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
             </div>
           </div>
         </>
+      )}
+
+      {voiceError && (
+        <div
+          className="flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg text-xs"
+          style={{ background: "var(--color-danger-faint, rgba(239,68,68,0.08))", color: "var(--color-danger, #ef4444)" }}
+        >
+          <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>{voiceError}</span>
+          <button onClick={() => setVoiceError(null)} className="ml-auto opacity-60 hover:opacity-100" title="Dismiss">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
       )}
     </div>
   );
