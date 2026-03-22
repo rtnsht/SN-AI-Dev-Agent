@@ -1895,16 +1895,6 @@ export default function Home() {
               {showRelease && (() => {
                 const released = changelogEntries.filter(e => e.status === "released");
                 const upcoming = changelogEntries.filter(e => e.status === "upcoming" || e.status === "planned");
-                const hasData = changelogEntries.length > 0;
-                const fallbackReleased = [
-                  "UI/UX elevation: new design tokens, QHD logo, semantic banners",
-                  "Header redesign: two-tier layout with subheader",
-                  "Focus Mode: auto-collapses sidebars during deep work",
-                ];
-                const fallbackUpcoming = [
-                  "Agent activity rollup for long conversations",
-                  "Contextual chat TOC for navigating SDLC phases",
-                ];
                 return (
                   <div
                     className="release-dropdown absolute right-0 mt-1.5 rounded-lg overflow-hidden"
@@ -1915,32 +1905,39 @@ export default function Home() {
                       <div className="text-[10px] mt-0.5" style={{ color: "var(--text-disabled)" }}>Latest updates and upcoming features</div>
                     </div>
                     <div className="p-3 space-y-3 max-h-[320px] overflow-y-auto">
-                      <div className="space-y-2">
-                        <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-disabled)" }}>Recent</div>
-                        <div className="space-y-1.5">
-                          {(hasData ? released : fallbackReleased.map((t, i) => ({ id: `f-${i}`, title: t, status: "released", created_at: "" }))).map(entry => (
-                            <div key={entry.id} className="flex items-start gap-2 text-[12px]" style={{ color: "var(--text-secondary)" }}>
-                              <span className="w-1 h-1 rounded-full mt-1.5 flex-shrink-0" style={{ background: "var(--color-success)" }} />
-                              {entry.title}
-                            </div>
-                          ))}
-                          {hasData && released.length === 0 && <div className="text-[11px]" style={{ color: "var(--text-disabled)" }}>No recent releases</div>}
-                        </div>
-                      </div>
-                      {((hasData ? upcoming : fallbackUpcoming.map((t, i) => ({ id: `u-${i}`, title: t, status: "upcoming", created_at: "" }))).length > 0) && (
+                      {changelogEntries.length === 0 ? (
+                        <div className="text-center py-4 text-[11px]" style={{ color: "var(--text-disabled)" }}>No updates available</div>
+                      ) : (
                         <>
-                          <div style={{ borderTop: "1px solid var(--border-default)", margin: "0 -12px", padding: "0" }} />
-                          <div className="space-y-2">
-                            <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-disabled)" }}>Coming Soon</div>
-                            <div className="space-y-1.5">
-                              {(hasData ? upcoming : fallbackUpcoming.map((t, i) => ({ id: `u-${i}`, title: t, status: "upcoming", created_at: "" }))).map(entry => (
-                                <div key={entry.id} className="flex items-start gap-2 text-[12px]" style={{ color: "var(--text-disabled)" }}>
-                                  <span className="w-1 h-1 rounded-full mt-1.5 flex-shrink-0" style={{ background: "var(--status-progress)" }} />
-                                  {entry.title}
-                                </div>
-                              ))}
+                          {released.length > 0 && (
+                            <div className="space-y-2">
+                              <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-disabled)" }}>Recent</div>
+                              <div className="space-y-1.5">
+                                {released.map(entry => (
+                                  <div key={entry.id} className="flex items-start gap-2 text-[12px]" style={{ color: "var(--text-secondary)" }}>
+                                    <span className="w-1 h-1 rounded-full mt-1.5 flex-shrink-0" style={{ background: "var(--color-success)" }} />
+                                    {entry.title}
+                                  </div>
+                                ))}
+                              </div>
                             </div>
-                          </div>
+                          )}
+                          {upcoming.length > 0 && (
+                            <>
+                              {released.length > 0 && <div style={{ borderTop: "1px solid var(--border-default)", margin: "0 -12px", padding: "0" }} />}
+                              <div className="space-y-2">
+                                <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-disabled)" }}>Coming Soon</div>
+                                <div className="space-y-1.5">
+                                  {upcoming.map(entry => (
+                                    <div key={entry.id} className="flex items-start gap-2 text-[12px]" style={{ color: "var(--text-disabled)" }}>
+                                      <span className="w-1 h-1 rounded-full mt-1.5 flex-shrink-0" style={{ background: "var(--status-progress)" }} />
+                                      {entry.title}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </>
+                          )}
                         </>
                       )}
                     </div>
