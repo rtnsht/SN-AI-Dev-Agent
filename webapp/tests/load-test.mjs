@@ -388,6 +388,140 @@ async function scenario6() {
   return results;
 }
 
+async function scenario7() {
+  console.log("\n╔══════════════════════════════════════════════════════════╗");
+  console.log("║  SCENARIO 7: OpenRouter Multi-Model Chat (3000 users)  ║");
+  console.log("╚══════════════════════════════════════════════════════════╝");
+
+  const results = [];
+
+  // 3000 concurrent on stateless endpoints first
+  console.log("\n  📊 Phase A: Stateless endpoint burst at 3000 concurrent\n");
+
+  for (const endpoint of ["/api/config", "/api/changelog"]) {
+    results.push(
+      await runConcurrent(`GET ${endpoint} @3000`, 3000, () =>
+        makeRequest(`${BASE_URL}${endpoint}`, { timeout: 30000 })
+      )
+    );
+  }
+
+  // OpenRouter chat — server-allowed models (cost-protected, no user key needed)
+  const ALLOWED_MODELS = [
+    { id: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet (OR)" },
+    { id: "google/gemini-2.0-flash-001", label: "Gemini 2.0 Flash (OR)" },
+    { id: "meta-llama/llama-3.1-70b-instruct", label: "Llama 3.1 70B (OR)" },
+  ];
+
+  // Premium models — require user-supplied key (tests cost-protection guard)
+  const PREMIUM_MODELS = [
+    { id: "qwen/qwen3.5-plus-02-15", label: "Qwen 3.5 Plus" },
+    { id: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro" },
+    { id: "anthropic/claude-opus-4", label: "Claude Opus 4" },
+    { id: "openai/gpt-5.4-pro", label: "GPT-5.4 Pro" },
+  ];
+
+  // Phase B: Verify cost-protection blocks premium models (should return 403)
+  console.log("\n  📊 Phase B: Cost-protection guard — premium models (expect 403)\n");
+
+  for (const model of PREMIUM_MODELS) {
+    results.push(
+      await runConcurrent(`Guard: ${model.label} (expect 403)`, 5, (i) => {
+        const sid = `sess_${Date.now()}_grd${String(i).padStart(4, "0")}`;
+        return makeRequest(`${BASE_URL}/api/chat-stream`, {
+          method: "POST",
+          body: {
+            credentials: SN_CREDS,
+            messages: [{ role: "user", content: "Hello", timestamp: new Date().toISOString() }],
+            model: model.id,
+            aiProvider: "openrouter",
+            phase: null,
+            sddMode: false,
+            sessionId: sid,
+          },
+          timeout: 15000,
+        });
+      })
+    );
+  }
+
+  // Phase C: Actual OpenRouter chat with server-allowed models
+  console.log("\n  📊 Phase C: OpenRouter chat — server-allowed models\n");
+
+  for (const model of ALLOWED_MODELS) {
+    const chatBody = {
+      credentials: SN_CREDS,
+      messages: [{ role: "user", content: "Hello, briefly introduce yourself in one sentence.", timestamp: new Date().toISOString() }],
+      model: model.id,
+      aiProvider: "openrouter",
+      phase: null,
+      sddMode: false,
+    };
+
+    for (const n of [3, 5]) {
+      results.push(
+        await runConcurrent(`Chat: ${model.label}`, n, (i) => {
+          const sid = `sess_${Date.now()}_or${String(i).padStart(4, "0")}`;
+          return makeRequest(`${BASE_URL}/api/chat-stream`, {
+            method: "POST",
+            body: { ...chatBody, sessionId: sid },
+            timeout: 120000,
+          });
+        })
+      );
+    }
+  }
+
+  // Phase D: Mixed model burst — all 3 allowed models simultaneous
+  console.log("\n  📊 Phase D: Mixed allowed-model burst\n");
+
+  results.push(
+    await runConcurrent("Mixed allowed-model burst (3 models × 5)", 15, (i) => {
+      const model = ALLOWED_MODELS[i % ALLOWED_MODELS.length];
+      const sid = `sess_${Date.now()}_mix${String(i).padStart(4, "0")}`;
+      return makeRequest(`${BASE_URL}/api/chat-stream`, {
+        method: "POST",
+        body: {
+          credentials: SN_CREDS,
+          messages: [{ role: "user", content: "Say hello in one word.", timestamp: new Date().toISOString() }],
+          model: model.id,
+          aiProvider: "openrouter",
+          phase: null,
+          sddMode: false,
+          sessionId: sid,
+        },
+        timeout: 120000,
+      });
+    })
+  );
+
+  // Phase E: Sustained OpenRouter load — 30 seconds
+  console.log("\n  📊 Phase E: Sustained OpenRouter chat (30s, mixed allowed models)\n");
+
+  results.push(
+    await runSustained("Sustained OpenRouter chat (allowed models)", 3, 30, (i) => {
+      const model = ALLOWED_MODELS[i % ALLOWED_MODELS.length];
+      const sid = `sess_${Date.now()}_sus${String(i).padStart(4, "0")}`;
+      return makeRequest(`${BASE_URL}/api/chat-stream`, {
+        method: "POST",
+        body: {
+          credentials: SN_CREDS,
+          messages: [{ role: "user", content: "Reply with just OK.", timestamp: new Date().toISOString() }],
+          model: model.id,
+          aiProvider: "openrouter",
+          phase: null,
+          sddMode: false,
+          sessionId: sid,
+        },
+        timeout: 120000,
+      });
+    })
+  );
+
+  allResults.push({ scenario: "Scenario 7: OpenRouter Multi-Model Chat (3000 users)", results });
+  return results;
+}
+
 /* ── Main ── */
 async function main() {
   console.log("╔══════════════════════════════════════════════════════════╗");
@@ -405,7 +539,7 @@ async function main() {
   }
   console.log(`✅ Server healthy (${health.latency.toFixed(0)}ms)`);
 
-  const scenarios = [scenario1, scenario2, scenario3, scenario4, scenario5, scenario6];
+  const scenarios = [scenario1, scenario2, scenario3, scenario4, scenario5, scenario6, scenario7];
 
   for (let i = 0; i < scenarios.length; i++) {
     if (SCENARIO_FILTER !== null && SCENARIO_FILTER !== i + 1) continue;
