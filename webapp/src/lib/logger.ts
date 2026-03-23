@@ -39,6 +39,9 @@ const sessions = new Map<string, SessionContext>();
 const LOGS_DIR = path.join(process.cwd(), "logs");
 let logsDirEnsured = false;
 
+// One-time flag for storage sync initialization (see createSession)
+let _storageSyncInitialized = false;
+
 // Ensure logs directory exists
 function ensureLogsDir(): void {
   if (logsDirEnsured) return;
@@ -140,8 +143,15 @@ export function createSession(context: Partial<SessionContext> & { sessionId?: s
   };
   sessions.set(sessionId, session);
 
-  // Initialize storage sync scanner (singleton — first call starts the scan loop)
-  try { getLogStorageSync(); } catch { /* never block session start */ }
+  // Initialize the log storage sync scanner on first session creation.
+  // This is intentionally lazy: the scanner creates S3 clients, runs connectivity
+  // checks, and starts a periodic upload loop — we defer this until the first real
+  // session rather than app boot to avoid errors when S3 credentials are missing.
+  // The singleton guard inside getLogStorageSync() ensures this only runs once.
+  if (!_storageSyncInitialized) {
+    _storageSyncInitialized = true;
+    try { getLogStorageSync(); } catch { /* never block session start */ }
+  }
 
   // Log session start
   log("info", sessionId, "session", "Session started", {
