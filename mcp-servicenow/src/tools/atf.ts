@@ -226,14 +226,6 @@ export async function runAtfSuite(client: ServiceNowClient, input: z.infer<typeo
 
   // ── Tier 1: CI/CD API ──
   try {
-    // The sn_cicd plugin provides a REST API for triggering test suites
-    const records = await client.getRecords('sys_plugins', {
-      sysparm_query: 'id=com.snc.cicd',
-      sysparm_fields: 'sys_id,active',
-      sysparm_limit: 1
-    });
-
-    // Attempt the CI/CD API call regardless (may work even if plugin query fails)
     const response = await (client as unknown as { client: { post: (url: string, data?: unknown) => Promise<{ data: unknown }> } }).client.post(
       `/api/sn_cicd/testsuite/run?test_suite_sys_id=${input.suite_sys_id}`
     );
@@ -308,9 +300,34 @@ async function runAtfViaBrowser(
       return { success: false, error: 'Instance URL not available for browser navigation' };
     }
 
-    browser = await chromium.launch({ headless: false });
+    browser = await chromium.launch({ headless: true });
+
+    // Extract credentials from the client for browser authentication
+    const creds = client.credentials;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const context = await (browser as any).newContext();
+    const contextOptions: Record<string, any> = {};
+    if (creds.username && creds.password) {
+      contextOptions.httpCredentials = { username: creds.username, password: creds.password };
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const context = await (browser as any).newContext(contextOptions);
+
+    // Inject session cookies if available (mirrors browser-scope-switcher pattern)
+    if (creds.sessionCookies?.length) {
+      const playwrightCookies = creds.sessionCookies.map((c) => ({
+        name: c.name,
+        value: c.value,
+        domain: c.domain,
+        path: c.path || '/',
+        ...(c.expires ? { expires: c.expires } : {}),
+        httpOnly: c.httpOnly ?? false,
+        secure: c.secure ?? true,
+        sameSite: (c.sameSite || 'Lax') as 'Strict' | 'Lax' | 'None',
+      }));
+      await context.addCookies(playwrightCookies);
+    }
+
     const page = await context.newPage();
 
     try {
