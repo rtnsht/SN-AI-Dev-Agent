@@ -140,6 +140,9 @@ export function createSession(context: Partial<SessionContext> & { sessionId?: s
   };
   sessions.set(sessionId, session);
 
+  // Initialize storage sync scanner (singleton — first call starts the scan loop)
+  try { getLogStorageSync(); } catch { /* never block session start */ }
+
   // Log session start
   log("info", sessionId, "session", "Session started", {
     username: session.username,
@@ -208,9 +211,6 @@ export function log(
 
   // Async persist to Supabase (fire-and-forget, never throws)
   try { getLogPersistence()?.enqueue(sessionId, entry); } catch { /* never block logging */ }
-
-  // Ensure storage sync scanner is running (singleton — first call starts the scan loop)
-  try { getLogStorageSync(); } catch { /* never block logging */ }
 
   // Trigger telemetry update (throttled to every 15s internally)
   if (sessionId.startsWith("sess_") && hasActiveTelemetryStream(sessionId)) {
