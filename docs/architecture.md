@@ -1480,7 +1480,7 @@ Each client has its own:
 |---------|--------|------------|
 | `helperApiPaths` Map growth | 1 entry per unique instance URL | Trivial memory (~100 bytes/entry); no TTL needed for <10K instances |
 | Concurrent Anthropic API calls | Each user's request makes independent API calls | Rate limiting per IP; users can bring their own API keys |
-| Log file I/O | Each session writes to its own file | Async append; persistent disk on Render/Railway |
+| Log file I/O | Each session writes to its own file | Async append; persistent disk on DigitalOcean App Platform |
 | Memory per request | ~2-5MB per active chat stream (client + messages + tool results) | Auto-scaling handles load spikes |
 
 ---
@@ -1550,13 +1550,13 @@ const nextConfig: NextConfig = {
 | Local `npm run dev` | Port `3000` (default) |
 | `docker compose up` | Container `3000` → host `3000` |
 | Railway | Platform injects `$PORT` env var → overrides default `3000` |
-| Render | Platform injects `$PORT` env var → overrides default `3000` |
+| DigitalOcean | Platform injects `$PORT` env var → overrides default `3000` |
 
 All platforms expose the app via HTTPS on standard port 443 — no port in the public URL.
 
-### 25.5 Render Blueprint (`render.yaml`)
+### 25.5 Deployment Config
 
-The `render.yaml` file auto-configures the app on Render:
+The app is deployed on DigitalOcean App Platform. The `render.yaml` file is retained for legacy reference:
 
 | Setting | Value |
 |---------|-------|
@@ -1573,5 +1573,5 @@ The `render.yaml` file auto-configures the app on Render:
 | `Dockerfile` | Multi-stage build (4 stages) |
 | `.dockerignore` | Excludes node_modules, .env, logs, temp files |
 | `docker-compose.yml` | Local Docker testing |
-| `render.yaml` | Render platform blueprint (auto-scale, health check, disk) |
+| `render.yaml` | Legacy Render blueprint (reference only; app deploys on DO App Platform) |
 | `webapp/.env.example` | Template for all environment variables |

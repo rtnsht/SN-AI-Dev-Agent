@@ -1730,6 +1730,9 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
                 <div className="hero-input-glow w-full">
                   {renderInputBar(true)}
                 </div>
+                <p className="text-center text-[11px] mt-2 select-none" style={{ color: "var(--text-disabled)" }}>
+                  This is Agentic AI and can make mistakes. Please double-check responses.
+                </p>
 
                 {/* Suggestion tabs */}
                 <div className="mt-6 w-full">
@@ -1923,6 +1926,9 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
           <div className="p-2 sm:p-4" style={{ borderTop: "1px solid var(--border-default)", background: "var(--surface-primary)" }}>
             <div className="max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto">
               {renderInputBar(false)}
+              <p className="text-center text-[11px] mt-1.5 select-none" style={{ color: "var(--text-disabled)" }}>
+                This is Agentic AI and can make mistakes. Please double-check responses.
+              </p>
             </div>
           </div>
         </div>

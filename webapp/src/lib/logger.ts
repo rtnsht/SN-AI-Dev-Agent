@@ -7,6 +7,7 @@ import fs from "fs";
 import path from "path";
 import { hasActiveTelemetryStream, updateTelemetry } from "./telemetry-generator";
 import { getLogPersistence } from "./log-persistence";
+import { getLogStorageSync } from "./log-storage";
 
 // Log levels
 export type LogLevel = "info" | "warn" | "error" | "debug";
@@ -168,7 +169,7 @@ export function endSession(sessionId: string, outcome: "success" | "error" | "ca
   }
 }
 
-// Core log function — never throws (safe on read-only filesystem e.g. Render)
+// Core log function — never throws (safe on read-only filesystem e.g. DigitalOcean App Platform)
 export function log(
   level: LogLevel,
   sessionId: string,
@@ -199,7 +200,7 @@ export function log(
       }
     });
   } catch (err) {
-    // Read-only or restricted fs (e.g. Render) — do not rethrow; console output below
+    // Read-only or restricted fs (e.g. DigitalOcean App Platform) — do not rethrow; console output below
     if (process.env.NODE_ENV !== "test") {
       console.warn("[logger] File write skipped (fs error):", err instanceof Error ? err.message : String(err));
     }
@@ -207,6 +208,9 @@ export function log(
 
   // Async persist to Supabase (fire-and-forget, never throws)
   try { getLogPersistence()?.enqueue(sessionId, entry); } catch { /* never block logging */ }
+
+  // Ensure storage sync scanner is running (singleton — first call starts the scan loop)
+  try { getLogStorageSync(); } catch { /* never block logging */ }
 
   // Trigger telemetry update (throttled to every 15s internally)
   if (sessionId.startsWith("sess_") && hasActiveTelemetryStream(sessionId)) {

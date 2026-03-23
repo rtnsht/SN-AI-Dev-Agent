@@ -7,7 +7,7 @@ This document captures the issues, root causes, and fixes for the production pro
 ## 1. Prompt enhancement endpoint (405 / 401)
 
 ### Symptom
-- `POST /api/enhance-prompt` returned **405 Method Not Allowed** or **401 Unauthorized** in production (e.g. on Render at `snaiagent.rapps.ai`).
+- `POST /api/enhance-prompt` returned **405 Method Not Allowed** or **401 Unauthorized** in production (e.g. on DigitalOcean App Platform at `snaiagent.rapps.ai`).
 - The route handler correctly implemented `POST`; the failure was at the gateway layer.
 
 ### Root cause

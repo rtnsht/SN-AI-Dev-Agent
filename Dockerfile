@@ -1,6 +1,6 @@
 # ============================================================================
 # Multi-stage Dockerfile for SN AI Agent
-# Works on: Railway, Render, DigitalOcean App Platform, any Docker host
+# Deployed on DigitalOcean App Platform. Also works on Railway, Render, any Docker host.
 # ============================================================================
 
 # ── Stage 1: Build mcp-servicenow ──────────────────────────────────────────
@@ -36,7 +36,7 @@ FROM node:24-alpine AS builder
 WORKDIR /app
 
 # NEXT_PUBLIC_* vars are inlined at build time by Next.js (not read at runtime).
-# Declare them as ARGs so they can be passed via --build-arg or Render/Railway env.
+# Declare them as ARGs so they can be passed via --build-arg or platform env (DigitalOcean, Railway, etc.).
 ARG NEXT_PUBLIC_APP_NAME="SN AI Agent"
 ARG NEXT_PUBLIC_APP_TAGLINE="Say it. Ship it."
 ARG NEXT_PUBLIC_APP_SUBTITLE="Spec-driven · Human-approved · AI-powered"
@@ -157,7 +157,7 @@ RUN mkdir -p /app/webapp/logs && chown nextjs:nodejs /app/webapp/logs
 
 USER nextjs
 
-# PORT is overridable — Railway/Render inject their own $PORT at runtime.
+# PORT is overridable — DigitalOcean/Railway inject their own $PORT at runtime.
 # Default 3000 matches local `npm run dev` behavior.
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"

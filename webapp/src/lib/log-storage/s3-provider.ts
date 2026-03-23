@@ -24,7 +24,7 @@ export class S3CompatibleProvider implements StorageProvider {
     this.client = new S3Client({
       endpoint: config.endpoint,
       region: config.region,
-      forcePathStyle: false,
+      forcePathStyle: config.forcePathStyle ?? false,
       credentials: {
         accessKeyId: config.accessKey,
         secretAccessKey: config.secretKey,

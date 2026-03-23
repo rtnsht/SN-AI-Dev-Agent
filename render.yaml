@@ -1,12 +1,10 @@
 # ============================================================================
-# Render Blueprint — Auto-configures the app when connected to your repo
+# Legacy Render Blueprint — retained for reference only.
+# The app is deployed on DigitalOcean App Platform.
 # Docs: https://docs.render.com/blueprint-spec
 #
-# Usage:
-#   1. Push this file to your repo
-#   2. Go to render.com → New → Blueprint → Connect repo
-#   3. Render reads this file and sets up everything
-#   4. Fill in env var values in the Render dashboard
+# NOTE: This file is NOT used in production. DigitalOcean App Platform
+# configuration is managed via the DO dashboard / doctl CLI.
 # ============================================================================
 
 services:
@@ -60,7 +58,7 @@ services:
       sizeGB: 1
 
     # ── Environment variables ──────────────────────────────────────
-    # Values are set in the Render dashboard (never commit secrets)
+    # Values are set in the DigitalOcean App Platform dashboard (never commit secrets)
     envVars:
       # AI Provider Keys (at least one required)
       - key: CLAUDE_API_KEY

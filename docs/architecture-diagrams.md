@@ -166,7 +166,7 @@ The application is packaged as a Docker container using a multi-stage build:
 3. Stage 3 builds the Next.js application in standalone mode
 4. Stage 4 creates a minimal Alpine Linux production image
 
-It is deployed to **Render** with auto-scaling (1–5 instances) based on CPU and memory usage. The health check endpoint is `/api/config`.
+It is deployed to **DigitalOcean App Platform** with auto-scaling (1–5 instances) based on CPU and memory usage. The health check endpoint is `/api/config`.
 
 ---
 
@@ -184,7 +184,7 @@ It is deployed to **Render** with auto-scaling (1–5 instances) based on CPU an
 | SDLC phases | 6 |
 | Max agentic loop rounds | 30 |
 
-**Stack:** Next.js 14 (App Router) · React · TypeScript · Tailwind CSS · Anthropic Claude / OpenRouter · Supabase (Postgres) · ServiceNow REST API · ZeptoMail · Docker · Render
+**Stack:** Next.js 14 (App Router) · React · TypeScript · Tailwind CSS · Anthropic Claude / OpenRouter · Supabase (Postgres) · ServiceNow REST API · ZeptoMail · Docker · DigitalOcean App Platform
 
 ---
 
@@ -1031,7 +1031,7 @@ This is the primary user interaction: sending a message and receiving an AI resp
   └──────────────────────────────────────────────────────────────┘
 
   ┌──────────────────────────────────────────────────────────────┐
-  │                    RENDER (render.yaml)                       │
+  │                 DIGITALOCEAN APP PLATFORM                     │
   │                                                              │
   │  Service:  sn-ai-dev-agent (web, Docker)                     │
   │  Plan:     Pro ($25/mo per instance)                         │

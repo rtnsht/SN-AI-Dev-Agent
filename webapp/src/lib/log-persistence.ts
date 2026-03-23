@@ -4,7 +4,7 @@
  * Buffers log entries in memory and flushes to Supabase periodically.
  * Never blocks or throws into the logging pipeline.
  *
- * Scale safeguards (2000 concurrent users on Render Pro):
+ * Scale safeguards (2000 concurrent users on DigitalOcean App Platform):
  *  - Per-session buffer cap: 200 entries (drops oldest on overflow)
  *  - Global buffer cap: ~50 MB (stops enqueueing when hit)
  *  - Staggered flush: batches of 20 sessions, 500ms gaps, max 10 concurrent

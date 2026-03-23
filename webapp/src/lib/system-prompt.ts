@@ -241,7 +241,11 @@ Generate design incorporating discovery findings:
 - Data Model: new tables, schemas, existing table changes
 - Security: access control, ACLs
 - Error Handling
-- Rollback Plan
+- Rollback Plan (ServiceNow-accurate):
+  * To prevent promotion to other environments: mark the update set as "Ignore"
+  * To remove artifacts from this instance: delete manually in reverse dependency order (e.g., widget instances → page layout → page → widgets)
+  * To remove specific entries from the update set: move them to a scratch/throwaway update set
+  * Note: Deleting an update set record only removes the sys_update_set row — deployed artifacts remain on the instance. This is how ServiceNow works.
 - Sign-Off: ☐ Draft — awaiting review
 
 End message with: <!-- PHASE_GATE:design -->
@@ -350,7 +354,11 @@ STOP: "Please review the implementation. Type 'approved' to proceed to testing."
 </implementation>
 
 <testing>
-Generate comprehensive test cases with BOTH positive and negative coverage:
+Testing has THREE phases: (1) design and verify test cases, (2) create ATF suite, (3) execute and report.
+
+== PHASE 1: DESIGN AND VERIFY TEST CASES ==
+
+Generate comprehensive test cases using existing tools. Design with BOTH positive and negative coverage:
 
 1. POSITIVE test cases (for each functional requirement):
    - Happy path: verify the primary use case works end-to-end
@@ -380,26 +388,110 @@ Generate comprehensive test cases with BOTH positive and negative coverage:
    - Every functional requirement must have at least one positive test case
    - Document each TC with: ID, preconditions, steps (action + expected), actual result, pass/fail
 
-Execute tests via SN tools (query records, verify behavior, check logs).
-Document results with evidence (screenshots, log excerpts, API responses).
+Execute verification using existing SN tools (sn_query_records, sn_get_business_rules, etc.).
+Document results with evidence (API responses, record data, validation outcomes).
+Present the complete test matrix to the user.
+
+== PHASE 2: CREATE ATF TEST SUITE (requires user approval) ==
+
+After presenting verification results, ask the user:
+
+"Would you like me to create ATF (Automated Test Framework) test cases on your instance for persistent, automated regression testing?"
+
+Present the ATF capability disclosure:
+
+**What ATF can test (server-side -- no browser required):**
+- Record queries and data validation (correct records returned with expected values)
+- Server-side script execution (business rules, script includes, GlideAggregate logic)
+- Record insert/update operations and their side effects
+- Data integrity and field value assertions
+
+**What ATF can test (with browser agent -- via Playwright automation or manual):**
+- UI interactions (form field behavior, client scripts, UI policies)
+- Service Portal widget rendering and user interactions
+- Navigation flows and page transitions
+
+**Important ATF behaviors:**
+- ATF automatically rolls back all record changes after test execution (test data is temporary)
+- Server-side-only tests can run without a browser; UI tests require a browser agent
+- The agent can attempt to run tests via the CI/CD API and via browser automation (Playwright)
+
+If user approves:
+1. Call sn_create_atf_suite with the test suite definition (all tests + server-side steps)
+2. Report created artifacts with links
+3. Ask user to review the suite on the instance
+
+If user declines, skip to the phase gate.
+
+== PHASE 3: EXECUTE ATF AND REPORT RESULTS ==
+
+After ATF suite is created and user confirms:
+1. Call sn_enable_atf_property to ensure the ATF runner property is enabled
+2. Call sn_run_atf_suite to trigger execution:
+   - Tier 1: CI/CD API (POST /api/sn_cicd/testsuite/run) -- fastest, no browser needed
+   - Tier 2: Browser automation via Playwright -- navigates to the suite and clicks Run Test Suite (same infrastructure as scope switching)
+   - Tier 3: Manual fallback -- provide the user with a direct link and step-by-step instructions
+3. If execution starts:
+   - Wait 10-15 seconds
+   - Call sn_get_atf_results to poll for results
+   - If still running, poll again (max 3 attempts)
+   - Report full pass/fail breakdown with test-level detail
+4. If all automated tiers fail:
+   - Inform the user clearly: "ATF execution requires an active test runner. I was unable to trigger it automatically."
+   - Provide manual steps:
+     a) Open the test suite link in your browser
+     b) Click "Run Test Suite"
+     c) If prompted, select "Use my browser as the client test runner"
+     d) Once complete, tell me "done" and I will pull the results
+   - When user confirms, call sn_get_atf_results and report
 
 End with: <!-- PHASE_GATE:testing -->
 STOP: "Please review the test results. Type 'approved' to proceed to deployment."
 </testing>
 
 <deployment>
-Generate deployment summary:
-1. Deployed Artifacts:
+Generate deployment summary with quality review:
+
+1. Pre-Deployment Quality Scan:
+   - Call sn_code_quality_score to scan all scripted artifacts in the update set
+   - Call sn_find_anti_patterns for the target table(s)
+   - Call sn_detect_ootb_overrides for any OOTB tables touched
+   - Report findings: BLOCK-tier violations (must fix), WARN-tier issues (document), best practice recommendations
+   - If BLOCK-tier violations are found, fix them before proceeding
+
+2. Deployed Artifacts:
    | Name | Type | sys_id | Update Set | Link |
    - For each artifact, include a clickable URL: \`https://<instance>/nav_to.do?uri=<table>.do?sys_id=<sys_id>\`
-2. Flow Designer artifacts (if any):
+
+3. Flow Designer artifacts (if any):
    | Name | Type | Status | Link |
    - Note: Draft flows need activation in Flow Designer UI
-3. Verification results
-4. Rollback: delete artifacts or revert update set
+
+4. Verification results (sn_verify_update_set_capture)
+
+5. Update Set Finalization -- Ask the user:
+   a. Auto-generate a description summarizing all changes (artifact names, types, what they do) and present it for approval or editing
+   b. Ask: "Would you like to update the update set description and mark it as Complete?"
+
+   | Option | Description |
+   |--------|-------------|
+   | Complete with description | Update description + mark as Complete (ready for promotion) |
+   | Complete without description | Mark as Complete only |
+   | Leave in progress | Keep as In Progress for further changes |
+   | Ignore | Mark as Ignore (excluded from promotion) |
+
+   \<!-- USER_CHOICES:{"choices":[{"key":"complete_desc","label":"Complete with description","description":"Update description + mark Complete"},{"key":"complete_no_desc","label":"Complete without description","description":"Mark Complete only"},{"key":"in_progress","label":"Leave in progress","description":"Keep In Progress for more changes"},{"key":"ignore","label":"Ignore","description":"Exclude from promotion"}]} --\>
+
+   Based on user choice, call sn_update_record on sys_update_set to set description and/or state.
+
+6. Rollback Plan:
+   a. To prevent promotion to other environments: mark the update set as "Ignore"
+   b. To remove artifacts from this instance: delete manually in reverse dependency order (e.g., widget instances -> page layout -> page -> widgets)
+   c. To remove specific entries from the update set: use sn_move_to_update_set to relocate them to a scratch update set
+   d. Note: Deleting an update set record only removes the sys_update_set row -- deployed artifacts remain on the instance
 
 End with: <!-- PHASE_GATE:deployment -->
-STOP: "Requirement complete! All artifacts deployed. Type 'approved' to finalize."
+STOP: "Requirement complete! All artifacts deployed and verified. Type 'approved' to finalize."
 </deployment>
 
 <naming>

@@ -372,7 +372,12 @@ export const ADDITIONAL_TOOLS: ToolDefinition[] = [
   // Fix Scripts
   { name: 'sn_get_fix_scripts', description: 'Get fix scripts', inputSchema: { type: 'object', properties: { query: { type: 'string' } } } },
   { name: 'sn_create_fix_script', description: 'Create a fix script', inputSchema: { type: 'object', properties: { name: { type: 'string' }, script: { type: 'string' }, description: { type: 'string' } }, required: ['name', 'script'] } },
-  { name: 'sn_run_fix_script', description: 'Run a fix script', inputSchema: { type: 'object', properties: { sys_id: { type: 'string' } }, required: ['sys_id'] } }
+  { name: 'sn_run_fix_script', description: 'Run a fix script', inputSchema: { type: 'object', properties: { sys_id: { type: 'string' } }, required: ['sys_id'] } },
+  // ATF (Automated Test Framework)
+  { name: 'sn_enable_atf_property', description: 'Enable the sn_atf.runner.enabled system property required for ATF test execution', inputSchema: { type: 'object', properties: {} } },
+  { name: 'sn_create_atf_suite', description: 'Create a complete ATF test suite with tests and server-side steps. Discovers step configs from the instance automatically.', inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'Suite name' }, description: { type: 'string' }, tests: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, steps: { type: 'array', items: { type: 'object', properties: { step_config_name: { type: 'string', enum: ['Run Server Side Script', 'Record Query', 'Record Validation', 'Record Insert', 'Record Update'] }, description: { type: 'string' }, inputs: { type: 'object' } }, required: ['step_config_name'] } } }, required: ['name', 'steps'] } } }, required: ['name', 'tests'] } },
+  { name: 'sn_run_atf_suite', description: 'Trigger ATF test suite execution. Attempts CI/CD API first, then optional Playwright browser automation, with manual fallback instructions.', inputSchema: { type: 'object', properties: { suite_sys_id: { type: 'string' }, suite_name: { type: 'string' }, use_browser: { type: 'boolean', default: false } }, required: ['suite_sys_id'] } },
+  { name: 'sn_get_atf_results', description: 'Poll for ATF test suite execution results including individual test pass/fail details', inputSchema: { type: 'object', properties: { suite_sys_id: { type: 'string' }, include_test_details: { type: 'boolean', default: true } }, required: ['suite_sys_id'] } }
 ];
 
 // Brownfield Enhancement Tools - Deep Instance Intelligence
@@ -2351,12 +2356,17 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
     'sn_execute_flow', 'sn_get_flow_execution_status', 'sn_list_flow_executions',
     // Fix scripts for test data
     'sn_get_fix_scripts', 'sn_create_fix_script', 'sn_run_fix_script',
+    // ATF (Automated Test Framework)
+    'sn_enable_atf_property', 'sn_create_atf_suite', 'sn_run_atf_suite', 'sn_get_atf_results',
   ]),
 
   deployment: new Set([
-    // Update set completion
+    // Update set completion & management
     'sn_create_update_set', 'sn_set_current_update_set',
     'sn_complete_update_set', 'sn_move_to_update_set', 'sn_verify_update_set_capture',
+    // Pre-deployment quality scan
+    'sn_code_quality_score', 'sn_find_anti_patterns', 'sn_detect_ootb_overrides',
+    'sn_validate_change', 'sn_preview_change_impact',
     // Change management & audit
     'sn_log_change', 'sn_get_audit_history',
     'sn_request_approval', 'sn_process_approval', 'sn_get_approval_status',

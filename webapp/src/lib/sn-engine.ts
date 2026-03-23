@@ -355,6 +355,31 @@ function trimConversationHistory(messages: Anthropic.MessageParam[], sessionId: 
 }
 
 /**
+ * Sanitize raw API errors before surfacing to users.
+ * Strips JSON error bodies, HTTP status codes, and technical details
+ * that are not actionable for end users.
+ */
+function sanitizeApiError(raw: string): string {
+  // Strip raw Anthropic/OpenRouter JSON error bodies — never show to users
+  if (raw.includes('"type":"error"') || raw.includes('"invalid_request_error"') || raw.includes('"overloaded_error"')) {
+    return "Something went wrong while processing your request. Please try again. If the issue persists, try starting a new conversation.";
+  }
+  // Strip HTTP status codes (e.g., "400 {type:error...}" or "500 Internal Server Error")
+  if (/^\d{3}\s/.test(raw)) {
+    return "A temporary issue occurred. Please try again in a moment.";
+  }
+  // Rate limit (already handled elsewhere, but safety net)
+  if (raw.toLowerCase().includes("rate limit")) {
+    return "Rate limit reached. Please wait a moment and try again.";
+  }
+  // Overly long errors — truncate and make user-friendly
+  if (raw.length > 200) {
+    return "An unexpected error occurred. Please try again. If the issue persists, try starting a new conversation.";
+  }
+  return raw;
+}
+
+/**
  * Parse the `retry-after` value from an Anthropic 429 error.
  * Falls back to exponential backoff when the header isn't available.
  */
@@ -1327,8 +1352,9 @@ export async function* chatStream(
           yield { type: "error", message: "Rate limit exceeded after retries" };
           return;
         }
-        logger.error(sessionId, "claude_api", "Stream Anthropic API error", { error: err instanceof Error ? err.message : String(err) });
-        yield { type: "error", message: err instanceof Error ? err.message : String(err) };
+        const rawError = err instanceof Error ? err.message : String(err);
+        logger.error(sessionId, "claude_api", "Stream Anthropic API error", { error: rawError });
+        yield { type: "error", message: sanitizeApiError(rawError) };
         return;
       }
     }
@@ -1376,18 +1402,20 @@ export async function* chatStream(
         }
       }
 
-      // Inject dedup warning if AI is going in circles
+      // Inject dedup warning as a text block AFTER tool_results (Anthropic requires
+      // tool_result blocks first, then text blocks in the same user message).
+      // Previously this used a fake tool_use_id "dedup_warning" which caused Anthropic
+      // 400 errors: "unexpected tool_use_id found in tool_result blocks: dedup_warning"
       if (dupesThisRound > 0) {
         const totalDupes = dedup.totalDuplicates;
         const severity = totalDupes >= 4 ? "CRITICAL" : "WARNING";
         const dupeMsg = totalDupes >= 4
           ? `[SYSTEM ${severity}: You have made ${totalDupes} duplicate tool calls with identical parameters. The results have not changed. STOP making tool calls and produce your text response NOW. If you are in a phase gate, emit the phase gate marker immediately.]`
           : `[SYSTEM ${severity}: You just called a tool with the same parameters as a previous call. The result is the same. Use the data you already have and proceed.]`;
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: "dedup_warning",
-          content: dupeMsg,
-        } as Anthropic.ToolResultBlockParam);
+        (toolResults as Array<Anthropic.ToolResultBlockParam | Anthropic.TextBlockParam>).push({
+          type: "text",
+          text: dupeMsg,
+        });
         logger.warn(sessionId, "dedup", `Injected ${severity} dedup warning`, { totalDupes, round: rounds });
       }
 
@@ -1580,7 +1608,7 @@ async function* chatStreamOpenRouter(
           return;
         }
         logger.error(sessionId, "openrouter_api", "OpenRouter streaming error", { error: errorMsg, model, round: rounds });
-        yield { type: "error", message: errorMsg };
+        yield { type: "error", message: sanitizeApiError(errorMsg) };
         return;
       }
     }

@@ -99,8 +99,8 @@ export async function proxy(request: NextRequest) {
   }
 
   // ── Dev bypass: skip all auth when BYPASS_AUTH=true ──────────────────────
-  // Safe because: (a) webapp/.env is never deployed to Render,
-  // (b) render.yaml explicitly sets BYPASS_AUTH=false.
+  // Safe because: (a) webapp/.env is never deployed to production,
+  // (b) DigitalOcean App Platform env vars explicitly set BYPASS_AUTH=false.
   // Still redirects authenticated users on "/" to "/app" when possible.
   if (process.env.BYPASS_AUTH === "true") {
     // Even with auth bypass, redirect "/" → "/app" if user has a session

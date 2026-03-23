@@ -223,7 +223,7 @@ Current implementation re-fetches on every dropdown open. No WebSocket or pollin
 | NET-001 | **High** | Missing HSTS header | `Strict-Transport-Security` not in `next.config.ts` headers | Add `Strict-Transport-Security: max-age=31536000; includeSubDomains` |
 | AUTH-001 | **High** | Session tokens stored unhashed | `createSession()` inserts raw token into `sessions` table | Hash tokens with SHA-256 before storage; compare hashed on lookup |
 | AUTH-002 | **High** | No session rotation on password set | `set-password` upgrades temp session but doesn't invalidate others | Delete all sessions + mint fresh token on password change |
-| NET-003 | **High** | `x-forwarded-for` trusted without proxy verification | `client-ip.ts` trusts first hop when `TRUST_X_FORWARDED_FOR !== "false"` | Add platform-specific proxy trust config (Render sets `X-Real-IP`) |
+| NET-003 | **High** | `x-forwarded-for` trusted without proxy verification | `client-ip.ts` trusts first hop when `TRUST_X_FORWARDED_FOR !== "false"` | Add platform-specific proxy trust config (DigitalOcean App Platform sets `X-Real-IP`) |
 | LLM-001 | **High** | No server-side model allowlist | Model string passed through to API without validation | Add `ALLOWED_MODELS` allowlist check in `sn-engine.ts` |
 | MCP-003 | **High** | No table name regex validation | `records.ts` uses plain `z.string()` for table names | Add regex: `z.string().regex(/^[a-z][a-z0-9_]*$/)` |
 | FE-001 | **Medium** | Mermaid SVG not sanitized | `dangerouslySetInnerHTML={{ __html: svg }}` without DOMPurify | Route SVG through `DOMPurify.sanitize()` before injection |
@@ -233,8 +233,8 @@ Current implementation re-fetches on every dropdown open. No WebSocket or pollin
 | Finding | Severity | Detail |
 |---------|----------|--------|
 | CSP allows `unsafe-inline` + `unsafe-eval` | Medium | Weakens XSS protection significantly; required for Next.js inline scripts |
-| In-memory rate limiter | Medium | Resets on deploy/restart; useless in multi-instance (render.yaml: 1-5 instances) |
-| `BYPASS_AUTH` relies on runtime check | Medium | If `NODE_ENV` doesn't match, auth can be bypassed; `render.yaml` pins to `"false"` |
+| In-memory rate limiter | Medium | Resets on deploy/restart; useless in multi-instance (DigitalOcean App Platform: 1-5 instances) |
+| `BYPASS_AUTH` relies on runtime check | Medium | If `NODE_ENV` doesn't match, auth can be bypassed; DigitalOcean App Platform env pins to `"false"` |
 | Session cookies missing `Secure` flag in dev | Low | Only affects local development; production via HTTPS |
 
 ---
