@@ -51,4 +51,11 @@ export interface S3ProviderConfig {
   accessKey: string;
   /** Secret access key */
   secretKey: string;
+  /**
+   * Whether to use path-style S3 URLs (bucket in path instead of subdomain).
+   * Required `true` for Supabase Storage S3 endpoints.
+   * DigitalOcean Spaces recommends `false` (virtual hosted-style).
+   * Default: false.
+   */
+  forcePathStyle?: boolean;
 }

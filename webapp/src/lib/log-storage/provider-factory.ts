@@ -68,13 +68,15 @@ function resolveS3Config(id: string): S3ProviderConfig {
   const bucket = process.env[`${prefix}BUCKET`] || process.env.LOG_STORAGE_BUCKET;
   const accessKey = process.env[`${prefix}ACCESS_KEY`] || process.env.LOG_STORAGE_ACCESS_KEY;
   const secretKey = process.env[`${prefix}SECRET_KEY`] || process.env.LOG_STORAGE_SECRET_KEY;
+  const forcePathStyleRaw = process.env[`${prefix}FORCE_PATH_STYLE`] || process.env.LOG_STORAGE_FORCE_PATH_STYLE;
+  const forcePathStyle = forcePathStyleRaw === "true";
 
   if (!endpoint) throw new Error(`[log-storage] Missing endpoint for provider "${id}". Set ${prefix}ENDPOINT or LOG_STORAGE_ENDPOINT`);
   if (!bucket) throw new Error(`[log-storage] Missing bucket for provider "${id}". Set ${prefix}BUCKET or LOG_STORAGE_BUCKET`);
   if (!accessKey) throw new Error(`[log-storage] Missing access key for provider "${id}". Set ${prefix}ACCESS_KEY or LOG_STORAGE_ACCESS_KEY`);
   if (!secretKey) throw new Error(`[log-storage] Missing secret key for provider "${id}". Set ${prefix}SECRET_KEY or LOG_STORAGE_SECRET_KEY`);
 
-  return { id, endpoint, region, bucket, accessKey, secretKey };
+  return { id, endpoint, region, bucket, accessKey, secretKey, forcePathStyle };
 }
 
 /** Convert provider ID to env var prefix segment: "do-spaces" → "DO_SPACES" */
