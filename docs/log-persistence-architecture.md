@@ -11,9 +11,9 @@
 | Option                  | Monthly Cost       | Queryable | Setup Effort                |
 | ----------------------- | ------------------ | --------- | --------------------------- |
 | **Supabase (existing)** | **$0 incremental** | Yes (SQL) | Low -- client already wired |
-| Render Disk (current)   | ~$0.25/GB          | No        | Already configured          |
+| DO App Platform Disk (current)   | ~$0.25/GB          | No        | Already configured          |
 | Datadog / Logtail       | $15-50+            | Yes       | New SDK, new vendor         |
-| Render Postgres         | $7+                | Yes       | New DB, new client          |
+| DO Managed Postgres         | $7+                | Yes       | New DB, new client          |
 | S3/R2 blob storage      | ~$0.01/GB          | No        | New SDK, no querying        |
 
 **Cost analysis:** Pro tier has 8 GB database storage. Current tables use under 100 MB. A typical session log is 20 KB-1 MB. Even at 50 sessions/day of 200 KB each, that's ~300 MB/month. With 90-day retention, worst case is ~900 MB -- well within the 8 GB limit at zero incremental cost.
@@ -53,7 +53,7 @@ flowchart LR
 
 ## Scale Safety Analysis (2000 concurrent users)
 
-Render Pro = 2 GB RAM/instance, auto-scale 1-5 instances. Worst case: 400 sessions/instance.
+DigitalOcean App Platform = 2 GB RAM/instance, auto-scale 1-5 instances. Worst case: 400 sessions/instance.
 
 | Failure Mode                                                  | Risk     | Safeguard                                                                                                        |
 | ------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -154,7 +154,7 @@ Self-healing upsert: if the initial `initSession` INSERT failed, the first flush
 | `webapp/src/app/api/admin/session-logs/route.ts` | New: list/query session logs |
 | `webapp/src/app/api/admin/session-logs/cleanup/route.ts` | New: retention cleanup trigger |
 | `webapp/.env` | Modified: LOG_PERSISTENCE_ENABLED, LOG_RETENTION_DAYS, LOG_FLUSH_INTERVAL_MS |
-| `render.yaml` | Modified: same env vars in envVars section |
+| DigitalOcean App Platform env vars | Modified: same env vars in envVars section |
 
 ---
 
@@ -167,9 +167,9 @@ Self-healing upsert: if the initial `initSession` INSERT failed, the first flush
 
 ---
 
-## Render Disk
+## DigitalOcean App Platform Disk
 
-The existing 1 GB Render Disk (`webapp-logs`) is kept as-is:
+The existing 1 GB persistent disk (`webapp-logs`) is kept as-is:
 
 1. Fast local storage for the telemetry generator
 2. Short-term cache for current deployment sessions
