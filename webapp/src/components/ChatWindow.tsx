@@ -738,11 +738,19 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [speechSupported, setSpeechSupported] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [voiceMode, setVoiceMode] = useState<"native" | "whisper-local" | "whisper-server">("native");
+  const [whisperLoading, setWhisperLoading] = useState<string | null>(null);
+  const [whisperProcessing, setWhisperProcessing] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const maxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const voiceErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const finalTranscriptRef = useRef("");
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const whisperWorkerRef = useRef<Worker | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
 
   /* ── Prompt enhance state ── */
   const [enhancing, setEnhancing] = useState<"grammar" | "enhance" | null>(null);
@@ -773,9 +781,11 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
     }
   }, [preEnhanceText]);
 
-  /** Check browser support on mount */
+  /** Check browser support on mount — native SpeechRecognition OR MediaRecorder fallback */
   useEffect(() => {
-    setSpeechSupported(getSpeechRecognition() !== null);
+    const hasNative = getSpeechRecognition() !== null;
+    const hasMediaRecorder = typeof MediaRecorder !== "undefined" && typeof navigator?.mediaDevices?.getUserMedia === "function";
+    setSpeechSupported(hasNative || hasMediaRecorder);
   }, []);
 
   /** Cleanup on unmount */
@@ -785,6 +795,10 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
       if (timerRef.current) clearInterval(timerRef.current);
       if (maxTimerRef.current) clearTimeout(maxTimerRef.current);
       if (voiceErrorTimerRef.current) clearTimeout(voiceErrorTimerRef.current);
+      mediaRecorderRef.current?.stop();
+      mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+      whisperWorkerRef.current?.terminate();
+      if (audioCtxRef.current && audioCtxRef.current.state !== "closed") audioCtxRef.current.close();
     };
   }, []);
 
@@ -841,24 +855,221 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
     return () => window.removeEventListener("keydown", handleSearchKey);
   }, [showSearch]);
 
-  const stopRecording = useCallback(() => {
-    recognitionRef.current?.stop();
-    setIsRecording(false);
-    setRecordingSeconds(0);
+  /* ── Voice helpers ── */
+
+  const showVoiceError = useCallback((msg: string) => {
+    setVoiceError(msg);
+    if (voiceErrorTimerRef.current) clearTimeout(voiceErrorTimerRef.current);
+    voiceErrorTimerRef.current = setTimeout(() => setVoiceError(null), 6000);
+  }, []);
+
+  const clearTimers = useCallback(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     if (maxTimerRef.current) { clearTimeout(maxTimerRef.current); maxTimerRef.current = null; }
   }, []);
 
-  const startRecording = useCallback(() => {
+  /** Ensure an AudioContext exists (create inside user gesture chain for iOS Safari) */
+  const ensureAudioCtx = useCallback((): AudioContext => {
+    if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
+      audioCtxRef.current = new AudioContext({ sampleRate: 16000 });
+    }
+    if (audioCtxRef.current.state === "suspended") {
+      audioCtxRef.current.resume();
+    }
+    return audioCtxRef.current;
+  }, []);
+
+  /** Resample an audio Blob to 16 kHz mono Float32Array for Whisper */
+  const resampleAudioBlob = useCallback(async (blob: Blob): Promise<Float32Array> => {
+    const arrayBuf = await blob.arrayBuffer();
+    const audioCtx = ensureAudioCtx();
+    const decoded = await audioCtx.decodeAudioData(arrayBuf);
+    return decoded.getChannelData(0);
+  }, [ensureAudioCtx]);
+
+  /** Get or create the Whisper Web Worker */
+  const getWhisperWorker = useCallback((): Worker => {
+    if (!whisperWorkerRef.current) {
+      whisperWorkerRef.current = new Worker("/workers/whisper-worker.js", { type: "module" });
+    }
+    return whisperWorkerRef.current;
+  }, []);
+
+  /** Transcribe audio via local Whisper worker (Tier 2) */
+  const transcribeLocal = useCallback(async (blob: Blob): Promise<string> => {
+    const audio = await resampleAudioBlob(blob);
+    const worker = getWhisperWorker();
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        cleanup();
+        reject(new Error("Transcription timed out"));
+      }, 120_000);
+
+      const cleanup = () => {
+        clearTimeout(timeout);
+        worker.removeEventListener("message", handler);
+        worker.removeEventListener("error", errHandler);
+        setWhisperLoading(null);
+      };
+
+      const errHandler = (ev: ErrorEvent) => {
+        cleanup();
+        reject(new Error(ev.message || "Worker crashed"));
+      };
+
+      const handler = (e: MessageEvent) => {
+        const msg = e.data;
+        if (msg.type === "progress") {
+          setWhisperLoading(msg.status);
+        } else if (msg.type === "result") {
+          cleanup();
+          resolve(msg.text);
+        } else if (msg.type === "error") {
+          cleanup();
+          reject(new Error(msg.message));
+        }
+      };
+
+      worker.addEventListener("message", handler);
+      worker.addEventListener("error", errHandler);
+      worker.postMessage({ type: "transcribe", audio }, [audio.buffer]);
+    });
+  }, [resampleAudioBlob, getWhisperWorker]);
+
+  /** Transcribe audio via server-side Whisper API (Tier 3) */
+  const transcribeServer = useCallback(async (blob: Blob): Promise<string> => {
+    const ext = blob.type.includes("mp4") ? "mp4" : blob.type.includes("ogg") ? "ogg" : "webm";
+    const form = new FormData();
+    form.append("file", blob, `audio.${ext}`);
+    const res = await fetch("/api/transcribe", { method: "POST", body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Server transcription failed");
+    return data.text || "";
+  }, []);
+
+  /* ── Stop helpers ── */
+
+  const stopNativeRecording = useCallback(() => {
+    recognitionRef.current?.stop();
+    setIsRecording(false);
+    setRecordingSeconds(0);
+    clearTimers();
+  }, [clearTimers]);
+
+  // Declared with `let` and reassigned so it can reference itself in startTimer
+  // eslint-disable-next-line prefer-const
+  let stopWhisperRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+    }
+    mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+    setIsRecording(false);
+    setRecordingSeconds(0);
+    clearTimers();
+  }, [clearTimers]);
+
+  /* ── Start helpers ── */
+
+  const startWhisperRecording = useCallback(async (mode: "whisper-local" | "whisper-server") => {
+    setVoiceError(null);
+    setVoiceMode(mode);
+
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      showVoiceError("Microphone access denied. Please allow microphone in your browser settings.");
+      return;
+    }
+    mediaStreamRef.current = stream;
+
+    const chunks: Blob[] = [];
+    audioChunksRef.current = chunks;
+
+    const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"]
+      .find((t) => MediaRecorder.isTypeSupported(t)) || "";
+
+    let recorder: MediaRecorder;
+    try {
+      recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+    } catch {
+      stream.getTracks().forEach((t) => t.stop());
+      showVoiceError("Your browser doesn't support audio recording.");
+      return;
+    }
+    mediaRecorderRef.current = recorder;
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+
+    recorder.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop());
+      if (chunks.length === 0) return;
+
+      const blob = new Blob(chunks, { type: recorder.mimeType });
+      setWhisperProcessing(true);
+
+      try {
+        let text: string;
+        if (mode === "whisper-local") {
+          try {
+            text = await transcribeLocal(blob);
+          } catch (localErr) {
+            console.warn("Local Whisper failed, trying server:", localErr);
+            try {
+              text = await transcribeServer(blob);
+              setVoiceMode("whisper-server");
+            } catch (serverErr) {
+              console.warn("Server Whisper also failed:", serverErr);
+              showVoiceError("Transcription failed. Please try again or use a different browser.");
+              setWhisperProcessing(false);
+              return;
+            }
+          }
+        } else {
+          text = await transcribeServer(blob);
+        }
+
+        if (text) {
+          setInput((prev) => (prev ? prev + " " + text : text));
+        }
+      } catch (err) {
+        console.warn("Whisper transcription failed:", err);
+        showVoiceError("Transcription failed. Please try again.");
+      } finally {
+        setWhisperProcessing(false);
+        setWhisperLoading(null);
+      }
+    };
+
+    ensureAudioCtx();
+    recorder.start(1000);
+    setIsRecording(true);
+    setRecordingSeconds(0);
+
+    timerRef.current = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
+    maxTimerRef.current = setTimeout(() => stopWhisperRecording(), MAX_RECORDING_MS);
+  }, [showVoiceError, transcribeLocal, transcribeServer, stopWhisperRecording, clearTimers, ensureAudioCtx]);
+
+  /** Start native Web Speech API recording (Tier 1) with auto-fallback */
+  const startNativeRecording = useCallback(() => {
     const SRCtor = getSpeechRecognition();
-    if (!SRCtor) return;
+    if (!SRCtor) {
+      startWhisperRecording("whisper-local");
+      return;
+    }
 
     const recognition = new SRCtor();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = "en-US";
     recognitionRef.current = recognition;
-    finalTranscriptRef.current = input; // preserve existing text
+    finalTranscriptRef.current = input;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let interim = "";
@@ -870,59 +1081,69 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
           interim += result[0].transcript;
         }
       }
-      // Show finalized + current interim in textarea
       setInput(finalTranscriptRef.current + interim);
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.warn("SpeechRecognition error:", event.error);
       const NON_FATAL = new Set(["no-speech", "aborted"]);
-      if (!NON_FATAL.has(event.error)) {
-        const messages: Record<string, string> = {
-          "not-allowed": "Microphone access denied. Please allow microphone in your browser settings.",
-          "service-not-allowed": "Microphone blocked by browser policy.",
-          "network": "Network error — speech recognition requires an internet connection.",
-          "audio-capture": "No microphone detected. Please check your audio input device.",
-          "language-not-supported": "Language not supported by your browser's speech recognition.",
-        };
-        const msg = messages[event.error] || `Voice input failed: ${event.error}`;
-        setVoiceError(msg);
-        if (voiceErrorTimerRef.current) clearTimeout(voiceErrorTimerRef.current);
-        voiceErrorTimerRef.current = setTimeout(() => setVoiceError(null), 5000);
+      if (NON_FATAL.has(event.error)) {
+        stopNativeRecording();
+        return;
       }
-      stopRecording();
+
+      const FALLBACK_ERRORS = new Set(["network", "service-not-allowed", "not-allowed"]);
+      if (FALLBACK_ERRORS.has(event.error)) {
+        stopNativeRecording();
+        setVoiceError("Switching to local transcription...");
+        if (voiceErrorTimerRef.current) clearTimeout(voiceErrorTimerRef.current);
+        voiceErrorTimerRef.current = setTimeout(() => setVoiceError(null), 3000);
+        startWhisperRecording("whisper-local");
+        return;
+      }
+
+      const messages: Record<string, string> = {
+        "audio-capture": "No microphone detected. Please check your audio input device.",
+        "language-not-supported": "Language not supported by your browser's speech recognition.",
+      };
+      showVoiceError(messages[event.error] || `Voice input failed: ${event.error}`);
+      stopNativeRecording();
     };
 
     recognition.onend = () => {
-      // Browser may auto-stop (e.g. silence); sync state
       setIsRecording(false);
       setRecordingSeconds(0);
-      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-      if (maxTimerRef.current) { clearTimeout(maxTimerRef.current); maxTimerRef.current = null; }
+      clearTimers();
     };
 
     try {
       recognition.start();
-    } catch (err) {
-      console.warn("SpeechRecognition start failed:", err);
-      setVoiceError("Could not start voice input. Please check microphone permissions.");
-      if (voiceErrorTimerRef.current) clearTimeout(voiceErrorTimerRef.current);
-      voiceErrorTimerRef.current = setTimeout(() => setVoiceError(null), 5000);
+    } catch {
+      startWhisperRecording("whisper-local");
       return;
     }
 
     setVoiceError(null);
+    setVoiceMode("native");
     setIsRecording(true);
     setRecordingSeconds(0);
 
     timerRef.current = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
-    maxTimerRef.current = setTimeout(() => stopRecording(), MAX_RECORDING_MS);
-  }, [input, stopRecording]);
+    maxTimerRef.current = setTimeout(() => stopNativeRecording(), MAX_RECORDING_MS);
+  }, [input, stopNativeRecording, startWhisperRecording, showVoiceError, clearTimers]);
+
+  const stopRecording = useCallback(() => {
+    if (voiceMode === "native") {
+      stopNativeRecording();
+    } else {
+      stopWhisperRecording();
+    }
+  }, [voiceMode, stopNativeRecording, stopWhisperRecording]);
 
   const toggleRecording = useCallback(() => {
     if (isRecording) stopRecording();
-    else startRecording();
-  }, [isRecording, stopRecording, startRecording]);
+    else startNativeRecording();
+  }, [isRecording, stopRecording, startNativeRecording]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -1127,60 +1348,77 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
           Drop images or documents here
         </div>
       )}
-      {isRecording ? (
-        /* ════ RECORDING MODE — full takeover ════ */
+      {(isRecording || whisperProcessing) ? (
+        /* ════ RECORDING / PROCESSING MODE ════ */
         <>
-          {/* Transcript area (live text as it comes in) */}
           <textarea
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Listening..."
+            placeholder={whisperProcessing ? "Processing audio..." : (voiceMode === "native" ? "Listening..." : "Recording...")}
             rows={1}
             className="w-full bg-transparent text-sm focus:outline-none resize-none overflow-y-auto"
             style={{ color: "var(--text-primary)", maxHeight: inHero ? "120px" : "50vh", opacity: input ? 1 : 0.5 }}
           />
-          {/* Recording controls row */}
           <div className="flex items-center gap-3 mt-3">
-            {/* Waveform visualizer */}
-            <div className="flex items-center gap-[2px] h-6">
-              {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-                <span
-                  key={i}
-                  className="w-[2.5px] rounded-full"
-                  style={{
-                    background: "var(--text-disabled)",
-                    animation: `voiceBar 0.7s ease-in-out ${i * 0.09}s infinite alternate`,
-                    height: "30%",
-                  }}
-                />
-              ))}
-            </div>
-            {/* Timer */}
-            <span className="font-mono tabular-nums text-xs" style={{ color: "var(--text-disabled)" }}>
-              {Math.floor(recordingSeconds / 60).toString().padStart(2, "0")}:{(recordingSeconds % 60).toString().padStart(2, "0")}
-            </span>
+            {whisperProcessing ? (
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <span className="text-xs" style={{ color: "var(--text-disabled)" }}>
+                  {whisperLoading || "Transcribing..."}
+                </span>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-[2px] h-6">
+                  {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                    <span
+                      key={i}
+                      className="w-[2.5px] rounded-full"
+                      style={{
+                        background: "var(--text-disabled)",
+                        animation: `voiceBar 0.7s ease-in-out ${i * 0.09}s infinite alternate`,
+                        height: "30%",
+                      }}
+                    />
+                  ))}
+                </div>
+                <span className="font-mono tabular-nums text-xs" style={{ color: "var(--text-disabled)" }}>
+                  {Math.floor(recordingSeconds / 60).toString().padStart(2, "0")}:{(recordingSeconds % 60).toString().padStart(2, "0")}
+                </span>
+                {voiceMode !== "native" && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "var(--surface-elevated)", color: "var(--text-disabled)" }}>
+                    local
+                  </span>
+                )}
+              </>
+            )}
 
             <div className="flex-1" />
 
-            {/* Cancel (discard) */}
-            <button
-              onClick={() => { stopRecording(); setInput(""); }}
-              className="text-xs px-3 py-1 rounded-full transition-colors"
-              style={{ color: "var(--text-secondary)", background: "var(--surface-elevated)" }}
-              title="Cancel recording"
-            >
-              Cancel
-            </button>
-            {/* Stop & keep */}
-            <button
-              onClick={stopRecording}
-              className="w-9 h-9 rounded-full flex items-center justify-center transition-all voice-stop-btn"
-              title="Done"
-            >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2" /></svg>
-            </button>
+            {!whisperProcessing && (
+              <>
+                <button
+                  onClick={() => { stopRecording(); setInput(""); }}
+                  className="text-xs px-3 py-1 rounded-full transition-colors"
+                  style={{ color: "var(--text-secondary)", background: "var(--surface-elevated)" }}
+                  title="Cancel recording"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={stopRecording}
+                  className="w-9 h-9 rounded-full flex items-center justify-center transition-all voice-stop-btn"
+                  title="Done"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2" /></svg>
+                </button>
+              </>
+            )}
           </div>
         </>
       ) : (

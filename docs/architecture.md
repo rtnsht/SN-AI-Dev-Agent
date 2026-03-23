@@ -108,7 +108,7 @@ graph TB
         CANCEL["■ Stop Button (cancels in-flight request)"]
         IMAGES["Image Paste/Upload/Drag-Drop"]
         DOCS["Document Upload (PDF/Word/Excel)<br/>Paperclip icon · 10MB/5-file limit"]
-        MIC["Voice Input (Web Speech API)<br/>Mic button (right of textarea) · real-time transcript"]
+        MIC["Voice Input (3-Tier STT)<br/>Mic button · Native / Whisper Local / Whisper Server"]
     end
 
     subgraph MSG["MessageBubble.tsx"]
@@ -827,67 +827,191 @@ Open-ended questions (free text) do NOT use this mechanism.
 
 ---
 
-## 14. Voice Input (Web Speech API)
+## 14. Voice Input (3-Tier Speech-to-Text)
 
-Browser-native speech-to-text that streams transcribed text into the chat textarea for user review before sending.
+Speech-to-text that streams transcribed text into the chat textarea for user review before sending. Uses a three-tier fallback strategy to work across all browsers.
 
-### 14.1 Approach
+### 14.1 Three-Tier Fallback Strategy
 
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| **Primary** | `window.SpeechRecognition` / `webkitSpeechRecognition` | Free, real-time transcription in Chrome/Edge/Safari |
-| **Unsupported browsers** | Mic button hidden with tooltip | Firefox and others see a grayed-out mic icon explaining the limitation |
+```mermaid
+flowchart TD
+    MicClick["User clicks mic"] --> Tier1{"Tier 1: Native Web Speech API"}
+    Tier1 -->|Works| NativeTranscript["Transcript in textarea"]
+    Tier1 -->|"network / not-allowed"| Tier2{"Tier 2: Client-side Whisper\n(transformers.js in Web Worker)"}
+    Tier2 -->|"Model loaded, works"| WhisperTranscript["Transcript in textarea"]
+    Tier2 -->|"WASM unavailable or fails"| Tier3{"Tier 3: Server-side Whisper\nPOST /api/transcribe"}
+    Tier3 -->|"OPENAI_API_KEY set"| ServerTranscript["Transcript in textarea"]
+    Tier3 -->|"Not configured"| ErrorMsg["Voice unavailable in this browser"]
+```
 
-No server-side transcription endpoint is required. No new npm dependencies.
+| Tier | Technology | Audio Destination | Cost | Latency |
+|------|-----------|-------------------|------|---------|
+| **1 — Native** | `window.SpeechRecognition` / `webkitSpeechRecognition` | Google's servers (via browser) | Free | Real-time streaming |
+| **2 — Client Whisper** | `Xenova/whisper-tiny.en` via transformers.js in a Web Worker | Stays on-device (WASM/WebGPU) | Free | ~2-5s after recording stops |
+| **3 — Server Whisper** | OpenAI Whisper API via `POST /api/transcribe` | Your server → OpenAI | ~$0.006/min | ~1-3s after recording stops |
 
-### 14.2 Data Flow
+**Rationale:** Tier 1 is ideal (real-time, free) but blocked by Brave and absent in Firefox. Tier 2 keeps audio on-device for privacy. Tier 3 handles edge cases where WASM is unavailable.
+
+### 14.2 Tier 1 — Native Web Speech API
+
+Real-time streaming transcription using the browser's built-in speech recognition engine.
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant Mic as Mic Button
-    participant SR as SpeechRecognition API
-    participant TA as Textarea
-    participant Send as Send Button
+    participant ChatWindow
+    participant SpeechAPI as "Browser SpeechRecognition"
+    participant Google as "Google STT Servers"
 
-    User->>Mic: Click (start)
-    Mic->>SR: recognition.start()
-    Note over Mic: Button pulses red, timer starts
-    SR-->>TA: onresult (interim transcript)
-    SR-->>TA: onresult (final transcript)
-    Note over TA: Text fills textarea in real-time
-    User->>Mic: Click (stop) or 2min timeout
-    Mic->>SR: recognition.stop()
-    Note over TA: User reviews/edits text
-    User->>Send: Click Send or press Enter
+    User->>ChatWindow: Click mic
+    ChatWindow->>SpeechAPI: recognition.start()
+    SpeechAPI->>Google: Audio stream
+    Google-->>SpeechAPI: Partial transcript
+    SpeechAPI-->>ChatWindow: onresult (interim)
+    ChatWindow->>ChatWindow: Update textarea live
+    User->>ChatWindow: Click stop
+    ChatWindow->>SpeechAPI: recognition.stop()
+    SpeechAPI-->>ChatWindow: onresult (final)
 ```
 
-### 14.3 UI States
+- `continuous: true` — captures multi-sentence speech
+- `interimResults: true` — shows partial text in real-time
+- Preserves existing textarea content
+- 2-minute hard cap via `setTimeout`
 
-| State | Mic Icon | Color | Indicator |
-|-------|----------|-------|-----------|
-| **Idle** | Microphone | Gray (matches image/doc buttons) | None |
-| **Recording** | Stop square | Red with `animate-pulse` | Red bar above textarea: pulsing dot + MM:SS elapsed + remaining time |
-| **Unsupported** | Microphone + strikethrough | Dark gray | Tooltip: "Voice input is not supported in this browser. Use Chrome or Edge." |
+### 14.3 Tier 2 — Client-Side Whisper (transformers.js)
 
-### 14.4 Key Behaviors
+Runs the Whisper ASR model entirely in the browser using a Web Worker. No audio leaves the device.
 
-- **Transcript fills textarea, not auto-sent** -- user reviews/edits before pressing Send
-- **Continuous mode** -- `recognition.continuous = true` captures multi-sentence speech
-- **Interim + final results** -- interim text shows immediately, replaced by finalized text as the engine confirms words
-- **Preserves existing text** -- if the textarea already has content, voice appends to it
-- **Auto-stop** -- 2-minute hard cap via `setTimeout`; browser may also stop on extended silence
-- **Cleanup** -- recognition aborted on component unmount; timers cleared
+```mermaid
+sequenceDiagram
+    participant User
+    participant ChatWindow
+    participant MediaRec as "MediaRecorder"
+    participant Worker as "Whisper Web Worker"
+    participant HF as "HuggingFace CDN"
 
-### 14.5 Browser Support
+    User->>ChatWindow: Click mic (fallback)
+    ChatWindow->>MediaRec: getUserMedia + start()
+    Note over MediaRec: Collecting audio chunks
+    User->>ChatWindow: Click stop
+    ChatWindow->>MediaRec: stop()
+    MediaRec-->>ChatWindow: Audio Blob
+    ChatWindow->>ChatWindow: Resample to 16kHz mono
+    ChatWindow->>Worker: postMessage(Float32Array)
+    alt First use
+        Worker->>HF: Download whisper-tiny.en (~41MB)
+        HF-->>Worker: Model weights (cached in IndexedDB)
+    end
+    Worker->>Worker: Run ASR pipeline
+    Worker-->>ChatWindow: transcript text
+    ChatWindow->>ChatWindow: Set textarea value
+```
 
-| Browser | Support | Notes |
-|---------|---------|-------|
-| Chrome / Edge | Full | `SpeechRecognition` or `webkitSpeechRecognition` |
-| Safari | Partial | `webkitSpeechRecognition` (prefixed) |
-| Firefox | None | Mic button hidden with tooltip |
+**Model:** `Xenova/whisper-tiny.en` — ~41 MB quantized (q8), cached in IndexedDB after first download.
 
-### 14.6 Input Bar Layout
+**Files:**
+
+| File | Purpose |
+|------|---------|
+| `webapp/public/workers/whisper-worker.js` | Web Worker — imports transformers.js from CDN, runs ASR pipeline |
+| `webapp/src/components/ChatWindow.tsx` | MediaRecorder recording, audio resampling, Worker communication |
+
+**First-use experience:** On first Whisper use, the model downloads (~41 MB). A progress indicator shows "Downloading voice model... 65%". Subsequent uses are instant (loaded from IndexedDB cache).
+
+### 14.4 Tier 3 — Server-Side Whisper API
+
+Last resort fallback when the Web Worker fails (old browser without WASM SIMD, device too slow).
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant ChatWindow
+    participant MediaRec as "MediaRecorder"
+    participant API as "POST /api/transcribe"
+    participant OpenAI as "OpenAI Whisper API"
+
+    User->>ChatWindow: Click mic (Tier 3)
+    ChatWindow->>MediaRec: getUserMedia + start()
+    User->>ChatWindow: Click stop
+    MediaRec-->>ChatWindow: Audio Blob
+    ChatWindow->>API: FormData (audio file)
+    API->>API: Rate limit check
+    API->>OpenAI: POST /v1/audio/transcriptions
+    OpenAI-->>API: transcript
+    API-->>ChatWindow: transcript text
+    ChatWindow->>ChatWindow: Set textarea value
+```
+
+**Endpoint:** `POST /api/transcribe` — follows the same pattern as `/api/enhance-prompt` (rate limiting via `checkAccess`, IP extraction, error handling).
+
+**Requirements:** `OPENAI_API_KEY` environment variable. Returns 503 if not configured.
+
+**Limits:** 25 MB max file size. Accepts `audio/webm`, `audio/wav`, `audio/mp4`, `audio/ogg`.
+
+### 14.5 Auto-Fallback Flow
+
+The fallback is automatic and transparent to the user:
+
+1. `toggleRecording()` always tries Tier 1 (native) first
+2. If native `onerror` fires with `network`, `not-allowed`, or `service-not-allowed`, it auto-switches to Tier 2
+3. If Tier 2's `transcribeLocal()` fails (worker error, WASM unavailable), it falls through to Tier 3 (`transcribeServer()`)
+4. If Tier 3 also fails (no API key, network error), it shows an error message
+
+The user sees "Switching to local transcription..." briefly during the Tier 1 → Tier 2 transition.
+
+### 14.6 Browser Compatibility
+
+| Browser | Tier 1 (Native) | Tier 2 (Whisper Local) | Tier 3 (Whisper Server) |
+|---------|-----------------|----------------------|------------------------|
+| Chrome / Edge | Works | Fallback available | Last resort |
+| Safari | Works (prefixed) | Fallback available | Last resort |
+| Brave | Blocked (`network` error) | Primary path | Last resort |
+| Firefox | API absent | Primary path | Last resort |
+| Older browsers | Varies | Requires WASM SIMD | Primary path |
+
+### 14.7 Data Flow / Privacy
+
+```mermaid
+flowchart LR
+    subgraph tier1 [Tier 1: Native]
+        Mic1["Mic"] --> Browser1["Browser"] --> GoogleSTT["Google Servers"]
+    end
+    subgraph tier2 [Tier 2: Local Whisper]
+        Mic2["Mic"] --> Browser2["Browser"] --> WASM["WASM/WebGPU\non device"]
+    end
+    subgraph tier3 [Tier 3: Server Whisper]
+        Mic3["Mic"] --> Browser3["Browser"] --> AppServer["Your Server"] --> OpenAISTT["OpenAI API"]
+    end
+```
+
+- **Tier 1:** Audio goes to Google servers (browser default behavior, not controllable)
+- **Tier 2:** Audio never leaves the device — full privacy
+- **Tier 3:** Audio goes to your server, then to OpenAI — no audio stored server-side
+
+### 14.8 Security
+
+- `Permissions-Policy: microphone=(self)` — allows same-origin mic access, blocks third-party iframes
+- MediaRecorder and Web Speech API both require HTTPS in production
+- Server-side `/api/transcribe` is rate-limited via the existing `checkAccess` system
+- No audio is persisted — streamed to Whisper and discarded
+
+### 14.9 Configuration
+
+| Env Var | Required | Purpose |
+|---------|----------|---------|
+| `OPENAI_API_KEY` | No (Tier 3 only) | Enables server-side Whisper fallback. Leave blank to disable. |
+
+### 14.10 Key Files
+
+| File | Purpose |
+|------|---------|
+| `webapp/src/components/ChatWindow.tsx` | Voice state, recording logic, auto-fallback chain, UI |
+| `webapp/public/workers/whisper-worker.js` | Web Worker running transformers.js Whisper pipeline |
+| `webapp/src/app/api/transcribe/route.ts` | Server-side Whisper API proxy (Tier 3) |
+| `webapp/next.config.ts` | `Permissions-Policy: microphone=(self)` header |
+
+### 14.11 Input Bar Layout
 
 ```
 [Image btn] [Doc btn] [Textarea] [Mic btn] [Send/Stop btn]

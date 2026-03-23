@@ -30,6 +30,7 @@ const PUBLIC_PATHS = [
   "/api/auth/",           // includes /api/auth/check-email
   "/api/config",
   "/api/enhance-prompt",
+  "/api/transcribe",      // Whisper transcription fallback (rate-limited server-side)
   "/api/instance-prompts",
   "/api/openrouter-models",
   "/api/feedback",
