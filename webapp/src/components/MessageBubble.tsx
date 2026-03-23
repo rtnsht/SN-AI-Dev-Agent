@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, Component, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ChatMessage, ToolExecution, SDLCPhase, UserChoicesBlock } from "@/lib/types";
@@ -15,8 +15,6 @@ interface Props {
   showToolDetails?: boolean;
   /** Authenticated user's display name (for avatar initial) */
   userName?: string;
-  /** Remove a queued message by ID */
-  onDequeue?: (id: string) => void;
 }
 
 /** Copy-to-clipboard button with brief "Copied!" feedback */
@@ -211,7 +209,27 @@ function SystemMessage({ message }: Props) {
   );
 }
 
-type DiagramView = "diagram" | "text" | "code";
+type DiagramView = "diagram" | "ascii" | "text" | "code";
+
+/** Extract AI-generated ASCII art from %% @ascii / %% @end-ascii comment block */
+function extractAsciiArt(code: string): string {
+  const lines = code.split("\n");
+  const startIdx = lines.findIndex(l => l.trim() === "%% @ascii");
+  const endIdx = lines.findIndex(l => l.trim() === "%% @end-ascii");
+  if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) return "";
+  return lines.slice(startIdx + 1, endIdx)
+    .map(l => l.replace(/^%%\s?/, ""))
+    .join("\n");
+}
+
+/** Strip the @ascii comment block, returning only the mermaid code for rendering */
+function stripAsciiArt(code: string): string {
+  const lines = code.split("\n");
+  const startIdx = lines.findIndex(l => l.trim() === "%% @ascii");
+  const endIdx = lines.findIndex(l => l.trim() === "%% @end-ascii");
+  if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) return code;
+  return [...lines.slice(0, startIdx), ...lines.slice(endIdx + 1)].join("\n").trim();
+}
 
 /** Convert Mermaid syntax into a simple ASCII/text representation */
 function mermaidToAscii(code: string): string {
@@ -295,23 +313,24 @@ function mermaidToAscii(code: string): string {
 
 const VIEW_OPTIONS: { key: DiagramView; label: string }[] = [
   { key: "diagram", label: "Diagram" },
+  { key: "ascii", label: "ASCII" },
   { key: "text", label: "Text" },
   { key: "code", label: "Code" },
 ];
 
 let mermaidInitialized = false;
 
-/** Mermaid diagram renderer with three view modes: visual SVG, ASCII text, raw code */
+/** Mermaid diagram renderer with four view modes: visual SVG, ASCII art, text outline, raw code */
 function MermaidDiagram({ code }: { code: string }) {
+  const asciiArt = extractAsciiArt(code);
+  const mermaidCode = stripAsciiArt(code);
+  const textFallback = mermaidToAscii(mermaidCode);
+  const asciiContent = asciiArt || textFallback;
+
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [view, setView] = useState<DiagramView>("diagram");
   const idRef = useRef(`mermaid-${crypto.randomUUID()}`);
-  const asciiRef = useRef<string>("");
-
-  useEffect(() => {
-    asciiRef.current = mermaidToAscii(code);
-  }, [code]);
 
   useEffect(() => {
     let cancelled = false;
@@ -327,18 +346,21 @@ function MermaidDiagram({ code }: { code: string }) {
           });
           mermaidInitialized = true;
         }
-        const { svg: rendered } = await mermaid.render(idRef.current, code.trim());
+        await mermaid.parse(mermaidCode.trim());
+        const { svg: rendered } = await mermaid.render(idRef.current, mermaidCode.trim());
         if (!cancelled) setSvg(rendered);
       } catch (e: unknown) {
+        document.getElementById(`d${idRef.current}`)?.remove();
+        document.getElementById(idRef.current)?.remove();
         if (!cancelled) {
           const msg = e instanceof Error ? e.message : "Failed to render diagram";
           setError(msg);
-          setView("text");
+          setView("ascii");
         }
       }
     })();
     return () => { cancelled = true; };
-  }, [code]);
+  }, [mermaidCode]);
 
   if (!svg && !error) {
     return (
@@ -387,18 +409,49 @@ function MermaidDiagram({ code }: { code: string }) {
           dangerouslySetInnerHTML={{ __html: svg }}
         />
       )}
+      {view === "ascii" && (
+        <pre className="block p-3 text-[11px] font-mono overflow-x-auto whitespace-pre leading-relaxed" style={{ background: "var(--surface-app)", color: "var(--text-secondary)" }}>
+          {asciiContent}
+        </pre>
+      )}
       {view === "text" && (
         <pre className="block p-3 text-[11px] font-mono overflow-x-auto whitespace-pre leading-relaxed" style={{ background: "var(--surface-app)", color: "var(--text-secondary)" }}>
-          {asciiRef.current}
+          {textFallback}
         </pre>
       )}
       {view === "code" && (
         <code className="block p-3 text-[12px] font-mono overflow-x-auto" style={{ background: "var(--surface-app)", color: "var(--text-secondary)" }}>
-          {code}
+          {mermaidCode}
         </code>
       )}
     </div>
   );
+}
+
+/** Safety net: catches errors that escape the MermaidDiagram try/catch (import failure, SVG render crash) */
+class DiagramErrorBoundary extends Component<{ code: string; children: ReactNode }, { hasError: boolean }> {
+  constructor(props: { code: string; children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="my-2 rounded-md overflow-hidden" style={{ border: "1px solid var(--border-subtle)" }}>
+          <div className="flex items-center px-3 py-1.5" style={{ background: "var(--surface-secondary)" }}>
+            <span className="text-[11px] font-medium" style={{ color: "var(--text-disabled)" }}>Diagram (render error)</span>
+          </div>
+          <code className="block p-3 text-[12px] font-mono overflow-x-auto" style={{ background: "var(--surface-app)", color: "var(--text-secondary)" }}>
+            {this.props.code}
+          </code>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -423,7 +476,7 @@ const MD_COMPONENTS: Record<string, any> = {
     const isBlock = className?.includes("language-");
     if (isMermaid) {
       const code = String(children).replace(/\n$/, "");
-      return <MermaidDiagram code={code} />;
+      return <DiagramErrorBoundary code={code}><MermaidDiagram code={code} /></DiagramErrorBoundary>;
     }
     if (isBlock) {
       return <code className="block p-3 my-2 rounded-md text-[12px] font-mono overflow-x-auto" style={{ background: "var(--surface-app)", color: "var(--text-secondary)" }}>{children}</code>;
@@ -441,7 +494,7 @@ const MD_COMPONENTS: Record<string, any> = {
 };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-export default function MessageBubble({ message, onApprove, onChoiceSelect, showToolDetails = true, userName, onDequeue }: Props) {
+export default function MessageBubble({ message, onApprove, onChoiceSelect, showToolDetails = true, userName }: Props) {
   const [approving, setApproving] = useState(false);
   const [msgExpanded, setMsgExpanded] = useState(true);
   const [isLong, setIsLong] = useState(false);
@@ -465,30 +518,21 @@ export default function MessageBubble({ message, onApprove, onChoiceSelect, show
     }
   }, [isUser, isLong, displayContent]);
 
-  const isQueued = !!message.queued;
-
   return (
-    <div className={`group/msg flex items-start gap-3 ${isUser ? "ml-auto flex-row-reverse" : ""}`} style={isQueued ? { opacity: 0.6 } : undefined}>
-      {/* Content — no chat bubble styling, Linear/Notion comment aesthetic */}
+    <div className={`group/msg flex items-start gap-3 ${isUser ? "ml-auto flex-row-reverse" : ""}`}>
       <div
         className="relative px-3 sm:px-4 py-2.5 sm:py-3 min-w-0 rounded-md"
         style={{
           background: isUser ? "var(--surface-secondary)" : "transparent",
-          border: isUser
-            ? isQueued ? "1px dashed var(--border-default)" : "1px solid var(--border-default)"
-            : "none",
+          border: isUser ? "1px solid var(--border-default)" : "none",
           color: "var(--text-primary)",
           maxWidth: isUser ? "85%" : undefined,
           flex: isUser ? undefined : "1",
         }}
       >
-        {/* Copy button — visible on hover (hidden for queued messages) */}
-        {!isQueued && (
-          <div className={`absolute top-1.5 ${isUser ? "left-1.5" : "right-1.5"} opacity-0 group-hover/msg:opacity-100 transition-opacity`}>
-            <CopyButton text={displayContent} />
-          </div>
-        )}
-        {/* User-attached images */}
+        <div className={`absolute top-1.5 ${isUser ? "left-1.5" : "right-1.5"} opacity-0 group-hover/msg:opacity-100 transition-opacity`}>
+          <CopyButton text={displayContent} />
+        </div>
         {isUser && message.images && message.images.length > 0 && (
           <div className={`flex gap-2 flex-wrap ${displayContent ? "mb-2" : ""}`}>
             {message.images.map((img, i) => (
@@ -500,34 +544,6 @@ export default function MessageBubble({ message, onApprove, onChoiceSelect, show
         {isUser ? (
           <>
             {displayContent ? <div className="text-sm whitespace-pre-wrap break-words">{displayContent}</div> : null}
-            {isQueued && (
-              <div className="flex items-center gap-2 mt-1.5">
-                <span
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
-                  style={{ background: "color-mix(in srgb, var(--color-primary) 10%, transparent)", color: "var(--color-primary)", border: "1px solid color-mix(in srgb, var(--color-primary) 20%, transparent)" }}
-                >
-                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6l4 2" />
-                    <circle cx="12" cy="12" r="9" strokeWidth={2} fill="none" stroke="currentColor" />
-                  </svg>
-                  Queued
-                </span>
-                {onDequeue && message.id && (
-                  <button
-                    onClick={() => onDequeue(message.id!)}
-                    className="p-0.5 rounded transition-colors"
-                    style={{ color: "var(--text-disabled)" }}
-                    onMouseEnter={e => { e.currentTarget.style.color = "var(--color-danger)"; }}
-                    onMouseLeave={e => { e.currentTarget.style.color = "var(--text-disabled)"; }}
-                    title="Cancel queued message"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            )}
           </>
         ) : (
           <div ref={contentRef}>

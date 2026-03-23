@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
-import { APP_NAME, APP_LOGO } from "@/lib/branding";
+import { APP_NAME } from "@/lib/branding";
 
 interface Props {
   open: boolean;
@@ -10,13 +9,18 @@ interface Props {
   onKeyProvided: (provider: "anthropic" | "openrouter", key: string) => void;
   dailyUsed: number;
   dailyLimit: number;
+  /** When set, the panel was opened because a server key hit a provider error */
+  providerError?: string | null;
 }
 
 /**
- * Shown when an authenticated user exhausts their daily requests.
- * Prompts them to enter their own API key for unlimited access.
+ * Slide-in side panel for entering BYOK API keys.
+ * Triggered by:
+ *  - Rate-limit / billing errors on the server pool key
+ *  - Daily quota exhaustion
+ *  - User clicking "Your API Key" in Settings when not connected
  */
-export default function APIKeyGateModal({ open, onClose, onKeyProvided, dailyUsed, dailyLimit }: Props) {
+export default function APIKeyGateModal({ open, onClose, onKeyProvided, dailyUsed, dailyLimit, providerError }: Props) {
   const [provider, setProvider] = useState<"anthropic" | "openrouter">("anthropic");
   const [apiKey, setApiKey] = useState("");
   const [error, setError] = useState("");
@@ -27,6 +31,10 @@ export default function APIKeyGateModal({ open, onClose, onKeyProvided, dailyUse
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [open, onClose]);
+
+  useEffect(() => {
+    if (open) { setApiKey(""); setError(""); }
+  }, [open]);
 
   if (!open) return null;
 
@@ -40,44 +48,63 @@ export default function APIKeyGateModal({ open, onClose, onKeyProvided, dailyUse
     onKeyProvided(provider, key);
   }
 
+  const heading = providerError
+    ? "Shared key hit a limit"
+    : dailyUsed >= dailyLimit
+      ? `You\u2019ve used ${dailyUsed}/${dailyLimit} requests today`
+      : "Bring Your Own Key";
+
+  const subtext = providerError
+    ? "The app\u2019s shared AI key is temporarily rate-limited. Enter your own key to continue this conversation."
+    : dailyUsed >= dailyLimit
+      ? "Add your own API key to continue with unlimited access."
+      : `Use your own ${APP_NAME === "SN AI Agent" ? "Anthropic or OpenRouter" : ""} API key.`;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+
+      {/* Slide-in panel from right */}
       <div
-        className="relative w-full max-w-md mx-0 sm:mx-4 rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col"
-        style={{ background: "var(--surface-primary)", border: "1px solid var(--border-emphasis)" }}
-        onClick={(e) => e.stopPropagation()}
+        className="fixed top-0 right-0 z-50 h-full w-full max-w-sm shadow-2xl flex flex-col animate-slide-in-right"
+        style={{ background: "var(--surface-primary)", borderLeft: "1px solid var(--border-emphasis)" }}
       >
         {/* Header */}
-        <div className="flex flex-col items-center px-6 pt-6 pb-4 text-center" style={{ borderBottom: "1px solid var(--border-default)" }}>
-          {APP_LOGO && (
-            <Image src={APP_LOGO} alt={APP_NAME} width={48} height={48} className="rounded-full mb-3" unoptimized />
-          )}
-          <h2 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
-            You&apos;ve used {dailyUsed}/{dailyLimit} requests today
-          </h2>
-          <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
-            Add your own API key for unlimited access.
-          </p>
+        <div className="flex items-center justify-between px-5 pt-5 pb-4" style={{ borderBottom: "1px solid var(--border-default)" }}>
+          <div>
+            <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>{heading}</h2>
+            <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{subtext}</p>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-md" style={{ color: "var(--text-disabled)" }}
+            onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-secondary)")}
+            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5 space-y-4">
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
           {/* Provider toggle */}
-          <div className="flex gap-2">
-            {(["anthropic", "openrouter"] as const).map((p) => (
-              <button
-                key={p}
-                onClick={() => { setProvider(p); setApiKey(""); setError(""); }}
-                className="flex-1 py-2 rounded-lg text-xs font-medium transition-colors"
-                style={{
-                  background: provider === p ? "var(--color-primary)" : "var(--surface-secondary)",
-                  color: provider === p ? "#fff" : "var(--text-secondary)",
-                  border: `1px solid ${provider === p ? "var(--color-primary)" : "var(--border-default)"}`,
-                }}
-              >
-                {p === "anthropic" ? "Anthropic (Claude)" : "OpenRouter"}
-              </button>
-            ))}
+          <div>
+            <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Provider</label>
+            <div className="flex gap-2">
+              {(["anthropic", "openrouter"] as const).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => { setProvider(p); setApiKey(""); setError(""); }}
+                  className="flex-1 py-2.5 rounded-lg text-xs font-medium transition-colors"
+                  style={{
+                    background: provider === p ? "var(--color-primary)" : "var(--surface-secondary)",
+                    color: provider === p ? "#fff" : "var(--text-secondary)",
+                    border: `1px solid ${provider === p ? "var(--color-primary)" : "var(--border-default)"}`,
+                  }}
+                >
+                  {p === "anthropic" ? "Anthropic (Claude)" : "OpenRouter"}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Key input */}
@@ -91,7 +118,7 @@ export default function APIKeyGateModal({ open, onClose, onKeyProvided, dailyUse
               onChange={(e) => { setApiKey(e.target.value); setError(""); }}
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
               placeholder={provider === "anthropic" ? "sk-ant-..." : "sk-or-..."}
-              className="w-full px-3 py-2 rounded-lg text-sm outline-none font-mono"
+              className="w-full px-3 py-2.5 rounded-lg text-sm outline-none font-mono"
               style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
               autoFocus
             />
@@ -105,10 +132,10 @@ export default function APIKeyGateModal({ open, onClose, onKeyProvided, dailyUse
             className="w-full py-2.5 rounded-xl text-sm font-medium text-white transition-colors disabled:opacity-50"
             style={{ background: "var(--color-primary)" }}
           >
-            Continue with my key
+            {providerError ? "Save & retry" : "Continue with my key"}
           </button>
 
-          <div className="text-center space-y-1">
+          <div className="space-y-1 pt-2">
             <p className="text-[10px]" style={{ color: "var(--text-disabled)" }}>
               Your key is sent per-request over HTTPS and never stored on our servers.
             </p>
@@ -124,6 +151,16 @@ export default function APIKeyGateModal({ open, onClose, onKeyProvided, dailyUse
           </div>
         </div>
       </div>
-    </div>
+
+      <style jsx>{`
+        @keyframes slideInRight {
+          from { transform: translateX(100%); }
+          to { transform: translateX(0); }
+        }
+        .animate-slide-in-right {
+          animation: slideInRight 0.25s ease-out;
+        }
+      `}</style>
+    </>
   );
 }

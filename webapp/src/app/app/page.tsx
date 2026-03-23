@@ -12,17 +12,20 @@ import APIKeyGateModal from "@/components/APIKeyGateModal";
 import ConnectModal from "@/components/ConnectModal";
 import ThemeToggle from "@/components/ThemeToggle";
 import SuggestionPanel from "@/components/SuggestionPanel";
+import ShareBanner from "@/components/ShareBanner";
+import SharePromptModal from "@/components/SharePromptModal";
 import type { ChatMessage, ConnectionResult, UsageInfo, TrialStatus, SDLCPhase, LiveStatus, AIProvider, ModelOption, FileAttachment, CategorizedPrompts, Credentials, QueuedMessage } from "@/lib/types";
 import { parsePhaseGate, parseUserChoices, ANTHROPIC_MODELS, SDLC_PHASES } from "@/lib/types";
 import { APP_NAME, APP_LOGO, SHOW_INFO_BUTTON, CREATOR_NAME, CREATOR_LINKEDIN, FOOTER_TAGLINE, FOOTER_COPYRIGHT, CHANGELOG_URL } from "@/lib/branding";
 import { dispatch as dispatchSlashCommand, type CommandContext } from "@/lib/slash-commands";
+import { useSharePrompt } from "@/hooks/useSharePrompt";
 import {
   buildServiceNowAuthorizationUrl,
   createPkcePair,
   normalizeServiceNowAuthMethod,
 } from "@/lib/servicenow-auth";
 import Link from "next/link";
-import { User, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Sparkles, MessageSquare, Info, Plus, RotateCcw } from "lucide-react";
+import { User, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Sparkles, MessageSquare, Info, Plus, RotateCcw, Share2 } from "lucide-react";
 import FeedbackFAB from "@/components/FeedbackFAB";
 
 
@@ -192,6 +195,7 @@ export default function Home() {
   // Gate modals (3-tier access system)
   const [showSignupGate, setShowSignupGate] = useState(false);
   const [showApiKeyGate, setShowApiKeyGate] = useState(false);
+  const [providerError, setProviderError] = useState<string | null>(null);
   const [gateInfo, setGateInfo] = useState<{ dailyUsed: number; dailyLimit: number; authDailyLimit: number }>({ dailyUsed: 0, dailyLimit: 10, authDailyLimit: 20 });
   // Whether current user is authenticated (set from /api/config)
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -232,11 +236,37 @@ export default function Home() {
   const handleSendRef = useRef<(text: string, images?: string[], files?: FileAttachment[], hidden?: boolean) => void>(() => {});
   // Ref to always have access to the latest messages (avoids race conditions with React batching)
   const messagesRef = useRef<ChatMessage[]>([]);
+  // Avoid duplicate /api/session-start posts for the same clientSessionId
+  const trackedSessionStartIdRef = useRef<string | null>(null);
 
   // Keep messagesRef in sync with messages state (for use in callbacks that need latest messages)
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  const {
+    showBanner: showShareBanner,
+    showModal: showShareModal,
+    showPanelLink: showSharePanelLink,
+    sessionStats: shareSessionStats,
+    markConnected: markShareConnected,
+    markDisconnected: markShareDisconnected,
+    openModalFromBanner: openShareModalFromBanner,
+    openModalFromPanel: openShareModalFromPanel,
+    dismissBanner: dismissShareBanner,
+    closeModal: closeShareModal,
+    onShared: onSharePromptShared,
+    resetSession: resetSharePromptSession,
+  } = useSharePrompt({
+    connected,
+    clientSessionId,
+    messages,
+    connectionError,
+    rateLimitHit,
+    pendingRetry,
+    completedPhases,
+    activityLog,
+  });
 
   // Clear connection error when user edits credentials
   useEffect(() => {
@@ -787,6 +817,40 @@ export default function Home() {
     }
   }, [credentials]);
 
+  const startTrackedSession = useCallback((sessionId: string, sessionCredentials: Credentials, connectionData: ConnectionResult) => {
+    fetch("/api/session-start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId,
+        instanceUrl: sessionCredentials.instanceUrl,
+        username: sessionCredentials.username,
+        userFullName: connectionData.userInfo?.name || "",
+        model: (aiProvider === "openrouter" ? openRouterModels : ANTHROPIC_MODELS)
+          .find((m) => m.key === selectedModel)?.modelId || selectedModel,
+        aiProvider,
+        hasAdmin: connectionData.hasAdmin,
+        hasSecurityAdmin: connectionData.hasSecurityAdmin,
+        authType: sessionCredentials.snAuthType,
+      }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const errText = await res.text().catch(() => "");
+          console.warn("[session-start] non-OK:", res.status, errText.slice(0, 200));
+        }
+      })
+      .catch((err) => { console.warn("[session-start] failed:", err); });
+  }, [aiProvider, openRouterModels, selectedModel]);
+
+  // Log a session row in Supabase for each browser chat session id (incl. New Chat), without double-posting on reconnect churn.
+  useEffect(() => {
+    if (!connected || !connInfo || !clientSessionId) return;
+    if (trackedSessionStartIdRef.current === clientSessionId) return;
+    trackedSessionStartIdRef.current = clientSessionId;
+    startTrackedSession(clientSessionId, credentials, connInfo);
+  }, [connected, connInfo, clientSessionId, credentials, startTrackedSession]);
+
   const handleConnect = useCallback(async () => {
     setIsConnecting(true);
     setConnectingLabel("Connecting...");
@@ -873,6 +937,7 @@ export default function Home() {
         setConnInfo(data);
         setShowSettings(false);
         setMobileStep("hero"); // dismiss mobile full-screen connection panel
+        markShareConnected();
 
         // Inject system messages into chat
         const sysMsgs: ChatMessage[] = [];
@@ -926,24 +991,6 @@ export default function Home() {
         setMessages(newMsgs);
         setTimeout(() => inputRef.current?.focus(), 100);
 
-        // Log session start with connect metadata (non-blocking, fire-and-forget)
-        fetch("/api/session-start", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sessionId: clientSessionId,
-            instanceUrl: effectiveCredentials.instanceUrl,
-            username: effectiveCredentials.username,
-            userFullName: data.userInfo?.name || "",
-            model: (aiProvider === "openrouter" ? openRouterModels : ANTHROPIC_MODELS)
-              .find((m) => m.key === selectedModel)?.modelId || selectedModel,
-            aiProvider,
-            hasAdmin: data.hasAdmin,
-            hasSecurityAdmin: data.hasSecurityAdmin,
-            authType: effectiveCredentials.snAuthType,
-          }),
-        }).catch((err) => { console.warn("[session-start] failed:", err); });
-
         // Fetch categorized instance prompts in background (non-blocking)
         const userContext = data.userInfo?.sysId
           ? {
@@ -977,7 +1024,7 @@ export default function Home() {
       setConnectingLabel(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchCategorizedPromptsFromApi is stable ([] deps) but declared after this hook
-  }, [credentials, clientSessionId, aiProvider, openRouterModels, selectedModel, completeAuthorizationCodeSignIn, completeBrowserSessionSignIn]);
+  }, [credentials, clientSessionId, aiProvider, openRouterModels, selectedModel, completeAuthorizationCodeSignIn, completeBrowserSessionSignIn, markShareConnected]);
 
   const handleSend = useCallback(
     async (text: string, images?: string[], files?: FileAttachment[], hidden?: boolean) => {
@@ -1136,9 +1183,11 @@ export default function Home() {
                   ...prev,
                   { id: genMsgId(), role: "system", type: "error", content: errorData.message || "Daily limit reached. Add your API key to continue.", timestamp: new Date().toISOString() },
                 ]);
-              } else if (errorData.error === "anthropic_rate_limit") {
-                if (allowUserApiKeys) {
+              } else if (errorData.error === "anthropic_rate_limit" || errorData.code === "provider_rate_limit" || errorData.code === "provider_billing" || errorData.code === "provider_auth") {
+                const isServerKey = errorData.usedServerKey !== false;
+                if (allowUserApiKeys && isServerKey) {
                   setPendingRetry({ text, images, files });
+                  setProviderError(errorData.code || errorData.error);
                   setShowApiKeyGate(true);
                 }
                 setMessages((prev) => [
@@ -1147,9 +1196,11 @@ export default function Home() {
                     id: genMsgId(),
                     role: "system",
                     type: "error",
-                    content: allowUserApiKeys
-                      ? `**API rate limit hit** -- The server's Claude API key hit its token limit. Add your own API key to continue.`
-                      : `**API rate limit hit** -- Please try again later.`,
+                    content: (allowUserApiKeys && isServerKey)
+                      ? `**Shared key limit hit** -- The app's server key is temporarily limited. Add your own API key to continue.`
+                      : errorData.code === "provider_auth"
+                        ? `**API key error** -- Check your API key in Settings.`
+                        : `**API rate limit hit** -- Please try again later.`,
                     timestamp: new Date().toISOString(),
                   },
                 ]);
@@ -1467,9 +1518,10 @@ export default function Home() {
             setGateInfo((prev) => ({ ...prev, dailyUsed: data.dailyUsed ?? prev.dailyUsed, dailyLimit: data.dailyLimit ?? prev.dailyLimit }));
             setShowApiKeyGate(true);
             setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: data.message || "Daily limit reached. Add your API key to continue.", timestamp: new Date().toISOString() }]);
-          } else if (data.error === "anthropic_rate_limit") {
-            if (allowUserApiKeys) { setPendingRetry({ text, images, files }); setShowApiKeyGate(true); }
-            setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: allowUserApiKeys ? "**API rate limit hit** -- Add your own API key to continue." : "**API rate limit hit** -- Please try again later.", timestamp: new Date().toISOString() }]);
+          } else if (data.error === "anthropic_rate_limit" || data.code === "provider_rate_limit" || data.code === "provider_billing") {
+            const isServerKey = data.usedServerKey !== false;
+            if (allowUserApiKeys && isServerKey) { setPendingRetry({ text, images, files }); setProviderError(data.code || data.error); setShowApiKeyGate(true); }
+            setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: (allowUserApiKeys && isServerKey) ? "**Shared key limit hit** -- Add your own API key to continue." : "**API rate limit hit** -- Please try again later.", timestamp: new Date().toISOString() }]);
           } else {
             setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: data.message || "Rate limit reached. Please try again later.", timestamp: new Date().toISOString() }]);
           }
@@ -1615,6 +1667,7 @@ export default function Home() {
   );
 
   const handleNewChat = useCallback(() => {
+    resetSharePromptSession();
     // Finalize the old session (best-effort, non-blocking)
     if (clientSessionId) {
       fetch("/api/session-end", {
@@ -1643,7 +1696,7 @@ export default function Home() {
     const newId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     setClientSessionId(newId);
     try { sessionStorage.setItem(SK.SESSION_ID, newId); } catch { /* quota */ }
-  }, [clientSessionId]);
+  }, [clientSessionId, resetSharePromptSession]);
 
   const handlePhaseClick = useCallback((phase: SDLCPhase) => {
     const el = document.querySelector(`[data-phase-divider="${phase}"]`) || document.querySelector(`[data-phase="${phase}"]`);
@@ -1729,6 +1782,8 @@ export default function Home() {
   /** Disconnect and unlock fields so user can edit before reconnecting */
   const handleReconnect = useCallback(() => {
     const authType = normalizeServiceNowAuthMethod(credentials.snAuthType);
+    trackedSessionStartIdRef.current = null;
+    markShareDisconnected();
     setConnected(false);
     setConnInfo(null);
     setConnectingLabel(null);
@@ -1742,7 +1797,7 @@ export default function Home() {
       setCredentials((prev) => ({ ...prev, accessToken: "", refreshToken: "" }));
     }
     try { sessionStorage.removeItem(SK.SEEN_SUGGESTIONS); sessionStorage.removeItem(SK.CATEGORIZED_PROMPTS); } catch { /* ok */ }
-  }, [credentials.snAuthType]);
+  }, [credentials.snAuthType, markShareDisconnected]);
 
 
   /** Sidebar resize handlers (mouse + touch) */
@@ -2131,6 +2186,15 @@ export default function Home() {
         )}
 
         {/* ═══ Chat / Center content ═══ */}
+        {showShareBanner && (
+          <div className="flex-shrink-0 px-3 pt-3 sm:px-4 sm:pt-3">
+            <ShareBanner
+              stats={shareSessionStats}
+              onShare={openShareModalFromBanner}
+              onDismiss={dismissShareBanner}
+            />
+          </div>
+        )}
         <ChatWindow
           messages={messages}
           isLoading={isLoading}
@@ -2209,6 +2273,25 @@ export default function Home() {
               </div>
             )}
 
+            {showSharePanelLink && (
+              <div>
+                <div className="sidebar-group-label">Share</div>
+                <button
+                  type="button"
+                  onClick={openShareModalFromPanel}
+                  className="mt-2 w-full flex items-center justify-center gap-2 rounded-md px-3 py-2 text-[11px] font-medium transition-colors"
+                  style={{
+                    background: "color-mix(in srgb, var(--surface-secondary) 92%, transparent)",
+                    border: "1px solid var(--border-default)",
+                    color: "var(--text-primary)",
+                  }}
+                >
+                  <Share2 className="w-3.5 h-3.5" strokeWidth={1.8} />
+                  Share your session
+                </button>
+              </div>
+            )}
+
             {/* Suggestion panel */}
             <SuggestionPanel
               prompts={categorizedPrompts}
@@ -2279,6 +2362,13 @@ export default function Home() {
       {/* Info modal */}
       <InfoModal open={showInfo} onClose={() => setShowInfo(false)} onTryPrompt={(text) => { setShowInfo(false); setTimeout(() => handleSendRef.current(text), 100); }} />
       <WelcomeModal open={showWelcome} onClose={dismissWelcome} />
+      <SharePromptModal
+        open={showShareModal}
+        sessionId={clientSessionId}
+        stats={shareSessionStats}
+        onClose={closeShareModal}
+        onShared={onSharePromptShared}
+      />
 
       {/* Feedback (header-triggered, no floating button) */}
       <FeedbackFAB hideButton externalOpen={showFeedback} onExternalClose={() => setShowFeedback(false)} />
@@ -2316,9 +2406,10 @@ export default function Home() {
       />
       <APIKeyGateModal
         open={showApiKeyGate}
-        onClose={() => setShowApiKeyGate(false)}
+        onClose={() => { setShowApiKeyGate(false); setProviderError(null); }}
         onKeyProvided={(provider, key) => {
           setShowApiKeyGate(false);
+          setProviderError(null);
           if (provider === "anthropic") {
             setCredentials((prev) => ({ ...prev, claudeApiKey: key }));
           } else {
@@ -2326,7 +2417,7 @@ export default function Home() {
             setAiProvider("openrouter");
           }
           setRateLimitHit(false);
-          // Auto-retry the pending message
+          if (typeof window !== "undefined") localStorage.setItem("keyMode", "byok");
           if (pendingRetry) {
             const retry = pendingRetry;
             setPendingRetry(null);
@@ -2335,6 +2426,7 @@ export default function Home() {
         }}
         dailyUsed={gateInfo.dailyUsed}
         dailyLimit={gateInfo.dailyLimit}
+        providerError={providerError}
       />
     </div>
   );

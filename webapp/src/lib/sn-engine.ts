@@ -23,6 +23,7 @@ import { getSessionCache, SessionCache } from "./session-cache";
 import { APP_NAME } from "./branding";
 import { shouldPlan, generatePlan, executePlan, formatGatheredData, type PlanStreamEvent, type ExecutionPlan } from "./task-planner";
 import { normalizeServiceNowAuthMethod } from "./servicenow-auth";
+import { getSupabase } from "./supabase";
 
 /* ── Context management constants ─────────────────────────────── */
 
@@ -35,26 +36,69 @@ const MAX_CONTEXT_TOKENS = 150_000;
 /** Warning threshold - start trimming older messages */
 const CONTEXT_WARNING_TOKENS = 120_000;
 
-/* ── Phase-aware round limits ────────────────────────────────── */
+/* ── Engine config (Supabase-backed with in-memory cache) ───── */
 
-/** Phase round limits + default, imported from MCP tool definitions */
-let _phaseRoundLimits: Record<string, number> | null = null;
-let _defaultRoundLimit = 30;
+export interface EngineConfig {
+  phaseRoundLimits: Record<string, number>;
+  defaultRoundLimit: number;
+  plannerBudgetFactor: number;
+  plannerBudgetMinimum: number;
+}
 
-function getPhaseRoundLimit(phase: string | null | undefined): number {
-  if (!_phaseRoundLimits) {
-    try {
-      const defs = getToolDefs();
-      _phaseRoundLimits = defs.PHASE_ROUND_LIMITS ?? {};
-      _defaultRoundLimit = defs.DEFAULT_ROUND_LIMIT ?? 30;
-    } catch {
-      return 30;
+let _cachedConfig: EngineConfig | null = null;
+let _cacheTimestamp = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function buildFallbackConfig(): EngineConfig {
+  try {
+    const defs = getToolDefs();
+    return {
+      phaseRoundLimits: defs.PHASE_ROUND_LIMITS ?? {},
+      defaultRoundLimit: defs.DEFAULT_ROUND_LIMIT ?? 30,
+      plannerBudgetFactor: 0.75,
+      plannerBudgetMinimum: 10,
+    };
+  } catch {
+    return { phaseRoundLimits: {}, defaultRoundLimit: 30, plannerBudgetFactor: 0.75, plannerBudgetMinimum: 10 };
+  }
+}
+
+export async function loadEngineConfig(): Promise<EngineConfig> {
+  if (_cachedConfig && Date.now() - _cacheTimestamp < CACHE_TTL_MS) return _cachedConfig;
+  const fallback = buildFallbackConfig();
+  try {
+    const db = getSupabase();
+    const { data, error } = await db.from("engine_config").select("key, value");
+    if (error || !data || data.length === 0) {
+      _cachedConfig = fallback;
+      _cacheTimestamp = Date.now();
+      return fallback;
     }
+    const map = new Map(data.map((r: { key: string; value: unknown }) => [r.key, r.value]));
+    _cachedConfig = {
+      phaseRoundLimits: (map.get("phase_round_limits") as Record<string, number>) ?? fallback.phaseRoundLimits,
+      defaultRoundLimit: Number(map.get("default_round_limit")) || fallback.defaultRoundLimit,
+      plannerBudgetFactor: Number(map.get("planner_budget_factor")) || fallback.plannerBudgetFactor,
+      plannerBudgetMinimum: Number(map.get("planner_budget_minimum")) || fallback.plannerBudgetMinimum,
+    };
+    _cacheTimestamp = Date.now();
+    return _cachedConfig;
+  } catch {
+    _cachedConfig = fallback;
+    _cacheTimestamp = Date.now();
+    return fallback;
   }
-  if (phase && _phaseRoundLimits && phase in _phaseRoundLimits) {
-    return _phaseRoundLimits[phase];
+}
+
+export function invalidateEngineConfigCache() { _cachedConfig = null; _cacheTimestamp = 0; }
+
+/** Synchronous phase limit lookup — call loadEngineConfig() first to populate */
+function getPhaseRoundLimit(phase: string | null | undefined, config?: EngineConfig): number {
+  const cfg = config || _cachedConfig || buildFallbackConfig();
+  if (phase && cfg.phaseRoundLimits && phase in cfg.phaseRoundLimits) {
+    return cfg.phaseRoundLimits[phase];
   }
-  return _defaultRoundLimit;
+  return cfg.defaultRoundLimit;
 }
 
 /* ── Duplicate tool call detection ───────────────────────────── */
@@ -92,22 +136,31 @@ const PHASE_GATE_REMINDERS: Partial<Record<string, { threshold: number; message:
     message: `[SYSTEM: You are in spec phase. You have spent 10 rounds. Create the spec document and emit <!-- PHASE_GATE:spec --> in your text response to present it for user approval.]`,
   },
   design: {
-    threshold: 12,
-    message: `[SYSTEM: You are in design phase. You have spent 12 rounds. Finalize the design document and emit <!-- PHASE_GATE:design --> in your text response to present it for user approval.]`,
+    threshold: 18,
+    message: `[SYSTEM: You are in design phase. You have spent 18 rounds. Finalize the design document and emit <!-- PHASE_GATE:design --> in your text response to present it for user approval.]`,
   },
   scope_selection: {
     threshold: 3,
     message: `[SYSTEM: You are in scope_selection phase. The user has already chosen their scope. You MUST emit <!-- PHASE_GATE:scope_selection --> in your text response NOW to proceed to implementation. Do NOT make more tool calls — you have all the information you need.]`,
   },
   implementation: {
-    threshold: 25,
-    message: `[SYSTEM: You are in implementation phase. You have spent 25 rounds. If all artifacts are created and verified, emit <!-- PHASE_GATE:implementation --> in your text response to present the implementation for user approval.]`,
+    threshold: 32,
+    message: `[SYSTEM: You are in implementation phase. You have spent 32 rounds. If all artifacts are created and verified, emit <!-- PHASE_GATE:implementation --> in your text response to present the implementation for user approval.]`,
   },
   testing: {
-    threshold: 15,
-    message: `[SYSTEM: You are in testing phase. You have spent 15 rounds. Complete testing and emit <!-- PHASE_GATE:testing --> in your text response to present test results for user approval.]`,
+    threshold: 30,
+    message: `[SYSTEM: You are in testing phase. You have spent 30 rounds. Complete testing and emit <!-- PHASE_GATE:testing --> in your text response to present test results for user approval.]`,
   },
 };
+
+/* ── Planner budget adjustment ────────────────────────────────── */
+
+/** Shared helper for reducing the round budget after the task planner pre-fetches data.
+ *  Used by both chatStream (Anthropic) and chatStreamOpenRouter. */
+function computeAdjustedRounds(effectiveMax: number, factor: number = 0.75, minimum: number = 10): number {
+  const adjusted = Math.max(minimum, Math.ceil(effectiveMax * factor));
+  return Math.min(effectiveMax, adjusted);
+}
 
 /* ── Rate-limit retry helpers ─────────────────────────────────── */
 
@@ -340,7 +393,14 @@ function trimConversationHistory(messages: Anthropic.MessageParam[], sessionId: 
     role: "assistant",
     content: "Understood. I have the summary context above and will continue with the recent messages."
   });
-  result.push(...compressed.slice(-recentCount));
+  const recentMessages = compressed.slice(-recentCount);
+  result.push(...recentMessages);
+
+  // Safety guard: ensure the result never ends with an assistant message.
+  // Claude 4.5+ and other models reject "assistant message prefill".
+  if (result.length > 0 && result[result.length - 1].role === "assistant") {
+    result.push({ role: "user", content: "Please continue." });
+  }
 
   const newTokens = estimateConversationTokens(result);
   logger.info(sessionId, "context_mgmt", "Dropped middle messages with extractive summary", {
@@ -356,23 +416,64 @@ function trimConversationHistory(messages: Anthropic.MessageParam[], sessionId: 
 
 /**
  * Sanitize raw API errors before surfacing to users.
- * Strips JSON error bodies, HTTP status codes, and technical details
- * that are not actionable for end users.
+ * Extracts actionable information from Anthropic/OpenRouter error bodies
+ * and maps to user-friendly messages by error category.
  */
 function sanitizeApiError(raw: string): string {
-  // Strip raw Anthropic/OpenRouter JSON error bodies — never show to users
-  if (raw.includes('"type":"error"') || raw.includes('"invalid_request_error"') || raw.includes('"overloaded_error"')) {
-    return "Something went wrong while processing your request. Please try again. If the issue persists, try starting a new conversation.";
+  const lower = raw.toLowerCase();
+
+  // Try to extract the "message" field from a JSON error body
+  const msgMatch = raw.match(/"message"\s*:\s*"([^"]+)"/);
+  const errorMsg = msgMatch?.[1]?.toLowerCase() || "";
+
+  // ── Category: Assistant prefill / message ordering ──────────────
+  if (errorMsg.includes("prefill") || errorMsg.includes("must end with a user message") || errorMsg.includes("last message must be")) {
+    return "The AI model rejected the message format (assistant prefill not supported). Please start a new conversation.";
   }
-  // Strip HTTP status codes (e.g., "400 {type:error...}" or "500 Internal Server Error")
+
+  // ── Category: Context length exceeded ──────────────────────────
+  if (errorMsg.includes("context length") || errorMsg.includes("too many tokens") || errorMsg.includes("maximum.*tokens") || errorMsg.includes("prompt is too long")) {
+    return "The conversation has grown too long for the model's context window. Please start a new conversation.";
+  }
+
+  // ── Category: Overloaded ───────────────────────────────────────
+  if (raw.includes('"overloaded_error"') || errorMsg.includes("overloaded") || errorMsg.includes("capacity")) {
+    return "The AI model is temporarily overloaded. Please try again in a moment.";
+  }
+
+  // ── Category: Authentication / billing ─────────────────────────
+  if (raw.includes('"authentication_error"') || errorMsg.includes("invalid.*api.key") || errorMsg.includes("unauthorized")) {
+    return "API authentication failed. Please check your API key in Settings.";
+  }
+  if (errorMsg.includes("billing") || errorMsg.includes("quota") || errorMsg.includes("insufficient_quota")) {
+    return "The API quota or billing limit has been reached. Please check your plan or try again later.";
+  }
+
+  // ── Category: Invalid model ────────────────────────────────────
+  if (errorMsg.includes("model") && (errorMsg.includes("not found") || errorMsg.includes("does not exist") || errorMsg.includes("not available"))) {
+    return "The selected AI model is not available. Please try switching to a different model.";
+  }
+
+  // ── Category: Rate limit (safety net — usually handled upstream) ─
+  if (lower.includes("rate limit") || lower.includes("429") || lower.includes("too many requests")) {
+    return "Rate limit reached. Please wait a moment and try again.";
+  }
+
+  // ── Category: Generic Anthropic/OpenRouter JSON error body ─────
+  if (raw.includes('"type":"error"') || raw.includes('"invalid_request_error"')) {
+    const detail = msgMatch?.[1] || "";
+    if (detail && detail.length < 150) {
+      return `The AI model could not process this request: ${detail}`;
+    }
+    return "The AI model could not process this request. Please try rephrasing or start a new conversation.";
+  }
+
+  // ── Category: HTTP status code prefix ──────────────────────────
   if (/^\d{3}\s/.test(raw)) {
     return "A temporary issue occurred. Please try again in a moment.";
   }
-  // Rate limit (already handled elsewhere, but safety net)
-  if (raw.toLowerCase().includes("rate limit")) {
-    return "Rate limit reached. Please wait a moment and try again.";
-  }
-  // Overly long errors — truncate and make user-friendly
+
+  // ── Fallback: overly long or unrecognized errors ───────────────
   if (raw.length > 200) {
     return "An unexpected error occurred. Please try again. If the issue persists, try starting a new conversation.";
   }
@@ -751,7 +852,7 @@ export async function chat(
     return chatOpenRouter(credentials, messages, model, sessionId, phase);
   }
 
-  const maxToolRounds = 30;
+  const maxToolRounds = getPhaseRoundLimit(phase);
   const registry = getToolRegistry();
   const snClient = createSnClient(credentials, registry);
   const tools = getFilteredTools(phase, getToolDefs());
@@ -901,7 +1002,7 @@ async function chatOpenRouter(
   sessionId: string,
   phase?: string | null
 ): Promise<ChatResponse> {
-  const maxToolRounds = 30;
+  const maxToolRounds = getPhaseRoundLimit(phase);
   const registry = getToolRegistry();
   const snClient = createSnClient(credentials, registry);
   const tools = toOpenRouterTools(getFilteredTools(phase, getToolDefs()));
@@ -1146,11 +1247,11 @@ export async function* chatStream(
   signal?: AbortSignal,
   sddMode?: boolean,
 ): AsyncGenerator<StreamEvent> {
-  // Apply per-phase round limit (overrides the caller's default if phase is set)
-  const effectiveMaxRounds = Math.min(maxToolRounds, getPhaseRoundLimit(phase));
+  const engineConfig = await loadEngineConfig();
+  const effectiveMaxRounds = Math.min(maxToolRounds, getPhaseRoundLimit(phase, engineConfig));
 
   if (credentials.aiProvider === "openrouter" && credentials.openRouterApiKey) {
-    yield* chatStreamOpenRouter(credentials, messages, model, effectiveMaxRounds, sessionId, phase, signal, sddMode);
+    yield* chatStreamOpenRouter(credentials, messages, model, effectiveMaxRounds, sessionId, phase, signal, sddMode, engineConfig);
     return;
   }
 
@@ -1233,18 +1334,22 @@ export async function* chatStream(
       // The return value of the generator is the gathered data
       gatheredData = iterResult.value || new Map();
 
-      // Inject gathered data into AI context so it doesn't re-fetch
+      // Inject gathered data into AI context so it doesn't re-fetch.
+      // IMPORTANT: Splice BEFORE the user's last message to maintain proper
+      // user/assistant alternation. Claude 4.5+ and other models reject
+      // "assistant message prefill" (trailing assistant message).
       if (gatheredData.size > 0) {
         const dataText = formatGatheredData(gatheredData);
-        anthropicMessages.push({
+        const dataMsg: Anthropic.MessageParam = {
           role: "user",
           content: [{ type: "text", text: dataText }],
-        });
-        // Add AI acknowledgment
-        anthropicMessages.push({
+        };
+        const ackMsg: Anthropic.MessageParam = {
           role: "assistant",
           content: "I have received the pre-fetched data and will use it directly without re-querying.",
-        });
+        };
+        const insertIdx = Math.max(0, anthropicMessages.length - 1);
+        anthropicMessages.splice(insertIdx, 0, dataMsg, ackMsg);
         plannerRanSuccessfully = true;
         logger.info(sessionId, "planner", "Gathered data injected into context", {
           dataKeys: gatheredData.size,
@@ -1256,10 +1361,9 @@ export async function* chatStream(
     }
   }
 
-  // Reduce round budget if planner already gathered data
   let adjustedMaxRounds = effectiveMaxRounds;
   if (plannerRanSuccessfully) {
-    adjustedMaxRounds = Math.max(5, Math.ceil(effectiveMaxRounds * 0.6));
+    adjustedMaxRounds = computeAdjustedRounds(effectiveMaxRounds, engineConfig.plannerBudgetFactor, engineConfig.plannerBudgetMinimum);
     logger.info(sessionId, "planner", "Round budget adjusted after planning", {
       original: effectiveMaxRounds,
       adjusted: adjustedMaxRounds,
@@ -1306,7 +1410,7 @@ export async function* chatStream(
         role: "user",
         content: [{
           type: "text",
-          text: `[SYSTEM NOTE: You have ${remainingRounds + 1} tool rounds remaining. Prioritize completing the most critical remaining work. Summarize what you have completed and what still needs to be done so work can be resumed if needed.]`,
+          text: `[SYSTEM NOTE: You have ${remainingRounds + 1} tool rounds remaining. Complete the highest-priority remaining work and emit the phase gate. Do NOT tell the user about round limits, tool capacity, or remaining rounds. Do NOT provide a "resume plan" or summary of what's left. Just finish the work and emit the phase gate marker.]`,
         }],
       });
       logger.info(sessionId, "round_limit", `Injected round-limit warning at round ${rounds}`, { remainingRounds: remainingRounds + 1 });
@@ -1488,6 +1592,7 @@ async function* chatStreamOpenRouter(
   phase?: string | null,
   signal?: AbortSignal,
   sddMode?: boolean,
+  engineConfig?: EngineConfig,
 ): AsyncGenerator<StreamEvent> {
   const registry = getToolRegistry();
   const snClient = createSnClient(credentials, registry);
@@ -1551,12 +1656,19 @@ async function* chatStreamOpenRouter(
       }
       gatheredData = iterResult.value || new Map();
 
+      // Splice BEFORE the user's last message -- same fix as Anthropic path.
+      // Claude 4.5+ and other models reject trailing assistant messages.
       if (gatheredData.size > 0) {
         const dataText = formatGatheredData(gatheredData);
-        orMessages.push({ role: "user", content: dataText });
-        orMessages.push({ role: "assistant", content: "I have received the pre-fetched data and will use it directly without re-querying." });
-        adjustedMaxRounds = Math.max(5, Math.ceil(maxToolRounds * 0.6));
-        logger.info(sessionId, "planner", "OpenRouter: Gathered data injected", { dataKeys: gatheredData.size });
+        const insertIdx = Math.max(0, orMessages.length - 1);
+        orMessages.splice(
+          insertIdx, 0,
+          { role: "user", content: dataText },
+          { role: "assistant", content: "I have received the pre-fetched data and will use it directly without re-querying." },
+        );
+        const cfg = engineConfig || buildFallbackConfig();
+        adjustedMaxRounds = computeAdjustedRounds(maxToolRounds, cfg.plannerBudgetFactor, cfg.plannerBudgetMinimum);
+        logger.info(sessionId, "planner", "OpenRouter: Gathered data injected", { dataKeys: gatheredData.size, adjusted: adjustedMaxRounds });
       }
     }
   }

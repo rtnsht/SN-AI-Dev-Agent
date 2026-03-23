@@ -8,12 +8,14 @@ import { normalizeServiceNowAuthMethod, validateServiceNowCredentials } from "@/
 import { requireAdmin } from "@/lib/admin-auth";
 import { getClientIp } from "@/lib/client-ip";
 import { parseChatBody } from "@/lib/request-validation";
+import { resolveLlmApiKey } from "@/lib/key-resolver";
 
 export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
-  let sessionId: string = 'unknown'; // Declare outside try block for error handler access
+  let sessionId: string = 'unknown';
+  let userSuppliedKey = false;
 
   try {
     const body = await request.json();
@@ -100,36 +102,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Resolve API key based on provider
-    // ALLOW_USER_API_KEYS controls whether users can supply their own API keys.
-    // Default: true (users can bring their own keys for unlimited access).
+    // Resolve API key via pool + BYOK + env fallback
     const allowUserKeys = process.env.ALLOW_USER_API_KEYS !== "false";
-    let userSuppliedKey = false;
+    const provider = credentials.aiProvider === "openrouter" ? "openrouter" as const : "anthropic" as const;
+    const userKey = provider === "openrouter"
+      ? (allowUserKeys ? credentials.openRouterApiKey || "" : "")
+      : (allowUserKeys ? credentials.claudeApiKey || "" : "");
 
-    if (credentials.aiProvider === "openrouter") {
-      const userProvidedOpenRouterKey = allowUserKeys && !!credentials.openRouterApiKey;
-      const openRouterKey = (allowUserKeys ? credentials.openRouterApiKey : "") || process.env.OPENROUTER_API_KEY || "";
-      if (!openRouterKey) {
-        logger.error(sessionId, "validation", "No OpenRouter API key available");
-        return new Response(
-          JSON.stringify({ error: "No OpenRouter API key available" }),
-          { status: 400, headers: { "Content-Type": "application/json" } }
-        );
-      }
-      credentials.openRouterApiKey = openRouterKey;
-      userSuppliedKey = userProvidedOpenRouterKey;
-    } else {
-      userSuppliedKey = allowUserKeys && !!credentials.claudeApiKey;
-      const claudeApiKey = (allowUserKeys ? credentials.claudeApiKey : "") || process.env.CLAUDE_API_KEY || "";
-      if (!claudeApiKey) {
-        logger.error(sessionId, "validation", "No Claude API key available", { userSuppliedKey, allowUserKeys });
-        return new Response(
-          JSON.stringify({ error: "No Claude API key available" }),
-          { status: 400, headers: { "Content-Type": "application/json" } }
-        );
-      }
-      credentials.claudeApiKey = claudeApiKey;
+    const resolved = resolveLlmApiKey(sessionId, provider, userKey, allowUserKeys);
+    if (!resolved) {
+      const label = provider === "openrouter" ? "OpenRouter" : "Claude";
+      logger.error(sessionId, "validation", `No ${label} API key available`, { provider, allowUserKeys });
+      return new Response(
+        JSON.stringify({ error: `No ${label} API key available. Provide one in settings or ask admin to configure it.` }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
     }
+
+    if (provider === "openrouter") {
+      credentials.openRouterApiKey = resolved.apiKey;
+    } else {
+      credentials.claudeApiKey = resolved.apiKey;
+    }
+    userSuppliedKey = resolved.userSuppliedKey;
 
     // 3-tier access check: anonymous (IP) → authenticated (user) → BYOK (unlimited)
     const userId = request.headers.get("x-user-id");
@@ -331,6 +326,22 @@ export async function POST(request: NextRequest) {
       error: errorMsg,
       stack: error instanceof Error ? error.stack : undefined,
     });
+
+    const allowUserKeys = process.env.ALLOW_USER_API_KEYS !== "false";
+
+    if (errorMsg === "anthropic_rate_limit") {
+      return new Response(
+        JSON.stringify({
+          error: "provider_rate_limit",
+          code: "provider_rate_limit",
+          message: "Claude API rate limit exceeded after retries.",
+          usedServerKey: !userSuppliedKey,
+          allowUserApiKeys: allowUserKeys,
+          retryable: true,
+        }),
+        { status: 429, headers: { "Content-Type": "application/json" } }
+      );
+    }
 
     return new Response(
       JSON.stringify({ error: "Internal server error" }),

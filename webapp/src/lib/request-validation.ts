@@ -136,6 +136,82 @@ export function parseSessionEndBody(body: unknown): ValidationResult<ParsedSessi
   return { ok: true, data: { sessionId: body.sessionId } };
 }
 
+export interface ParsedShareTrackingBody {
+  sessionId: string;
+  action: "shown" | "dismissed" | "shared";
+  platform?: "linkedin" | "x";
+}
+
+export function parseShareTrackingBody(body: unknown): ValidationResult<ParsedShareTrackingBody> {
+  if (!isRecord(body)) return { ok: false, error: "Invalid request body" };
+  if (!isValidSessionId(body.sessionId)) {
+    return { ok: false, error: "sessionId has invalid format" };
+  }
+  if (body.action !== "shown" && body.action !== "dismissed" && body.action !== "shared") {
+    return { ok: false, error: "action must be 'shown', 'dismissed', or 'shared'" };
+  }
+  if ("platform" in body && body.platform !== undefined && body.platform !== "linkedin" && body.platform !== "x") {
+    return { ok: false, error: "platform must be 'linkedin' or 'x'" };
+  }
+  if (body.action === "shared" && !body.platform) {
+    return { ok: false, error: "platform is required when action is 'shared'" };
+  }
+  return {
+    ok: true,
+    data: {
+      sessionId: body.sessionId,
+      action: body.action,
+      platform: body.platform as "linkedin" | "x" | undefined,
+    },
+  };
+}
+
+export interface ParsedShareTagBody {
+  sessionId: string;
+  durationMin: number;
+  phaseCount: number;
+  toolCount: number;
+  assistantCount: number;
+}
+
+export function parseShareTagBody(body: unknown): ValidationResult<ParsedShareTagBody> {
+  if (!isRecord(body)) return { ok: false, error: "Invalid request body" };
+  if (!isValidSessionId(body.sessionId)) {
+    return { ok: false, error: "sessionId has invalid format" };
+  }
+
+  const numericFields = ["durationMin", "phaseCount", "toolCount", "assistantCount"] as const;
+  for (const field of numericFields) {
+    if (typeof body[field] !== "number" || !Number.isFinite(body[field])) {
+      return { ok: false, error: `${field} must be a number` };
+    }
+  }
+
+  if (body.durationMin < 1 || body.durationMin > 1440) {
+    return { ok: false, error: "durationMin must be between 1 and 1440" };
+  }
+  if (body.phaseCount < 1 || body.phaseCount > 6) {
+    return { ok: false, error: "phaseCount must be between 1 and 6" };
+  }
+  if (body.toolCount < 1 || body.toolCount > 1000) {
+    return { ok: false, error: "toolCount must be between 1 and 1000" };
+  }
+  if (body.assistantCount < 1 || body.assistantCount > 1000) {
+    return { ok: false, error: "assistantCount must be between 1 and 1000" };
+  }
+
+  return {
+    ok: true,
+    data: {
+      sessionId: body.sessionId,
+      durationMin: body.durationMin,
+      phaseCount: body.phaseCount,
+      toolCount: body.toolCount,
+      assistantCount: body.assistantCount,
+    },
+  };
+}
+
 export interface ParsedEmailBody {
   email: string;
 }
@@ -501,4 +577,47 @@ export function parseInviteCreateBody(body: unknown): ValidationResult<ParsedInv
     }
   }
   return { ok: true, data: body as unknown as ParsedInviteCreateBody };
+}
+
+/* ── Engine Config validation ──────────────────────────────────── */
+
+const ALLOWED_ENGINE_KEYS = new Set(["phase_round_limits", "default_round_limit", "planner_budget_factor", "planner_budget_minimum"]);
+const REQUIRED_PHASES = ["spec", "design", "scope_selection", "implementation", "testing", "deployment"];
+
+export interface ParsedEngineConfigBody {
+  key: string;
+  value: unknown;
+}
+
+export function parseEngineConfigBody(body: unknown): ValidationResult<ParsedEngineConfigBody> {
+  if (!isRecord(body)) return { ok: false, error: "Invalid request body" };
+  if (typeof body.key !== "string" || !ALLOWED_ENGINE_KEYS.has(body.key)) {
+    return { ok: false, error: `key must be one of: ${[...ALLOWED_ENGINE_KEYS].join(", ")}` };
+  }
+  if (body.value === undefined || body.value === null) {
+    return { ok: false, error: "value is required" };
+  }
+
+  const key = body.key;
+  const value = body.value;
+
+  if (key === "phase_round_limits") {
+    if (!isRecord(value)) return { ok: false, error: "phase_round_limits must be an object" };
+    for (const phase of REQUIRED_PHASES) {
+      if (typeof (value as Record<string, unknown>)[phase] !== "number") return { ok: false, error: `Missing or invalid value for phase: ${phase}` };
+      const v = (value as Record<string, number>)[phase];
+      if (v < 1 || v > 100) return { ok: false, error: `${phase} must be between 1 and 100` };
+    }
+  } else if (key === "default_round_limit") {
+    const n = Number(value);
+    if (!Number.isInteger(n) || n < 1 || n > 100) return { ok: false, error: "default_round_limit must be an integer between 1 and 100" };
+  } else if (key === "planner_budget_factor") {
+    const n = Number(value);
+    if (isNaN(n) || n < 0.01 || n > 1.0) return { ok: false, error: "planner_budget_factor must be between 0.01 and 1.0" };
+  } else if (key === "planner_budget_minimum") {
+    const n = Number(value);
+    if (!Number.isInteger(n) || n < 1 || n > 50) return { ok: false, error: "planner_budget_minimum must be an integer between 1 and 50" };
+  }
+
+  return { ok: true, data: { key, value } };
 }

@@ -44,6 +44,9 @@ const PUBLIC_PATHS = [
   "/api/sn-oauth/",                // OAuth token exchange (used from public /app page)
   "/api/session-start",            // session telemetry init (used from public /app page)
   "/api/session-end",              // session finalization (used from public /app page + sendBeacon)
+  "/api/share-tracking",           // social share prompt analytics (fingerprint only; used from /app)
+  "/api/share-card",               // OG share card PNG (session-bound; used from /app)
+  "/api/generate-share-tag",       // AI hashtag helper (session-bound; used from /app)
 ];
 const USER_CONTEXT_HEADERS = ["x-user-id", "x-user-email", "x-user-name", "x-user-role"] as const;
 

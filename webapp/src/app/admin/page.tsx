@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import DOMPurify from "isomorphic-dompurify";
 
-type Tab = "requests" | "users" | "invites" | "banners" | "trials" | "access-tiers" | "session-logs";
+type Tab = "requests" | "users" | "invites" | "banners" | "trials" | "access-tiers" | "session-logs" | "engine";
 
 interface AccessRequest {
   id: string;
@@ -159,6 +159,20 @@ export default function AdminPage() {
   const [expandedSessionDetail, setExpandedSessionDetail] = useState<any | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
+  // Engine config state
+  const ENGINE_DEFAULTS = {
+    phase_round_limits: { spec: 15, design: 25, scope_selection: 5, implementation: 40, testing: 40, deployment: 15 },
+    default_round_limit: 30,
+    planner_budget_factor: 0.75,
+    planner_budget_minimum: 10,
+  };
+  const [enginePhases, setEnginePhases] = useState<Record<string, number>>(ENGINE_DEFAULTS.phase_round_limits);
+  const [engineDefault, setEngineDefault] = useState("30");
+  const [engineFactor, setEngineFactor] = useState("0.75");
+  const [engineMinimum, setEngineMinimum] = useState("10");
+  const [engineSaved, setEngineSaved] = useState<Record<string, unknown> | null>(null);
+  const [engineDirty, setEngineDirty] = useState(false);
+
   const pendingCount = requests.filter((r) => canModerateRequest(r.status)).length;
 
   const fetchData = useCallback(async () => {
@@ -221,6 +235,17 @@ export default function AdminPage() {
         const data = await res.json();
         setSessionLogs(data.sessions || []);
         setSessionLogsTotal(data.total || 0);
+      } else if (tab === "engine") {
+        const res = await fetch("/api/admin/engine-config");
+        if (res.status === 401 || res.status === 403) { router.push("/login"); return; }
+        const data = await res.json();
+        const c = data.configs || {};
+        if (c.phase_round_limits) setEnginePhases(c.phase_round_limits);
+        if (c.default_round_limit !== undefined) setEngineDefault(String(c.default_round_limit));
+        if (c.planner_budget_factor !== undefined) setEngineFactor(String(c.planner_budget_factor));
+        if (c.planner_budget_minimum !== undefined) setEngineMinimum(String(c.planner_budget_minimum));
+        setEngineSaved(c);
+        setEngineDirty(false);
       } else {
         const res = await fetch("/api/admin/invite-codes");
         if (res.status === 401 || res.status === 403) { router.push("/login"); return; }
@@ -594,6 +619,7 @@ export default function AdminPage() {
         <button className={`admin-tab ${tab === "trials" ? "active" : ""}`} onClick={() => setTab("trials")}>Trials</button>
         <button className={`admin-tab ${tab === "access-tiers" ? "active" : ""}`} onClick={() => setTab("access-tiers")}>Access Tiers</button>
         <button className={`admin-tab ${tab === "session-logs" ? "active" : ""}`} onClick={() => setTab("session-logs")}>Session Logs</button>
+        <button className={`admin-tab ${tab === "engine" ? "active" : ""}`} onClick={() => setTab("engine")}>Engine</button>
       </div>
 
       {loading && <p className="admin-loading">Loading...</p>}
@@ -1639,6 +1665,141 @@ export default function AdminPage() {
                 {sessionLogs.length === 0 && <tr><td colSpan={11} className="admin-empty">No sessions found</td></tr>}
               </tbody>
             </table>
+          </div>
+        </>
+      )}
+
+      {/* ─── Engine Config Tab ─── */}
+      {tab === "engine" && !loading && (
+        <>
+          <p style={{ color: "var(--text-secondary)", fontSize: "13px", marginBottom: "16px" }}>
+            Configure AI engine round limits and planner settings. Changes take up to 5 minutes to apply across active sessions.
+          </p>
+
+          {engineDirty && (
+            <div style={{ padding: "6px 12px", marginBottom: "12px", borderRadius: "6px", fontSize: "12px", fontWeight: 500, background: "color-mix(in srgb, var(--color-warning) 10%, transparent)", color: "var(--color-warning)", border: "1px solid color-mix(in srgb, var(--color-warning) 25%, transparent)" }}>
+              Unsaved changes
+            </div>
+          )}
+
+          <div style={{ display: "grid", gap: "20px" }}>
+            {/* Phase Round Limits */}
+            <div style={{ padding: "16px", borderRadius: "8px", background: "var(--surface-secondary)", border: "1px solid var(--border-default)" }}>
+              <h3 style={{ margin: "0 0 4px", fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>Phase Round Limits</h3>
+              <p style={{ margin: "0 0 12px", fontSize: "12px", color: "var(--text-disabled)" }}>Maximum tool-call rounds the AI gets per SDLC phase.</p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                {([
+                  ["spec", "Spec", "Discovery + spec generation"],
+                  ["design", "Design", "Architecture diagrams + design doc"],
+                  ["scope_selection", "Scope Selection", "Short phase, typically 2-3 calls"],
+                  ["implementation", "Implementation", "Artifact creation + verification"],
+                  ["testing", "Testing", "Verification + ATF creation + execution"],
+                  ["deployment", "Deployment", "Deploy scripts + completion"],
+                ] as [string, string, string][]).map(([key, label, hint]) => (
+                  <div key={key}>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 500, color: "var(--text-secondary)", marginBottom: "4px" }}>
+                      {label} <span style={{ color: "var(--text-disabled)", fontWeight: 400 }}>(default: {ENGINE_DEFAULTS.phase_round_limits[key as keyof typeof ENGINE_DEFAULTS.phase_round_limits]})</span>
+                    </label>
+                    <input
+                      type="number" min={1} max={100}
+                      value={enginePhases[key] ?? ""}
+                      onChange={e => { setEnginePhases(prev => ({ ...prev, [key]: parseInt(e.target.value, 10) || 0 })); setEngineDirty(true); }}
+                      style={{ width: "100%", padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-default)", background: "var(--surface-app)", color: "var(--text-primary)", fontSize: "13px" }}
+                    />
+                    <span style={{ fontSize: "10px", color: "var(--text-disabled)" }}>{hint}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Planner & Default */}
+            <div style={{ padding: "16px", borderRadius: "8px", background: "var(--surface-secondary)", border: "1px solid var(--border-default)" }}>
+              <h3 style={{ margin: "0 0 4px", fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>Planner Settings</h3>
+              <p style={{ margin: "0 0 12px", fontSize: "12px", color: "var(--text-disabled)" }}>When the task planner pre-fetches data, the round budget is reduced by a factor. The minimum floor prevents the budget from dropping too low.</p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: 500, color: "var(--text-secondary)", marginBottom: "4px" }}>
+                    Budget Factor <span style={{ color: "var(--text-disabled)", fontWeight: 400 }}>(default: 0.75)</span>
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <input
+                      type="number" min={0.01} max={1} step={0.05}
+                      value={engineFactor}
+                      onChange={e => { setEngineFactor(e.target.value); setEngineDirty(true); }}
+                      style={{ flex: 1, padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-default)", background: "var(--surface-app)", color: "var(--text-primary)", fontSize: "13px" }}
+                    />
+                    <span style={{ fontSize: "12px", color: "var(--text-disabled)", minWidth: "32px" }}>{Math.round(parseFloat(engineFactor || "0") * 100)}%</span>
+                  </div>
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: 500, color: "var(--text-secondary)", marginBottom: "4px" }}>
+                    Minimum Rounds <span style={{ color: "var(--text-disabled)", fontWeight: 400 }}>(default: 10)</span>
+                  </label>
+                  <input
+                    type="number" min={1} max={50}
+                    value={engineMinimum}
+                    onChange={e => { setEngineMinimum(e.target.value); setEngineDirty(true); }}
+                    style={{ width: "100%", padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-default)", background: "var(--surface-app)", color: "var(--text-primary)", fontSize: "13px" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: 500, color: "var(--text-secondary)", marginBottom: "4px" }}>
+                    Default Round Limit <span style={{ color: "var(--text-disabled)", fontWeight: 400 }}>(default: 30)</span>
+                  </label>
+                  <input
+                    type="number" min={1} max={100}
+                    value={engineDefault}
+                    onChange={e => { setEngineDefault(e.target.value); setEngineDirty(true); }}
+                    style={{ width: "100%", padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-default)", background: "var(--surface-app)", color: "var(--text-primary)", fontSize: "13px" }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
+            <button
+              className="admin-btn"
+              disabled={actionLoading === "engine-save"}
+              onClick={async () => {
+                setActionLoading("engine-save");
+                setMessage("");
+                try {
+                  const saves = [
+                    { key: "phase_round_limits", value: enginePhases },
+                    { key: "default_round_limit", value: parseInt(engineDefault, 10) },
+                    { key: "planner_budget_factor", value: parseFloat(engineFactor) },
+                    { key: "planner_budget_minimum", value: parseInt(engineMinimum, 10) },
+                  ];
+                  for (const s of saves) {
+                    const res = await fetch("/api/admin/engine-config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(s) });
+                    if (!res.ok) { const e = await res.json(); throw new Error(e.error || "Save failed"); }
+                  }
+                  setEngineDirty(false);
+                  setMessage("Engine config saved. Changes take up to 5 minutes to apply across active sessions.");
+                  fetchData();
+                } catch (err) {
+                  setMessage(err instanceof Error ? err.message : "Failed to save");
+                }
+                setActionLoading(null);
+              }}
+            >
+              {actionLoading ? "Saving..." : "Save All"}
+            </button>
+            <button
+              className="admin-btn"
+              style={{ background: "var(--surface-elevated)", color: "var(--text-secondary)" }}
+              onClick={() => {
+                setEnginePhases(ENGINE_DEFAULTS.phase_round_limits);
+                setEngineDefault(String(ENGINE_DEFAULTS.default_round_limit));
+                setEngineFactor(String(ENGINE_DEFAULTS.planner_budget_factor));
+                setEngineMinimum(String(ENGINE_DEFAULTS.planner_budget_minimum));
+                setEngineDirty(true);
+              }}
+            >
+              Reset to Defaults
+            </button>
           </div>
         </>
       )}

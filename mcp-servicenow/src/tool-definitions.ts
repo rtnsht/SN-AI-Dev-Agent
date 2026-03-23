@@ -2194,10 +2194,10 @@ export type SDLCToolPhase = 'spec' | 'design' | 'scope_selection' | 'implementat
 /** Per-phase round limits — lightweight phases get fewer rounds to prevent loops */
 export const PHASE_ROUND_LIMITS: Record<SDLCToolPhase, number> = {
   spec: 15,
-  design: 20,
+  design: 25,
   scope_selection: 5,   // Scope is a 2-3 tool call phase — hard cap prevents the loop seen in session xyhkmn8
-  implementation: 30,
-  testing: 20,
+  implementation: 40,
+  testing: 40,
   deployment: 15,
 };
 
