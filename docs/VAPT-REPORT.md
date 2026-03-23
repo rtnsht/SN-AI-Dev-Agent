@@ -143,7 +143,7 @@ A comprehensive Vulnerability Assessment and Penetration Testing (VAPT) review w
 | SEC-015 | Low | User-supplied API keys transit through server | CWE-319 |
 | SEC-016 | Low | Email error responses may leak provider details | CWE-209 |
 
-**Positive findings:** `.env` files excluded from git; no hardcoded secrets in source; `NEXT_PUBLIC_*` vars are branding-only; `SUPABASE_SERVICE_KEY` server-side only; `render.yaml` uses `sync: false` for all secrets; comprehensive logger redaction.
+**Positive findings:** `.env` files excluded from git; no hardcoded secrets in source; `NEXT_PUBLIC_*` vars are branding-only; `SUPABASE_SERVICE_KEY` server-side only; DigitalOcean App Platform env vars use `sync: false` for all secrets; comprehensive logger redaction.
 
 ### 7. Frontend & Client Security (Agent 7)
 
@@ -265,7 +265,7 @@ A comprehensive Vulnerability Assessment and Penetration Testing (VAPT) review w
 | Item | Severity | Rationale |
 |------|----------|-----------|
 | AUTH-001: Unhashed session tokens in DB | High | Requires migration strategy; deferred to next sprint |
-| NET-003: IP spoofing via `x-forwarded-for` | High | Requires platform-specific proxy trust config (Render) |
+| NET-003: IP spoofing via `x-forwarded-for` | High | Requires platform-specific proxy trust config (DigitalOcean App Platform) |
 | NET-009 / AUTH-009: In-memory rate limiter | Medium | Needs Redis/KV store; architectural change |
 | LLM-003: Tool result injection | High | Requires content filtering layer between SN and LLM |
 | MCP-002: Arbitrary script execution | Critical | Core feature; mitigated by SN instance ACLs |

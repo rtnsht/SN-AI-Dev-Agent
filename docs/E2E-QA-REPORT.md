@@ -233,8 +233,8 @@ Current implementation re-fetches on every dropdown open. No WebSocket or pollin
 | Finding | Severity | Detail |
 |---------|----------|--------|
 | CSP allows `unsafe-inline` + `unsafe-eval` | Medium | Weakens XSS protection significantly; required for Next.js inline scripts |
-| In-memory rate limiter | Medium | Resets on deploy/restart; useless in multi-instance (render.yaml: 1-5 instances) |
-| `BYPASS_AUTH` relies on runtime check | Medium | If `NODE_ENV` doesn't match, auth can be bypassed; `render.yaml` pins to `"false"` |
+| In-memory rate limiter | Medium | Resets on deploy/restart; useless in multi-instance (DigitalOcean App Platform: 1-5 instances) |
+| `BYPASS_AUTH` relies on runtime check | Medium | If `NODE_ENV` doesn't match, auth can be bypassed; DigitalOcean App Platform env pins to `"false"` |
 | Session cookies missing `Secure` flag in dev | Low | Only affects local development; production via HTTPS |
 
 ---
