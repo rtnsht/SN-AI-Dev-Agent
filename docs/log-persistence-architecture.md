@@ -60,7 +60,7 @@ DigitalOcean App Platform = 2 GB RAM/instance, auto-scale 1-5 instances. Worst c
 | **OOM from unbounded buffer** (Supabase down 30 min = 360 MB) | CRITICAL | Per-session cap: 200 entries. Global cap: 50 MB. Drop oldest on overflow.                                        |
 | **Thundering herd** (400 flushes simultaneously every 30s)    | CRITICAL | Staggered flush: process 20 sessions/tick with 500ms gaps. Concurrency limit: max 10 parallel Supabase requests. |
 | **JSONB write amplification** (append rewrites entire column) | HIGH     | Cap `log_entries` at 500 entries/row. Beyond that, update only metadata counters (full data is on local FS).      |
-| **SIGTERM flush timeout** (Render gives 10s)                  | MEDIUM   | Best-effort flush with 7s timeout. Accept last-interval data loss (it's on local disk anyway).                    |
+| **SIGTERM flush timeout** (DigitalOcean gives 10s)            | MEDIUM   | Best-effort flush with 7s timeout. Accept last-interval data loss (it's on local disk anyway).                    |
 | **initSession fails, UPDATE finds no row**                    | MEDIUM   | Flush uses upsert (`INSERT ... ON CONFLICT DO UPDATE`), not plain UPDATE. Self-healing.                           |
 | **Supabase rate limits** (2000 req burst from all instances)  | LOW      | Staggered flush + concurrency limit keeps peak at ~100 req/s, well under Pro's ~1000 req/s.                       |
 
