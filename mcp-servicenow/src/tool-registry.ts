@@ -39,6 +39,7 @@ import * as promotionWorkflow from './tools/promotion-workflow.js';
 import * as flowDesigner from './tools/flow-designer.js';
 import * as scopedApps from './tools/scoped-apps.js';
 import * as servicePortal from './tools/service-portal.js';
+import * as atf from './tools/atf.js';
 
 /**
  * Tool handler mapping: tool name -> async function(snClient, args) => result
@@ -116,6 +117,12 @@ const TOOL_HANDLERS: Record<string, (snClient: ServiceNowClient, args: unknown) 
   sn_get_fix_scripts: async (c, a) => scheduledJobs.getFixScripts(c, scheduledJobs.getFixScriptsSchema.parse(a)),
   sn_create_fix_script: async (c, a) => scheduledJobs.createFixScript(c, scheduledJobs.createFixScriptSchema.parse(a)),
   sn_run_fix_script: async (c, a) => scheduledJobs.runFixScript(c, scheduledJobs.runFixScriptSchema.parse(a)),
+
+  // ATF (Automated Test Framework)
+  sn_enable_atf_property: async (c) => atf.enableAtfProperty(c),
+  sn_create_atf_suite: async (c, a) => atf.createAtfSuite(c, atf.createAtfSuiteSchema.parse(a)),
+  sn_run_atf_suite: async (c, a) => atf.runAtfSuite(c, atf.runAtfSuiteSchema.parse(a)),
+  sn_get_atf_results: async (c, a) => atf.getAtfResults(c, atf.getAtfResultsSchema.parse(a)),
 
   // Brownfield: Instance Intelligence
   sn_analyze_instance: async (c, a) => instanceAnalyzer.analyzeInstance(c, instanceAnalyzer.analyzeInstanceSchema.parse(a)),
