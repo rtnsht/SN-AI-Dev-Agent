@@ -1518,10 +1518,10 @@ export default function Home() {
             setGateInfo((prev) => ({ ...prev, dailyUsed: data.dailyUsed ?? prev.dailyUsed, dailyLimit: data.dailyLimit ?? prev.dailyLimit }));
             setShowApiKeyGate(true);
             setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: data.message || "Daily limit reached. Add your API key to continue.", timestamp: new Date().toISOString() }]);
-          } else if (data.error === "anthropic_rate_limit" || data.code === "provider_rate_limit" || data.code === "provider_billing") {
+          } else if (data.error === "anthropic_rate_limit" || data.code === "provider_rate_limit" || data.code === "provider_billing" || data.code === "provider_auth") {
             const isServerKey = data.usedServerKey !== false;
             if (allowUserApiKeys && isServerKey) { setPendingRetry({ text, images, files }); setProviderError(data.code || data.error); setShowApiKeyGate(true); }
-            setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: (allowUserApiKeys && isServerKey) ? "**Shared key limit hit** -- Add your own API key to continue." : "**API rate limit hit** -- Please try again later.", timestamp: new Date().toISOString() }]);
+            setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: (allowUserApiKeys && isServerKey) ? "**Shared key limit hit** -- Add your own API key to continue." : data.code === "provider_auth" ? "**API key error** -- Check your API key in Settings." : "**API rate limit hit** -- Please try again later.", timestamp: new Date().toISOString() }]);
           } else {
             setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: data.message || "Rate limit reached. Please try again later.", timestamp: new Date().toISOString() }]);
           }

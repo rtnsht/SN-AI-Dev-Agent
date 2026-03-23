@@ -39,7 +39,17 @@ export function getPoolSize(provider: AiProvider): number {
 
 /* ── Session-sticky binding (in-memory, per serverless instance) ─ */
 
+const MAX_SESSION_BINDINGS = 10_000;
 const sessionBindings = new Map<string, number>();
+
+function evictOldestBindings() {
+  const toRemove = Math.floor(MAX_SESSION_BINDINGS * 0.2);
+  const iter = sessionBindings.keys();
+  for (let i = 0; i < toRemove; i++) {
+    const key = iter.next().value;
+    if (key !== undefined) sessionBindings.delete(key);
+  }
+}
 
 function getPoolKey(sessionId: string, provider: AiProvider): string | null {
   const pool = getPool(provider);
@@ -48,6 +58,7 @@ function getPoolKey(sessionId: string, provider: AiProvider): string | null {
   const bindingKey = `${sessionId}:${provider}`;
   let idx = sessionBindings.get(bindingKey);
   if (idx === undefined || idx >= pool.length) {
+    if (sessionBindings.size >= MAX_SESSION_BINDINGS) evictOldestBindings();
     idx = Math.floor(Math.random() * pool.length);
     sessionBindings.set(bindingKey, idx);
   }
