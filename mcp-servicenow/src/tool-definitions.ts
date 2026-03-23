@@ -2354,9 +2354,12 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
   ]),
 
   deployment: new Set([
-    // Update set completion
+    // Update set completion & management
     'sn_create_update_set', 'sn_set_current_update_set',
     'sn_complete_update_set', 'sn_move_to_update_set', 'sn_verify_update_set_capture',
+    // Pre-deployment quality scan
+    'sn_code_quality_score', 'sn_find_anti_patterns', 'sn_detect_ootb_overrides',
+    'sn_validate_change', 'sn_preview_change_impact',
     // Change management & audit
     'sn_log_change', 'sn_get_audit_history',
     'sn_request_approval', 'sn_process_approval', 'sn_get_approval_status',
