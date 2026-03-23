@@ -198,14 +198,20 @@ export async function createAtfSuite(client: ServiceNowClient, input: z.infer<ty
       }
     }
 
+    const hasErrors = errors.length > 0;
+    const hasTests = createdTests.length > 0;
+
     return {
-      success: true,
-      message: `ATF Test Suite "${input.name}" created with ${createdTests.length} test(s)`,
+      success: hasTests,
+      partialSuccess: hasTests && hasErrors ? true : undefined,
+      message: hasTests
+        ? `ATF Test Suite "${input.name}" created with ${createdTests.length} test(s)${hasErrors ? ` (${errors.length} error(s) during creation)` : ''}`
+        : `Failed to create any tests for suite "${input.name}"`,
       suite: { sys_id: suiteId, name: input.name },
       tests: createdTests,
       stepConfigsFound: Object.keys(configMap),
-      errors: errors.length > 0 ? errors : undefined,
-      note: 'Use sn_run_atf_suite to trigger execution, or run manually from the ServiceNow UI.'
+      errors: hasErrors ? errors : undefined,
+      note: hasTests ? 'Use sn_run_atf_suite to trigger execution, or run manually from the ServiceNow UI.' : 'Review the errors above and try again.'
     };
   } catch (err) {
     return {
@@ -226,15 +232,17 @@ export async function runAtfSuite(client: ServiceNowClient, input: z.infer<typeo
 
   // ── Tier 1: CI/CD API ──
   try {
-    const response = await (client as unknown as { client: { post: (url: string, data?: unknown) => Promise<{ data: unknown }> } }).client.post(
-      `/api/sn_cicd/testsuite/run?test_suite_sys_id=${input.suite_sys_id}`
+    // Use the public callScriptedRestApi method — avoids unsafe private client access
+    const response = await client.callScriptedRestApi(
+      `/api/sn_cicd/testsuite/run?test_suite_sys_id=${input.suite_sys_id}`,
+      'POST'
     );
 
     return {
       success: true,
       method: 'cicd_api',
       message: `ATF suite "${suiteName}" execution triggered via CI/CD API`,
-      response: response.data,
+      response,
       note: 'Use sn_get_atf_results to poll for completion and results.'
     };
   } catch (cicdErr) {
@@ -292,82 +300,98 @@ async function runAtfViaBrowser(
     };
   }
 
-  let browser: unknown;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let browser: any = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let context: any = null;
+
   try {
     const instanceUrl = client.instanceUrl?.replace(/\/+$/, '') || '';
-
     if (!instanceUrl) {
       return { success: false, error: 'Instance URL not available for browser navigation' };
     }
 
-    browser = await chromium.launch({ headless: true });
+    // Determine headless mode from env (matches browser-scope-switcher.ts pattern)
+    const browserMode = process.env.BROWSER_SCOPE_SWITCH_MODE || 'headless';
+    const headless = browserMode !== 'headed';
 
-    // Extract credentials from the client for browser authentication
+    browser = await chromium.launch({ headless });
+
+    // Build context options with auth credentials
     const creds = client.credentials;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const contextOptions: Record<string, any> = {};
+    const contextOptions: Record<string, any> = { ignoreHTTPSErrors: true };
     if (creds.username && creds.password) {
       contextOptions.httpCredentials = { username: creds.username, password: creds.password };
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const context = await (browser as any).newContext(contextOptions);
+    context = await browser.newContext(contextOptions);
 
-    // Inject session cookies if available (mirrors browser-scope-switcher pattern)
+    // Inject session cookies if available (mirrors browser-scope-switcher.ts pattern)
     if (creds.sessionCookies?.length) {
-      const playwrightCookies = creds.sessionCookies.map((c) => ({
-        name: c.name,
-        value: c.value,
-        domain: c.domain,
-        path: c.path || '/',
-        ...(c.expires ? { expires: c.expires } : {}),
-        httpOnly: c.httpOnly ?? false,
-        secure: c.secure ?? true,
-        sameSite: (c.sameSite || 'Lax') as 'Strict' | 'Lax' | 'None',
-      }));
-      await context.addCookies(playwrightCookies);
+      const playwrightCookies = creds.sessionCookies
+        .filter((c: { name?: string; value?: string; domain?: string }) => c.name && c.value && c.domain)
+        .map((c: { name: string; value: string; domain: string; path?: string; expires?: number; httpOnly?: boolean; secure?: boolean; sameSite?: string }) => ({
+          name: c.name,
+          value: c.value,
+          domain: c.domain,
+          path: c.path || '/',
+          ...(c.expires ? { expires: c.expires } : {}),
+          httpOnly: c.httpOnly ?? false,
+          secure: c.secure ?? true,
+          sameSite: (c.sameSite || 'Lax') as 'Strict' | 'Lax' | 'None',
+        }));
+      if (playwrightCookies.length > 0) {
+        await context.addCookies(playwrightCookies);
+      }
     }
 
     const page = await context.newPage();
 
+    // Navigate to the test suite
+    await page.goto(`${instanceUrl}/sys_atf_test_suite.do?sys_id=${suiteSysId}`, {
+      timeout: 30000,
+      waitUntil: 'domcontentloaded'
+    });
+
+    // Wait for page to be fully loaded (no more network activity)
+    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {
+      // networkidle may not fire on complex SN pages — proceed anyway
+    });
+
+    // Look for the "Run Test Suite" button using explicit selector wait
+    const runButtonSelector = 'button:has-text("Run Test Suite"), [id*="run_suite"], [data-action="runSuite"]';
     try {
-      // Navigate to the test suite
-      await page.goto(`${instanceUrl}/sys_atf_test_suite.do?sys_id=${suiteSysId}`, {
-        timeout: 30000,
-        waitUntil: 'domcontentloaded'
-      });
-
-      // Wait for the page to load and look for the Run button
-      await page.waitForTimeout(3000);
-
-      // Try clicking "Run Test Suite" button
-      const runButton = page.locator('button:has-text("Run Test Suite"), [id*="run_suite"], [data-action="runSuite"]');
-      if (await runButton.count() > 0) {
-        await runButton.first().click();
-        await page.waitForTimeout(5000); // Wait for execution to start
-
-        return {
-          success: true,
-          method: 'browser_playwright',
-          message: `ATF suite "${suiteName}" triggered via browser automation. Use sn_get_atf_results to poll for results.`
-        };
-      }
-
+      await page.waitForSelector(runButtonSelector, { timeout: 10000 });
+    } catch {
       return {
         success: false,
-        error: 'Could not find the Run Test Suite button on the page'
+        error: 'Could not find the Run Test Suite button. The page may require authentication or the suite may not exist.'
       };
-    } finally {
-      await context.close();
     }
+
+    const runButton = page.locator(runButtonSelector);
+    await runButton.first().click();
+
+    // Wait for SN to process the execution request (watch for network activity to settle)
+    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {
+      // Best effort — execution may have been triggered even if networkidle doesn't fire
+    });
+
+    return {
+      success: true,
+      method: 'browser_playwright',
+      message: `ATF suite "${suiteName}" triggered via browser automation. Use sn_get_atf_results to poll for results.`
+    };
   } catch (err) {
     return {
       success: false,
       error: `Browser automation failed: ${err instanceof Error ? err.message : String(err)}`
     };
   } finally {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    try { if (browser) await (browser as any).close(); } catch { /* best effort */ }
+    // Safe cleanup — null-guarded to prevent ReferenceError if newContext() or launch() threw
+    try { if (context) await context.close(); } catch { /* best effort */ }
+    try { if (browser) await browser.close(); } catch { /* best effort */ }
   }
 }
 
