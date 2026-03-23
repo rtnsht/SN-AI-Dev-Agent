@@ -169,7 +169,7 @@ export function endSession(sessionId: string, outcome: "success" | "error" | "ca
   }
 }
 
-// Core log function — never throws (safe on read-only filesystem e.g. Render)
+// Core log function — never throws (safe on read-only filesystem e.g. DigitalOcean App Platform)
 export function log(
   level: LogLevel,
   sessionId: string,
@@ -200,7 +200,7 @@ export function log(
       }
     });
   } catch (err) {
-    // Read-only or restricted fs (e.g. Render) — do not rethrow; console output below
+    // Read-only or restricted fs (e.g. DigitalOcean App Platform) — do not rethrow; console output below
     if (process.env.NODE_ENV !== "test") {
       console.warn("[logger] File write skipped (fs error):", err instanceof Error ? err.message : String(err));
     }

@@ -63,7 +63,7 @@ type BrowserMode = "headless" | "headed" | "cdp";
 type BrowserAuthSuccessMode = "session" | "shell";
 type BrowserWaitResult = BrowserScopeSwitchResult & { page?: Page };
 
-// NOTE: In-memory rate limits assume a persistent server process (e.g., Render).
+// NOTE: In-memory rate limits assume a persistent server process (e.g., DigitalOcean App Platform).
 // In serverless/Lambda deployments these reset on cold start and offer no protection.
 const scopeRateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const connectRateLimitMap = new Map<string, { count: number; resetAt: number }>();

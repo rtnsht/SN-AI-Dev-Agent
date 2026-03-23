@@ -283,7 +283,7 @@ export async function POST(request: NextRequest) {
           }
         };
 
-        // SSE heartbeat keepalive — prevents idle connection timeout on proxies/platforms (e.g. Render)
+        // SSE heartbeat keepalive — prevents idle connection timeout on proxies/platforms (e.g. DigitalOcean App Platform)
         const HEARTBEAT_INTERVAL_MS = 15_000;
         const heartbeatPayload = encoder.encode(": heartbeat\n\n");
         const heartbeatInterval = setInterval(() => {
