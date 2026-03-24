@@ -439,9 +439,9 @@ export async function addCatalogItemToCategory(client: ServiceNowClient, input: 
       } else {
         throw new Error(result.error || 'Helper API returned failure');
       }
-    } catch (helperError) {
-      // Helper API endpoint may not be deployed yet (older instances).
-      // Fall back to Table API.
+    } catch {
+      // Helper API endpoint may not be deployed yet (older instances) or returned 404.
+      // Fall back to Table API (may fail with 403 if ACLs restrict it).
       const record = await client.createRecord('sc_cat_item_category', {
         sc_cat_item: input.sc_cat_item,
         sc_category: input.sc_category,
@@ -504,9 +504,9 @@ export async function addCatalogItemToCatalog(client: ServiceNowClient, input: z
       } else {
         throw new Error(result.error || 'Helper API returned failure');
       }
-    } catch (helperError) {
-      // Helper API endpoint may not be deployed yet (older instances).
-      // Fall back to Table API.
+    } catch {
+      // Helper API endpoint may not be deployed yet (older instances) or returned 404.
+      // Fall back to Table API (may fail with 403 if ACLs restrict it).
       const record = await client.createRecord('sc_cat_item_catalog', {
         sc_cat_item: input.sc_cat_item,
         sc_catalog: input.sc_catalog,
