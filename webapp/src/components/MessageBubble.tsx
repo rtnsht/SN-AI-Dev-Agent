@@ -318,7 +318,23 @@ const VIEW_OPTIONS: { key: DiagramView; label: string }[] = [
   { key: "code", label: "Code" },
 ];
 
-let mermaidInitialized = false;
+let mermaidInitPromise: Promise<void> | null = null;
+
+async function ensureMermaidInit(): Promise<void> {
+  if (mermaidInitPromise) return mermaidInitPromise;
+  mermaidInitPromise = (async () => {
+    const mermaid = (await import("mermaid")).default;
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: document.documentElement.getAttribute("data-theme") === "light" ? "default" : "dark",
+      securityLevel: "strict",
+      fontFamily: "ui-sans-serif, system-ui, sans-serif",
+    });
+  })();
+  return mermaidInitPromise;
+}
+
+let idCounter = 0;
 
 /** Mermaid diagram renderer with four view modes: visual SVG, ASCII art, text outline, raw code */
 function MermaidDiagram({ code }: { code: string }) {
@@ -330,22 +346,14 @@ function MermaidDiagram({ code }: { code: string }) {
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [view, setView] = useState<DiagramView>("diagram");
-  const idRef = useRef(`mermaid-${crypto.randomUUID()}`);
+  const idRef = useRef(`mermaid-${Date.now()}-${++idCounter}`);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
+        await ensureMermaidInit();
         const mermaid = (await import("mermaid")).default;
-        if (!mermaidInitialized) {
-          mermaid.initialize({
-            startOnLoad: false,
-            theme: document.documentElement.getAttribute("data-theme") === "light" ? "default" : "dark",
-            securityLevel: "strict",
-            fontFamily: "ui-sans-serif, system-ui, sans-serif",
-          });
-          mermaidInitialized = true;
-        }
         await mermaid.parse(mermaidCode.trim());
         const { svg: rendered } = await mermaid.render(idRef.current, mermaidCode.trim());
         if (!cancelled) setSvg(rendered);

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAccessStatus, getTierLimits } from "@/lib/access-tier";
 import { SESSION_COOKIE_NAME, validateSession } from "@/lib/auth";
 import { getClientIp } from "@/lib/client-ip";
-import { hasServerKey, getPoolSize } from "@/lib/key-resolver";
+import { hasServerKey } from "@/lib/key-resolver";
 
 /**
  * GET /api/config — returns public app configuration.
@@ -56,7 +56,6 @@ export async function GET(request: NextRequest) {
     showLiveStatus: process.env.NEXT_PUBLIC_SHOW_LIVE_STATUS !== "false",
     // Whether users are allowed to provide their own Claude API key (default: true)
     allowUserApiKeys: process.env.ALLOW_USER_API_KEYS !== "false",
-    keyPoolSize: { anthropic: getPoolSize("anthropic"), openrouter: getPoolSize("openrouter") },
     // Browser-assisted ServiceNow sign-in availability
     browserScopeSwitchEnabled:
       process.env.ENABLE_BROWSER_SCOPE_SWITCH === "true" ||

@@ -1672,8 +1672,11 @@ export default function AdminPage() {
       {/* ─── Engine Config Tab ─── */}
       {tab === "engine" && !loading && (
         <>
-          <p style={{ color: "var(--text-secondary)", fontSize: "13px", marginBottom: "16px" }}>
-            Configure AI engine round limits and planner settings. Changes take up to 5 minutes to apply across active sessions.
+          <p style={{ color: "var(--text-secondary)", fontSize: "13px", marginBottom: "8px" }}>
+            Configure AI engine round limits and planner settings.
+          </p>
+          <p style={{ color: "var(--text-disabled)", fontSize: "11px", marginBottom: "16px" }}>
+            Config is cached per server worker for 5 minutes. In serverless deployments (Vercel), each worker has its own cache &mdash; changes propagate across all workers within 5 minutes.
           </p>
 
           {engineDirty && (

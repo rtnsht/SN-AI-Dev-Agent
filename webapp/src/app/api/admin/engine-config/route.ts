@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
 
     const db = getSupabase();
 
-    const { data: existing } = await db.from("engine_config").select("value").eq("key", key).single();
+    const { data: existing } = await db.from("engine_config").select("value").eq("key", key).maybeSingle();
     const oldValue = existing?.value;
 
     const { data, error } = await db

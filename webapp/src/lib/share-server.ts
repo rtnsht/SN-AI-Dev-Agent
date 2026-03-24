@@ -127,8 +127,15 @@ export async function resolveShareSessionContext(
   } else {
     const rec = (recordedIp || "").trim();
     const cur = (currentIp || "").trim();
-    if (!rec || rec === "unknown" || !cur || cur === "unknown" || rec !== cur) {
-      return { ok: false, status: 403, error: "Session verification failed" };
+    const ipMatch = rec && rec !== "unknown" && cur && cur !== "unknown" && rec === cur;
+    if (!ipMatch) {
+      // IP may change on mobile networks (CGNAT, WiFi→LTE). Fall back to
+      // sessionId knowledge as a weak-but-sufficient signal for share APIs
+      // (the share feature is low-risk; the worst outcome is an inflated share card).
+      const hasValidSession = !!data.session_id && !!data.instance_url && !!data.username;
+      if (!hasValidSession) {
+        return { ok: false, status: 403, error: "Session verification failed" };
+      }
     }
   }
 

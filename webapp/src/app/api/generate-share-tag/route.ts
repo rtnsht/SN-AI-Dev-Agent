@@ -5,11 +5,13 @@ import { getClientIp } from "@/lib/client-ip";
 import { parseShareTagBody } from "@/lib/request-validation";
 import { resolveShareSessionContext } from "@/lib/share-server";
 import { SHARE_FALLBACK_TAG, sanitizeHashtag } from "@/lib/share-content";
+import { resolveLlmApiKey } from "@/lib/key-resolver";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
 async function generateTagWithAnthropic(durationMin: number, phaseCount: number, toolCount: number, assistantCount: number): Promise<string> {
-  const apiKey = process.env.CLAUDE_API_KEY || "";
+  const resolved = resolveLlmApiKey("share-tag", "anthropic", "", false);
+  const apiKey = resolved?.apiKey || "";
   if (!apiKey) return SHARE_FALLBACK_TAG;
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {

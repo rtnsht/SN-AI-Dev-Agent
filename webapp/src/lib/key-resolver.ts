@@ -17,7 +17,11 @@ export interface KeyResolution {
   source: "byok" | "pool" | "env_fallback";
 }
 
-/* ── Pool parsing (cached at module load) ─────────────────────── */
+/*
+ * Pool parsing — cached at module load time.
+ * Env var changes (CLAUDE_API_KEYS / OPENROUTER_API_KEYS) require a process
+ * restart to take effect because pools are frozen at import time.
+ */
 
 function parseKeyPool(envVar: string): string[] {
   return (process.env[envVar] || "")
@@ -33,13 +37,21 @@ function getPool(provider: AiProvider): string[] {
   return provider === "anthropic" ? anthropicPool : openrouterPool;
 }
 
-export function getPoolSize(provider: AiProvider): number {
-  return getPool(provider).length;
-}
+/* ── Session-sticky binding (in-memory, capped LRU) ───────────── */
 
-/* ── Session-sticky binding (in-memory, per serverless instance) ─ */
-
+const SESSION_BINDINGS_MAX = 10_000;
+const SESSION_BINDINGS_EVICT_BATCH = 2_000;
 const sessionBindings = new Map<string, number>();
+
+function evictOldestBindings(): void {
+  if (sessionBindings.size <= SESSION_BINDINGS_MAX) return;
+  const iter = sessionBindings.keys();
+  for (let i = 0; i < SESSION_BINDINGS_EVICT_BATCH; i++) {
+    const next = iter.next();
+    if (next.done) break;
+    sessionBindings.delete(next.value);
+  }
+}
 
 function getPoolKey(sessionId: string, provider: AiProvider): string | null {
   const pool = getPool(provider);
@@ -48,8 +60,9 @@ function getPoolKey(sessionId: string, provider: AiProvider): string | null {
   const bindingKey = `${sessionId}:${provider}`;
   let idx = sessionBindings.get(bindingKey);
   if (idx === undefined || idx >= pool.length) {
-    idx = Math.floor(Math.random() * pool.length);
+    idx = idx !== undefined ? idx % pool.length : Math.floor(Math.random() * pool.length);
     sessionBindings.set(bindingKey, idx);
+    evictOldestBindings();
   }
   return pool[idx];
 }

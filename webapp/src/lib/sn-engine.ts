@@ -156,7 +156,9 @@ const PHASE_GATE_REMINDERS: Partial<Record<string, { threshold: number; message:
 /* ── Planner budget adjustment ────────────────────────────────── */
 
 /** Shared helper for reducing the round budget after the task planner pre-fetches data.
- *  Used by both chatStream (Anthropic) and chatStreamOpenRouter. */
+ *  Used by both chatStream (Anthropic) and chatStreamOpenRouter.
+ *  Note: when effectiveMax < minimum, the result is clamped to effectiveMax (by design —
+ *  the phase limit is a hard cap that the minimum floor cannot override). */
 function computeAdjustedRounds(effectiveMax: number, factor: number = 0.75, minimum: number = 10): number {
   const adjusted = Math.max(minimum, Math.ceil(effectiveMax * factor));
   return Math.min(effectiveMax, adjusted);
@@ -852,7 +854,8 @@ export async function chat(
     return chatOpenRouter(credentials, messages, model, sessionId, phase);
   }
 
-  const maxToolRounds = getPhaseRoundLimit(phase);
+  const engineConfig = await loadEngineConfig();
+  const maxToolRounds = getPhaseRoundLimit(phase, engineConfig);
   const registry = getToolRegistry();
   const snClient = createSnClient(credentials, registry);
   const tools = getFilteredTools(phase, getToolDefs());
@@ -1002,7 +1005,8 @@ async function chatOpenRouter(
   sessionId: string,
   phase?: string | null
 ): Promise<ChatResponse> {
-  const maxToolRounds = getPhaseRoundLimit(phase);
+  const engineConfig = await loadEngineConfig();
+  const maxToolRounds = getPhaseRoundLimit(phase, engineConfig);
   const registry = getToolRegistry();
   const snClient = createSnClient(credentials, registry);
   const tools = toOpenRouterTools(getFilteredTools(phase, getToolDefs()));

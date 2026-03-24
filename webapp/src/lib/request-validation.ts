@@ -603,6 +603,11 @@ export function parseEngineConfigBody(body: unknown): ValidationResult<ParsedEng
 
   if (key === "phase_round_limits") {
     if (!isRecord(value)) return { ok: false, error: "phase_round_limits must be an object" };
+    const valueKeys = Object.keys(value as Record<string, unknown>);
+    const extraKeys = valueKeys.filter(k => !REQUIRED_PHASES.includes(k));
+    if (extraKeys.length > 0) {
+      return { ok: false, error: `Unknown phase keys: ${extraKeys.join(", ")}. Allowed: ${REQUIRED_PHASES.join(", ")}` };
+    }
     for (const phase of REQUIRED_PHASES) {
       if (typeof (value as Record<string, unknown>)[phase] !== "number") return { ok: false, error: `Missing or invalid value for phase: ${phase}` };
       const v = (value as Record<string, number>)[phase];
