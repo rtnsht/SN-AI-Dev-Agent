@@ -182,8 +182,8 @@ export function parseShareTagBody(body: unknown): ValidationResult<ParsedShareTa
 
   const numericFields = ["durationMin", "phaseCount", "toolCount", "assistantCount"] as const;
   for (const field of numericFields) {
-    if (typeof body[field] !== "number" || !Number.isFinite(body[field])) {
-      return { ok: false, error: `${field} must be a number` };
+    if (typeof body[field] !== "number" || !Number.isFinite(body[field]) || !Number.isInteger(body[field])) {
+      return { ok: false, error: `${field} must be an integer` };
     }
   }
 
@@ -609,9 +609,9 @@ export function parseEngineConfigBody(body: unknown): ValidationResult<ParsedEng
       return { ok: false, error: `Unknown phase keys: ${extraKeys.join(", ")}. Allowed: ${REQUIRED_PHASES.join(", ")}` };
     }
     for (const phase of REQUIRED_PHASES) {
-      if (typeof (value as Record<string, unknown>)[phase] !== "number") return { ok: false, error: `Missing or invalid value for phase: ${phase}` };
-      const v = (value as Record<string, number>)[phase];
-      if (v < 1 || v > 100) return { ok: false, error: `${phase} must be between 1 and 100` };
+      const raw = (value as Record<string, unknown>)[phase];
+      if (typeof raw !== "number" || !Number.isFinite(raw) || !Number.isInteger(raw)) return { ok: false, error: `Missing or invalid value for phase: ${phase}` };
+      if (raw < 1 || raw > 100) return { ok: false, error: `${phase} must be between 1 and 100` };
     }
   } else if (key === "default_round_limit") {
     const n = Number(value);

@@ -49,13 +49,21 @@ export default function APIKeyGateModal({ open, onClose, onKeyProvided, dailyUse
   }
 
   const heading = providerError
-    ? "Shared key hit a limit"
+    ? providerError === "provider_auth"
+      ? "API key error"
+      : providerError === "provider_billing"
+        ? "Billing limit reached"
+        : "Shared key hit a limit"
     : dailyUsed >= dailyLimit
       ? `You\u2019ve used ${dailyUsed}/${dailyLimit} requests today`
       : "Bring Your Own Key";
 
   const subtext = providerError
-    ? "The app\u2019s shared AI key is temporarily rate-limited. Enter your own key to continue this conversation."
+    ? providerError === "provider_auth"
+      ? "The server API key failed authentication. Enter your own key to continue."
+      : providerError === "provider_billing"
+        ? "The server API key\u2019s billing limit has been reached. Enter your own key to continue."
+        : "The app\u2019s shared AI key is temporarily rate-limited. Enter your own key to continue this conversation."
     : dailyUsed >= dailyLimit
       ? "Add your own API key to continue with unlimited access."
       : `Use your own ${APP_NAME === "SN AI Agent" ? "Anthropic or OpenRouter" : ""} API key.`;
@@ -67,6 +75,9 @@ export default function APIKeyGateModal({ open, onClose, onKeyProvided, dailyUse
 
       {/* Slide-in panel from right */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="API Key"
         className="fixed top-0 right-0 z-50 h-full w-full max-w-sm shadow-2xl flex flex-col animate-slide-in-right"
         style={{ background: "var(--surface-primary)", borderLeft: "1px solid var(--border-emphasis)" }}
       >
@@ -76,7 +87,7 @@ export default function APIKeyGateModal({ open, onClose, onKeyProvided, dailyUse
             <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>{heading}</h2>
             <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{subtext}</p>
           </div>
-          <button onClick={onClose} className="p-1 rounded-md" style={{ color: "var(--text-disabled)" }}
+          <button onClick={onClose} aria-label="Close" className="p-1 rounded-md" style={{ color: "var(--text-disabled)" }}
             onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-secondary)")}
             onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
           >

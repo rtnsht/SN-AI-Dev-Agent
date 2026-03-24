@@ -1775,9 +1775,16 @@ export default function AdminPage() {
                     { key: "planner_budget_factor", value: parseFloat(engineFactor) },
                     { key: "planner_budget_minimum", value: parseInt(engineMinimum, 10) },
                   ];
+                  const savedKeys: string[] = [];
                   for (const s of saves) {
                     const res = await fetch("/api/admin/engine-config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(s) });
-                    if (!res.ok) { const e = await res.json(); throw new Error(e.error || "Save failed"); }
+                    if (!res.ok) {
+                      const e = await res.json();
+                      throw new Error(savedKeys.length > 0
+                        ? `Partial save: saved ${savedKeys.join(", ")} but failed on ${s.key}: ${e.error || "unknown error"}. Please re-save.`
+                        : (e.error || "Save failed"));
+                    }
+                    savedKeys.push(s.key);
                   }
                   setEngineDirty(false);
                   setMessage("Engine config saved. Changes take up to 5 minutes to apply across active sessions.");
@@ -1788,7 +1795,7 @@ export default function AdminPage() {
                 setActionLoading(null);
               }}
             >
-              {actionLoading ? "Saving..." : "Save All"}
+              {actionLoading === "engine-save" ? "Saving..." : "Save All"}
             </button>
             <button
               className="admin-btn"

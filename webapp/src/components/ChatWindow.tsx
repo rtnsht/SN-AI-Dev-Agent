@@ -1854,7 +1854,6 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
                       onApprove={onApprove}
                       onChoiceSelect={onChoiceSelect}
                       showToolDetails={showToolDetails}
-                      userName={userName}
                     />
                   </div>
                 );

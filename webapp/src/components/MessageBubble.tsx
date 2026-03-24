@@ -13,8 +13,6 @@ interface Props {
   onChoiceSelect?: (choiceKey: string) => void;
   /** When false, tool executions show only a compact summary line (no expandable cards) */
   showToolDetails?: boolean;
-  /** Authenticated user's display name (for avatar initial) */
-  userName?: string;
 }
 
 /** Copy-to-clipboard button with brief "Copied!" feedback */
@@ -331,6 +329,7 @@ async function ensureMermaidInit(): Promise<void> {
       fontFamily: "ui-sans-serif, system-ui, sans-serif",
     });
   })();
+  mermaidInitPromise.catch(() => { mermaidInitPromise = null; });
   return mermaidInitPromise;
 }
 
@@ -350,6 +349,9 @@ function MermaidDiagram({ code }: { code: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    setSvg("");
+    setError("");
+    setView("diagram");
     (async () => {
       try {
         await ensureMermaidInit();
@@ -445,6 +447,11 @@ class DiagramErrorBoundary extends Component<{ code: string; children: ReactNode
   static getDerivedStateFromError() {
     return { hasError: true };
   }
+  componentDidUpdate(prevProps: { code: string }) {
+    if (prevProps.code !== this.props.code && this.state.hasError) {
+      this.setState({ hasError: false });
+    }
+  }
   render() {
     if (this.state.hasError) {
       return (
@@ -502,7 +509,7 @@ const MD_COMPONENTS: Record<string, any> = {
 };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-export default function MessageBubble({ message, onApprove, onChoiceSelect, showToolDetails = true, userName }: Props) {
+export default function MessageBubble({ message, onApprove, onChoiceSelect, showToolDetails = true }: Props) {
   const [approving, setApproving] = useState(false);
   const [msgExpanded, setMsgExpanded] = useState(true);
   const [isLong, setIsLong] = useState(false);

@@ -62,8 +62,8 @@ export async function GET(request: NextRequest) {
     }
 
     const sessionId = request.nextUrl.searchParams.get("sessionId") || "";
-    if (!sessionId) {
-      return new Response("Missing sessionId", { status: 400 });
+    if (!sessionId || !/^sess_\d{13,20}_[A-Za-z0-9-]{6,64}$/.test(sessionId)) {
+      return new Response("Missing or invalid sessionId", { status: 400 });
     }
 
     const resolved = await resolveShareSessionContext(request, sessionId);

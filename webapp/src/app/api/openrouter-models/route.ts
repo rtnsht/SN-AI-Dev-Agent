@@ -8,8 +8,9 @@ import { resolveLlmApiKey } from "@/lib/key-resolver";
  */
 export async function GET(request: NextRequest) {
   try {
+    const allowUserKeys = process.env.ALLOW_USER_API_KEYS !== "false";
     const headerKey = request.headers.get("x-openrouter-key") || "";
-    const resolved = resolveLlmApiKey("openrouter-models", "openrouter", headerKey, true);
+    const resolved = resolveLlmApiKey("openrouter-models", "openrouter", headerKey, allowUserKeys);
     const apiKey = resolved?.apiKey || "";
 
     const models = await fetchOpenRouterModels(apiKey || undefined);

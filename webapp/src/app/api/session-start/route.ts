@@ -114,12 +114,16 @@ async function resolveUserId(request: NextRequest): Promise<string | null> {
  *  the row is created. Checks and logs Supabase errors instead of swallowing them. */
 async function getExistingSessionOwner(sessionId: string): Promise<{ exists: boolean; userId: string | null }> {
   const db = getSupabase();
-  const { data } = await db
+  const { data, error } = await db
     .from("session_logs")
     .select("user_id")
     .eq("session_id", sessionId)
     .maybeSingle();
 
+  if (error) {
+    console.error("[session-start] session ownership check failed:", error.message);
+    throw new Error("Failed to verify session ownership");
+  }
   if (!data) return { exists: false, userId: null };
   return { exists: true, userId: data.user_id || null };
 }

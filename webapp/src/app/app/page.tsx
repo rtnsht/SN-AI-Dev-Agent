@@ -1347,11 +1347,27 @@ export default function Home() {
                     } else if (event.type === "error") {
                       setLiveStatus(null);
                       let errorContent = `Error: ${event.message}`;
-                      // OpenRouter rate limit -- provide actionable guidance
-                      if (typeof event.message === "string" && event.message.startsWith("openrouter_rate_limit|")) {
-                        const parts = event.message.split("|");
+                      const msg = typeof event.message === "string" ? event.message : "";
+                      // Detect provider errors forwarded from sn-engine via SSE
+                      const isProviderRateLimit = msg.includes("Rate limit exceeded after retries") || msg.startsWith("openrouter_rate_limit|");
+                      const isProviderAuth = msg.includes("authentication failed") || msg.includes("invalid") && msg.includes("api key");
+                      if (isProviderRateLimit || isProviderAuth) {
+                        const hasUserKey = aiProvider === "openrouter" ? !!credentials.openRouterApiKey : !!credentials.claudeApiKey;
+                        const isServerKey = !hasUserKey;
+                        if (allowUserApiKeys && isServerKey) {
+                          setPendingRetry({ text, images, files });
+                          setProviderError(isProviderAuth ? "provider_auth" : "provider_rate_limit");
+                          setShowApiKeyGate(true);
+                        }
+                      }
+                      if (msg.startsWith("openrouter_rate_limit|")) {
+                        const parts = msg.split("|");
                         const rateLimitedModel = parts[1] || "the selected model";
                         errorContent = `**Rate limited** -- The model \`${rateLimitedModel}\` is temporarily rate-limited by its upstream provider after multiple retry attempts.\n\n**What you can do:**\n- **Switch to a different model** from the model selector\n- **Wait a few minutes** and try again\n- **Add your own API key** on [OpenRouter](https://openrouter.ai/settings/integrations) for higher limits`;
+                      } else if (isProviderRateLimit) {
+                        errorContent = allowUserApiKeys ? "**Shared key limit hit** -- Add your own API key to continue." : "**API rate limit hit** -- Please try again later.";
+                      } else if (isProviderAuth) {
+                        errorContent = "**API key error** -- Check your API key in Settings.";
                       }
                       setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: errorContent, timestamp: new Date().toISOString() }]);
                       setIsLoading(false);
@@ -1691,6 +1707,8 @@ export default function Home() {
     focusModeAutoTriggeredRef.current = false;
     setModelLocked(false);
     setPendingRetry(null);
+    setProviderError(null);
+    setShowApiKeyGate(false);
     setActivityLog([]);
     setTaskPlan(null);
     // Clear persisted session state

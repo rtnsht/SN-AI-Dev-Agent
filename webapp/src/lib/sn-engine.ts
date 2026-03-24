@@ -434,7 +434,7 @@ function sanitizeApiError(raw: string): string {
   }
 
   // ── Category: Context length exceeded ──────────────────────────
-  if (errorMsg.includes("context length") || errorMsg.includes("too many tokens") || errorMsg.includes("maximum.*tokens") || errorMsg.includes("prompt is too long")) {
+  if (errorMsg.includes("context length") || errorMsg.includes("too many tokens") || /maximum\s+\S*\s*tokens/i.test(errorMsg) || errorMsg.includes("prompt is too long")) {
     return "The conversation has grown too long for the model's context window. Please start a new conversation.";
   }
 
@@ -444,7 +444,7 @@ function sanitizeApiError(raw: string): string {
   }
 
   // ── Category: Authentication / billing ─────────────────────────
-  if (raw.includes('"authentication_error"') || errorMsg.includes("invalid.*api.key") || errorMsg.includes("unauthorized")) {
+  if (raw.includes('"authentication_error"') || /invalid\s+\S*\s*api.key/i.test(errorMsg) || errorMsg.includes("unauthorized")) {
     return "API authentication failed. Please check your API key in Settings.";
   }
   if (errorMsg.includes("billing") || errorMsg.includes("quota") || errorMsg.includes("insufficient_quota")) {
@@ -475,11 +475,8 @@ function sanitizeApiError(raw: string): string {
     return "A temporary issue occurred. Please try again in a moment.";
   }
 
-  // ── Fallback: overly long or unrecognized errors ───────────────
-  if (raw.length > 200) {
-    return "An unexpected error occurred. Please try again. If the issue persists, try starting a new conversation.";
-  }
-  return raw;
+  // ── Fallback: unrecognized errors ───────────────────────────────
+  return "An unexpected error occurred. Please try again. If the issue persists, try starting a new conversation.";
 }
 
 /**
@@ -1352,8 +1349,12 @@ export async function* chatStream(
           role: "assistant",
           content: "I have received the pre-fetched data and will use it directly without re-querying.",
         };
-        const insertIdx = Math.max(0, anthropicMessages.length - 1);
-        anthropicMessages.splice(insertIdx, 0, dataMsg, ackMsg);
+        if (anthropicMessages.length === 0) {
+          anthropicMessages.push(dataMsg, ackMsg);
+        } else {
+          const insertIdx = anthropicMessages.length - 1;
+          anthropicMessages.splice(insertIdx, 0, dataMsg, ackMsg);
+        }
         plannerRanSuccessfully = true;
         logger.info(sessionId, "planner", "Gathered data injected into context", {
           dataKeys: gatheredData.size,
@@ -1664,12 +1665,19 @@ async function* chatStreamOpenRouter(
       // Claude 4.5+ and other models reject trailing assistant messages.
       if (gatheredData.size > 0) {
         const dataText = formatGatheredData(gatheredData);
-        const insertIdx = Math.max(0, orMessages.length - 1);
-        orMessages.splice(
-          insertIdx, 0,
-          { role: "user", content: dataText },
-          { role: "assistant", content: "I have received the pre-fetched data and will use it directly without re-querying." },
-        );
+        if (orMessages.length <= 1) {
+          orMessages.push(
+            { role: "user", content: dataText },
+            { role: "assistant", content: "I have received the pre-fetched data and will use it directly without re-querying." },
+          );
+        } else {
+          const insertIdx = orMessages.length - 1;
+          orMessages.splice(
+            insertIdx, 0,
+            { role: "user", content: dataText },
+            { role: "assistant", content: "I have received the pre-fetched data and will use it directly without re-querying." },
+          );
+        }
         const cfg = engineConfig || buildFallbackConfig();
         adjustedMaxRounds = computeAdjustedRounds(maxToolRounds, cfg.plannerBudgetFactor, cfg.plannerBudgetMinimum);
         logger.info(sessionId, "planner", "OpenRouter: Gathered data injected", { dataKeys: gatheredData.size, adjusted: adjustedMaxRounds });
@@ -1694,6 +1702,17 @@ async function* chatStreamOpenRouter(
     }
 
     rounds++;
+
+    // Context trimming (mirrors Anthropic streaming path)
+    const trimmedOrMessages = trimConversationHistory(orMessages as unknown as Anthropic.MessageParam[], sessionId);
+    if (trimmedOrMessages.length !== orMessages.length) {
+      orMessages.length = 0;
+      orMessages.push(...(trimmedOrMessages as unknown as typeof orMessages));
+      logger.info(sessionId, "context_mgmt", "OpenRouter stream: conversation history trimmed", {
+        afterMessages: trimmedOrMessages.length,
+      });
+    }
+
     yield { type: "status", message: `Round ${rounds}: Analyzing request...`, phase: "thinking" };
 
     // Retry loop for rate limits (mirrors Anthropic retry logic)
@@ -1797,11 +1816,11 @@ async function* chatStreamOpenRouter(
 
   const RESUME_DELAY_MS = 5000;
   logger.warn(sessionId, "chat_stream", "Stream max tool rounds reached (OpenRouter) -- signaling auto-resume", {
-    rounds: maxToolRounds, toolCount: toolExecutions.length, duplicateToolCalls: dedup.totalDuplicates,
+    rounds: adjustedMaxRounds, toolCount: toolExecutions.length, duplicateToolCalls: dedup.totalDuplicates,
   });
   yield {
     type: "max_rounds_reached",
-    reply: `[Reached ${maxToolRounds} tool rounds in ${phase || "unknown"} phase. Resuming automatically to continue work...]`,
+    reply: `[Reached ${adjustedMaxRounds} tool rounds in ${phase || "unknown"} phase. Resuming automatically to continue work...]`,
     toolExecutions: toPublicToolExecutions(toolExecutions),
     resumeAfterMs: RESUME_DELAY_MS,
     phase: phase || undefined,
