@@ -1197,7 +1197,7 @@ export default function Home() {
                     role: "system",
                     type: "error",
                     content: (allowUserApiKeys && isServerKey)
-                      ? `**Shared key limit hit** -- The app's server key is temporarily limited. Add your own API key to continue.`
+                      ? `**Shared key limit hit** -- The app's server key is temporarily limited. Switch to BYOK (Bring Your Own Key) to continue.`
                       : errorData.code === "provider_auth"
                         ? `**API key error** -- Check your API key in Settings.`
                         : `**API rate limit hit** -- Please try again later.`,
@@ -1363,9 +1363,9 @@ export default function Home() {
                       if (msg.startsWith("openrouter_rate_limit|")) {
                         const parts = msg.split("|");
                         const rateLimitedModel = parts[1] || "the selected model";
-                        errorContent = `**Rate limited** -- The model \`${rateLimitedModel}\` is temporarily rate-limited by its upstream provider after multiple retry attempts.\n\n**What you can do:**\n- **Switch to a different model** from the model selector\n- **Wait a few minutes** and try again\n- **Add your own API key** on [OpenRouter](https://openrouter.ai/settings/integrations) for higher limits`;
+                        errorContent = `**Rate limited** -- The model \`${rateLimitedModel}\` is temporarily rate-limited by its upstream provider after multiple retry attempts.\n\n**What you can do:**\n- **Switch to a different model** from the model selector\n- **Wait a few minutes** and try again\n- **Use BYOK** (Bring Your Own Key) from [OpenRouter](https://openrouter.ai/settings/integrations) for higher limits`;
                       } else if (isProviderRateLimit) {
-                        errorContent = allowUserApiKeys ? "**Shared key limit hit** -- Add your own API key to continue." : "**API rate limit hit** -- Please try again later.";
+                        errorContent = allowUserApiKeys ? "**Shared key limit hit** -- Switch to BYOK (Bring Your Own Key) to continue." : "**API rate limit hit** -- Please try again later.";
                       } else if (isProviderAuth) {
                         errorContent = "**API key error** -- Check your API key in Settings.";
                       }
@@ -1533,12 +1533,12 @@ export default function Home() {
             setPendingRetry({ text, images, files });
             setGateInfo((prev) => ({ ...prev, dailyUsed: data.dailyUsed ?? prev.dailyUsed, dailyLimit: data.dailyLimit ?? prev.dailyLimit }));
             setShowApiKeyGate(true);
-            setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: data.message || "Daily limit reached. Add your API key to continue.", timestamp: new Date().toISOString() }]);
+            setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: data.message || "Daily limit reached. Switch to BYOK (Bring Your Own Key) to continue.", timestamp: new Date().toISOString() }]);
           } else if (data.error === "anthropic_rate_limit" || data.code === "provider_rate_limit" || data.code === "provider_billing" || data.code === "provider_auth") {
             const isServerKey = data.usedServerKey !== false;
             if (allowUserApiKeys && isServerKey) { setPendingRetry({ text, images, files }); setProviderError(data.code || data.error); setShowApiKeyGate(true); }
             setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: (allowUserApiKeys && isServerKey)
-              ? "**Shared key limit hit** -- Add your own API key to continue."
+              ? "**Shared key limit hit** -- Switch to BYOK (Bring Your Own Key) to continue."
               : data.code === "provider_auth"
                 ? "**API key error** -- Check your API key in Settings."
                 : "**API rate limit hit** -- Please try again later.", timestamp: new Date().toISOString() }]);
