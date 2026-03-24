@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
       if (!allowedServerModels.includes(selectedModel)) {
         logger.error(sessionId, "validation", "Unauthorized model requested with server key", { model: selectedModel });
         return new Response(
-          JSON.stringify({ error: "The requested model is not allowed when using the server's API key. Please provide your own OpenRouter key for this model." }),
+          JSON.stringify({ error: "The requested model is not allowed when using the server's API key. Switch to BYOK and provide your own OpenRouter key for this model." }),
           { status: 403, headers: { "Content-Type": "application/json" } }
         );
       }

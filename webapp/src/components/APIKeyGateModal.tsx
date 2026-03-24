@@ -18,7 +18,7 @@ interface Props {
  * Triggered by:
  *  - Rate-limit / billing errors on the server pool key
  *  - Daily quota exhaustion
- *  - User clicking "Your API Key" in Settings when not connected
+ *  - User clicking "BYOK" in Settings when not connected
  */
 export default function APIKeyGateModal({ open, onClose, onKeyProvided, dailyUsed, dailyLimit, providerError }: Props) {
   const [provider, setProvider] = useState<"anthropic" | "openrouter">("anthropic");
@@ -56,7 +56,7 @@ export default function APIKeyGateModal({ open, onClose, onKeyProvided, dailyUse
         : "Shared key hit a limit"
     : dailyUsed >= dailyLimit
       ? `You\u2019ve used ${dailyUsed}/${dailyLimit} requests today`
-      : "Bring Your Own Key";
+      : "BYOK \u2014 Bring Your Own Key";
 
   const subtext = providerError
     ? providerError === "provider_auth"
@@ -77,7 +77,7 @@ export default function APIKeyGateModal({ open, onClose, onKeyProvided, dailyUse
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="API Key"
+        aria-label="BYOK — Bring Your Own Key"
         className="fixed top-0 right-0 z-50 h-full w-full max-w-sm shadow-2xl flex flex-col animate-slide-in-right"
         style={{ background: "var(--surface-primary)", borderLeft: "1px solid var(--border-emphasis)" }}
       >
@@ -146,10 +146,33 @@ export default function APIKeyGateModal({ open, onClose, onKeyProvided, dailyUse
             {providerError ? "Save & retry" : "Continue with my key"}
           </button>
 
-          <div className="space-y-1 pt-2">
-            <p className="text-[10px]" style={{ color: "var(--text-disabled)" }}>
-              Your key is sent per-request over HTTPS and never stored on our servers.
-            </p>
+          {/* BYOK Security Disclosure */}
+          <details className="pt-2 group">
+            <summary
+              className="flex items-center gap-1.5 cursor-pointer text-[10px] font-medium select-none"
+              style={{ color: "var(--text-disabled)" }}
+            >
+              <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+              Key Security
+              <svg className="w-2.5 h-2.5 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+            </summary>
+            <div
+              className="mt-1.5 px-2.5 py-2 rounded-md text-[10px] leading-relaxed space-y-1.5"
+              style={{ background: "color-mix(in srgb, var(--color-primary) 4%, transparent)", border: "1px solid color-mix(in srgb, var(--color-primary) 12%, transparent)" }}
+            >
+              <ul className="space-y-1 pl-3" style={{ color: "var(--text-disabled)", listStyleType: "disc" }}>
+                <li>Stored in <strong style={{ color: "var(--text-secondary)" }}>browser memory only</strong> &mdash; cleared on tab close</li>
+                <li>Sent over <strong style={{ color: "var(--text-secondary)" }}>HTTPS</strong>, used transiently per-request, never persisted</li>
+                <li><strong style={{ color: "var(--text-secondary)" }}>Redacted from all logs</strong></li>
+                <li>Server proxies to {provider === "openrouter" ? "OpenRouter" : "Anthropic"} (industry-standard pattern &mdash; direct browser calls blocked by CORS)</li>
+              </ul>
+              <p className="pt-1" style={{ color: "var(--text-secondary)", borderTop: "1px solid color-mix(in srgb, var(--color-primary) 10%, transparent)" }}>
+                <strong>Tip:</strong> Use a dedicated key with spend limits rather than your primary key.
+              </p>
+            </div>
+          </details>
+
+          <div className="space-y-1 pt-1">
             <a
               href={provider === "anthropic" ? "https://console.anthropic.com/settings/keys" : "https://openrouter.ai/keys"}
               target="_blank"

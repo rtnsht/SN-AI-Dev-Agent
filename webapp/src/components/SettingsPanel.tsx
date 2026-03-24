@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import Image from "next/image";
 import type { Credentials, ConnectionResult, UsageInfo, TrialStatus, AIProvider, ModelOption } from "@/lib/types";
 import { ANTHROPIC_MODELS } from "@/lib/types";
@@ -174,6 +174,30 @@ export default function SettingsPanel({
 
   // All inputs disabled when connected or mid-connecting
   const fieldsDisabled = connected || isConnecting;
+
+  // Searchable model combobox state
+  const [modelSearch, setModelSearch] = useState("");
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const modelComboRef = useRef<HTMLDivElement>(null);
+
+  const filteredModels = useMemo(() => {
+    if (!modelSearch.trim()) return displayModels;
+    const q = modelSearch.toLowerCase();
+    return displayModels.filter(
+      (m) => m.label.toLowerCase().includes(q) || m.description.toLowerCase().includes(q)
+    );
+  }, [displayModels, modelSearch]);
+
+  useEffect(() => {
+    if (!modelDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (modelComboRef.current && !modelComboRef.current.contains(e.target as Node)) {
+        setModelDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [modelDropdownOpen]);
 
   const setSnAuthType = (nextAuthType: Credentials["snAuthType"]) => {
     setCredentials({
@@ -370,7 +394,7 @@ export default function SettingsPanel({
 
             {/* Key Source Toggle */}
             <div className="pt-3" style={{ borderTop: "1px solid var(--border-default)" }}>
-              <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>API Key Source</label>
+              <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>API Key Source (BYOK)</label>
               <div className="flex gap-2">
                 <button
                   onClick={() => !fieldsDisabled && setKeyMode("server")}
@@ -394,13 +418,13 @@ export default function SettingsPanel({
                     color: keyMode === "byok" ? "var(--color-primary)" : "var(--text-secondary)",
                   }}
                 >
-                  Your API Key
+                  BYOK
                 </button>
               </div>
               <p className="text-[10px] mt-1.5" style={{ color: "var(--text-disabled)" }}>
                 {keyMode === "server"
                   ? "Using the app\u2019s shared AI capacity. During busy periods you may see temporary limits."
-                  : "Using your own API account. Your billing, your limits."}
+                  : "Bring Your Own Key \u2014 your API account, your billing, your limits."}
               </p>
             </div>
 
@@ -416,14 +440,14 @@ export default function SettingsPanel({
                   ) : (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(249,115,115,0.06)", border: "1px solid rgba(249,115,115,0.15)" }}>
                       <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-failed)" }} />
-                      <span className="text-[11px]" style={{ color: "var(--color-danger)" }}>No server key configured. Switch to &quot;Your API Key&quot; or contact admin.</span>
+                      <span className="text-[11px]" style={{ color: "var(--color-danger)" }}>No server key configured. Switch to BYOK or contact admin.</span>
                     </div>
                   )}
                 </>
               ) : (
                 <>
                   <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>
-                    {aiProvider === "openrouter" ? "OpenRouter API Key" : "Claude API Key"}
+                    {aiProvider === "openrouter" ? "BYOK \u2014 OpenRouter API Key" : "BYOK \u2014 Claude API Key"}
                   </label>
                   {rateLimitHit && (
                     <div className="mb-2 px-3 py-2 rounded-md" style={{ background: "rgba(245,196,81,0.06)", border: "1px solid rgba(245,196,81,0.15)" }}>
@@ -459,6 +483,41 @@ export default function SettingsPanel({
                       {aiProvider === "openrouter" ? "openrouter.ai/keys" : "console.anthropic.com"}
                     </a>
                   </p>
+
+                  {/* BYOK Security Disclosure */}
+                  <details className="mt-2 group">
+                    <summary
+                      className="flex items-center gap-1.5 cursor-pointer text-[10px] font-medium select-none"
+                      style={{ color: "var(--text-disabled)" }}
+                    >
+                      <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                      Key Security
+                      <svg className="w-2.5 h-2.5 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                    </summary>
+                    <div
+                      className="mt-1.5 px-2.5 py-2 rounded-md text-[10px] leading-relaxed space-y-1.5"
+                      style={{ background: "color-mix(in srgb, var(--color-primary) 4%, transparent)", border: "1px solid color-mix(in srgb, var(--color-primary) 12%, transparent)" }}
+                    >
+                      <p style={{ color: "var(--text-secondary)" }}>How your key is handled:</p>
+                      <ul className="space-y-1 pl-3" style={{ color: "var(--text-disabled)", listStyleType: "disc" }}>
+                        <li>Stored in <strong style={{ color: "var(--text-secondary)" }}>browser memory only</strong> &mdash; cleared on tab close or disconnect</li>
+                        <li>Transmitted over <strong style={{ color: "var(--text-secondary)" }}>HTTPS</strong> to the app server for proxying API calls</li>
+                        <li>Used <strong style={{ color: "var(--text-secondary)" }}>transiently per-request</strong> &mdash; never written to disk, database, or any persistent storage</li>
+                        <li><strong style={{ color: "var(--text-secondary)" }}>Redacted from all logs</strong> &mdash; key values are stripped before logging</li>
+                        <li>Never exposed via config endpoints or returned in API responses</li>
+                      </ul>
+                      <div className="pt-1" style={{ borderTop: "1px solid color-mix(in srgb, var(--color-primary) 10%, transparent)" }}>
+                        <p style={{ color: "var(--text-disabled)" }}>
+                          <strong style={{ color: "var(--color-warning)" }}>Note:</strong> The server proxies your requests to {aiProvider === "openrouter" ? "OpenRouter" : "Anthropic"} and handles the key in-memory during the call. This is the industry-standard pattern (same as Cursor, TypingMind, etc.) since {aiProvider === "openrouter" ? "OpenRouter" : "Anthropic"} APIs do not support direct browser-to-API calls (CORS).
+                        </p>
+                      </div>
+                      <div className="pt-1" style={{ borderTop: "1px solid color-mix(in srgb, var(--color-primary) 10%, transparent)" }}>
+                        <p style={{ color: "var(--text-secondary)" }}>
+                          <strong>Recommendation:</strong> Create a <strong>dedicated API key with spend limits</strong> on your provider dashboard rather than using your primary key.
+                        </p>
+                      </div>
+                    </div>
+                  </details>
                 </>
               )}
 
@@ -491,7 +550,7 @@ export default function SettingsPanel({
                   </div>
                   {(trialStatus.trialExpired || trialStatus.dailyUsed >= trialStatus.dailyLimit) && allowUserApiKeys && (
                     <p className="text-[10px] mt-1" style={{ color: "var(--color-warning)" }}>
-                      Switch to &quot;Your API Key&quot; to continue
+                      Switch to BYOK to continue
                     </p>
                   )}
                 </div>
@@ -511,24 +570,101 @@ export default function SettingsPanel({
                   <span className="text-[11px]" style={{ color: "var(--text-disabled)" }}>Loading models...</span>
                 </div>
               ) : aiProvider === "openrouter" && displayModels.length > 10 ? (
-                <>
-                  <select
-                    value={selectedModel}
-                    onChange={(e) => !modelLocked && !fieldsDisabled && setSelectedModel(e.target.value)}
+                <div ref={modelComboRef} className="relative">
+                  {/* Selected model display / trigger */}
+                  <button
+                    type="button"
+                    onClick={() => !modelLocked && !fieldsDisabled && setModelDropdownOpen((v) => !v)}
                     disabled={modelLocked || fieldsDisabled}
-                    className={`${INPUT_CLS} ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : ""}`}
-                    style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)" }}
+                    className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-md text-left transition-colors ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+                    style={{ background: "var(--surface-elevated)", border: `1px solid ${modelDropdownOpen ? "var(--color-info)" : "var(--border-emphasis)"}`, color: "var(--text-primary)" }}
                   >
-                    {displayModels.map((opt) => (
-                      <option key={opt.key} value={opt.key}>{opt.label}</option>
-                    ))}
-                  </select>
-                  {selectedModel && (
+                    <span className="flex-1 text-[11px] truncate">
+                      {displayModels.find((m) => m.key === selectedModel)?.label || "Select a model"}
+                    </span>
+                    <svg className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${modelDropdownOpen ? "rotate-180" : ""}`} style={{ color: "var(--text-disabled)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  </button>
+
+                  {selectedModel && !modelDropdownOpen && (
                     <p className="text-[10px] mt-1" style={{ color: "var(--text-disabled)" }}>
-                      {displayModels.find(m => m.key === selectedModel)?.description || ""}
+                      {displayModels.find((m) => m.key === selectedModel)?.description || ""}
                     </p>
                   )}
-                </>
+
+                  {/* Dropdown */}
+                  {modelDropdownOpen && (
+                    <div
+                      className="absolute left-0 right-0 mt-1 rounded-md shadow-lg overflow-hidden z-20"
+                      style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-emphasis)" }}
+                    >
+                      {/* Search input */}
+                      <div className="p-1.5" style={{ borderBottom: "1px solid var(--border-default)" }}>
+                        <div className="relative">
+                          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3" style={{ color: "var(--text-disabled)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                          <input
+                            type="text"
+                            value={modelSearch}
+                            onChange={(e) => setModelSearch(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Escape") { setModelDropdownOpen(false); setModelSearch(""); } }}
+                            placeholder="Search models..."
+                            className="w-full pl-7 pr-2 py-1.5 rounded text-[11px] outline-none"
+                            style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
+                            autoFocus
+                          />
+                        </div>
+                      </div>
+
+                      {/* Results list */}
+                      <div className="max-h-[240px] overflow-y-auto">
+                        {filteredModels.length === 0 ? (
+                          <div className="px-3 py-4 text-center text-[11px]" style={{ color: "var(--text-disabled)" }}>
+                            No models match &ldquo;{modelSearch}&rdquo;
+                          </div>
+                        ) : (
+                          filteredModels.map((opt) => {
+                            const isSelected = selectedModel === opt.key;
+                            return (
+                              <button
+                                key={opt.key}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedModel(opt.key);
+                                  setModelDropdownOpen(false);
+                                  setModelSearch("");
+                                }}
+                                className="w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors"
+                                style={{
+                                  background: isSelected ? "color-mix(in srgb, var(--color-primary) 8%, transparent)" : "transparent",
+                                  borderBottom: "1px solid var(--border-default)",
+                                }}
+                                onMouseEnter={(e) => !isSelected && (e.currentTarget.style.background = "var(--surface-secondary)")}
+                                onMouseLeave={(e) => !isSelected && (e.currentTarget.style.background = "transparent")}
+                              >
+                                <div
+                                  className="w-2.5 h-2.5 rounded-full flex-shrink-0 flex items-center justify-center"
+                                  style={{ border: `2px solid ${isSelected ? OPENROUTER_COLOR : "var(--text-disabled)"}` }}
+                                >
+                                  {isSelected && <div className="w-1 h-1 rounded-full" style={{ background: OPENROUTER_COLOR }} />}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[11px] font-medium truncate" style={{ color: isSelected ? OPENROUTER_COLOR : "var(--text-primary)" }}>{opt.label}</p>
+                                  <p className="text-[10px] truncate" style={{ color: "var(--text-disabled)" }}>{opt.description}</p>
+                                </div>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      {/* Footer count */}
+                      <div className="px-3 py-1.5 text-[10px]" style={{ borderTop: "1px solid var(--border-default)", color: "var(--text-disabled)" }}>
+                        {filteredModels.length === displayModels.length
+                          ? `${displayModels.length} models`
+                          : `${filteredModels.length} of ${displayModels.length} models`}
+                      </div>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
                   {displayModels.map((opt) => {
