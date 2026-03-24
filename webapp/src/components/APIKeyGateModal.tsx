@@ -52,7 +52,7 @@ export default function APIKeyGateModal({ open, onClose, onKeyProvided, dailyUse
     ? providerError === "provider_auth"
       ? "API key error"
       : providerError === "provider_billing"
-        ? "Billing limit reached"
+        ? "Credits exhausted"
         : "Shared key hit a limit"
     : dailyUsed >= dailyLimit
       ? `You\u2019ve used ${dailyUsed}/${dailyLimit} requests today`
@@ -62,7 +62,7 @@ export default function APIKeyGateModal({ open, onClose, onKeyProvided, dailyUse
     ? providerError === "provider_auth"
       ? "The server API key failed authentication. Enter your own key to continue."
       : providerError === "provider_billing"
-        ? "The server API key\u2019s billing limit has been reached. Enter your own key to continue."
+        ? "The API key\u2019s credits are exhausted. Enter a key with available balance, or add credits at openrouter.ai/credits."
         : "The app\u2019s shared AI key is temporarily rate-limited. Enter your own key to continue this conversation."
     : dailyUsed >= dailyLimit
       ? "Add your own API key to continue with unlimited access."

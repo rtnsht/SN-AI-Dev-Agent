@@ -1368,7 +1368,11 @@ export default function Home() {
                           setShowApiKeyGate(true);
                         }
                       }
-                      if (msg.startsWith("openrouter_rate_limit|")) {
+                      if (msg.startsWith("openrouter_billing|")) {
+                        const parts = msg.split("|");
+                        const billingModel = parts[1] || "the selected model";
+                        errorContent = `**Insufficient credits** — Your OpenRouter API key does not have enough credits to use \`${billingModel}\`.\n\n**What you can do:**\n- **Add credits** at [openrouter.ai/credits](https://openrouter.ai/credits)\n- **Switch to a free model** from the model selector\n- **Use a different API key** with available balance`;
+                      } else if (msg.startsWith("openrouter_rate_limit|")) {
                         const parts = msg.split("|");
                         const rateLimitedModel = parts[1] || "the selected model";
                         errorContent = `**Rate limited** -- The model \`${rateLimitedModel}\` is temporarily rate-limited by its upstream provider after multiple retry attempts.\n\n**What you can do:**\n- **Switch to a different model** from the model selector\n- **Wait a few minutes** and try again\n- **Use BYOK** (Bring Your Own Key) from [OpenRouter](https://openrouter.ai/settings/integrations) for higher limits`;

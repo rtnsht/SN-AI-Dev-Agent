@@ -292,7 +292,7 @@ export async function POST(request: NextRequest) {
         {
           error: "provider_billing",
           code: "provider_billing",
-          message: "API key billing limit reached.",
+          message: "Your API key has insufficient credits. Check your balance and add funds to continue.",
           usedServerKey: !userSuppliedKey,
           allowUserApiKeys: allowUserKeys,
         },

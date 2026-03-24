@@ -447,8 +447,12 @@ function sanitizeApiError(raw: string): string {
   if (raw.includes('"authentication_error"') || /invalid\s+\S*\s*api.key/i.test(errorMsg) || errorMsg.includes("unauthorized")) {
     return "API authentication failed. Please check your API key in Settings.";
   }
+  // OpenRouter-specific: 402 / insufficient credits
+  if (lower.includes("openrouter 402") || lower.includes("insufficient credits") || lower.includes("payment required")) {
+    return "Your OpenRouter API key has insufficient credits. Add credits at openrouter.ai/credits or switch to a different key.";
+  }
   if (errorMsg.includes("billing") || errorMsg.includes("quota") || errorMsg.includes("insufficient_quota")) {
-    return "The API quota or billing limit has been reached. Please check your plan or try again later.";
+    return "Insufficient API credits. Check your balance and add funds, or switch to a different API key.";
   }
 
   // ── Category: Invalid model ────────────────────────────────────
@@ -1728,6 +1732,14 @@ async function* chatStreamOpenRouter(
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         const isRateLimit = errorMsg.includes("429");
+        const isBillingError = errorMsg.includes("402") || errorMsg.toLowerCase().includes("insufficient credits");
+
+        // Billing / insufficient credits — distinct handling
+        if (isBillingError) {
+          logger.error(sessionId, "openrouter_api", "OpenRouter billing error — insufficient credits", { model, error: errorMsg });
+          yield { type: "error", message: `openrouter_billing|${model}|Your OpenRouter API key has insufficient credits. Add credits at https://openrouter.ai/credits or switch to a different key.` };
+          return;
+        }
 
         if (isRateLimit && attempt < MAX_RETRIES) {
           const delay = BASE_BACKOFF_MS * Math.pow(2, attempt);
