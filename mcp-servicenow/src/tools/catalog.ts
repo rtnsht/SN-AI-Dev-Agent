@@ -417,22 +417,61 @@ export async function deleteCatalogItem(client: ServiceNowClient, input: z.infer
 }
 
 export async function addCatalogItemToCategory(client: ServiceNowClient, input: z.infer<typeof addItemToCategorySchema>) {
-  const record = await client.createRecord('sc_cat_item_category', {
-    sc_cat_item: input.sc_cat_item,
-    sc_category: input.sc_category,
-  });
+  let recordSysId: string;
+  let alreadyExists = false;
+  let method: 'helper_api' | 'table_api' = 'table_api';
+
+  // Try the CatalogVariableHelper API first (bypasses ACL restrictions on sc_cat_item_category).
+  const helperBasePath = client.getHelperApiPath('catalogVariableHelper');
+  if (helperBasePath) {
+    try {
+      const result = await client.callScriptedRestApi<{
+        success: boolean; sys_id: string; already_exists: boolean; error?: string;
+      }>(`${helperBasePath}/add_to_category`, 'POST', {
+        sc_cat_item: input.sc_cat_item,
+        sc_category: input.sc_category,
+      });
+
+      if (result.success) {
+        recordSysId = result.sys_id;
+        alreadyExists = result.already_exists;
+        method = 'helper_api';
+      } else {
+        throw new Error(result.error || 'Helper API returned failure');
+      }
+    } catch (helperError) {
+      // Helper API endpoint may not be deployed yet (older instances).
+      // Fall back to Table API.
+      const record = await client.createRecord('sc_cat_item_category', {
+        sc_cat_item: input.sc_cat_item,
+        sc_category: input.sc_category,
+      });
+      recordSysId = record.sys_id;
+    }
+  } else {
+    // No helper API available — use Table API directly
+    const record = await client.createRecord('sc_cat_item_category', {
+      sc_cat_item: input.sc_cat_item,
+      sc_category: input.sc_category,
+    });
+    recordSysId = record.sys_id;
+  }
 
   let updateSetCapture: { moved: number; errors: string[] } | undefined;
-  if (client.activeUpdateSetId) {
-    updateSetCapture = await client.moveArtifactToUpdateSet('sc_cat_item_category', record.sys_id);
+  if (client.activeUpdateSetId && !alreadyExists) {
+    updateSetCapture = await client.moveArtifactToUpdateSet('sc_cat_item_category', recordSysId);
   }
 
   return {
     success: true,
-    message: `Catalog item associated with category`,
-    sys_id: record.sys_id,
+    message: alreadyExists
+      ? `Catalog item already associated with category`
+      : `Catalog item associated with category`,
+    sys_id: recordSysId,
     catalogItem: input.sc_cat_item,
     category: input.sc_category,
+    alreadyExists,
+    method,
     updateSetCapture: updateSetCapture ? {
       activeUpdateSet: client.activeUpdateSetId,
       moved: updateSetCapture.moved,
@@ -442,22 +481,62 @@ export async function addCatalogItemToCategory(client: ServiceNowClient, input: 
 }
 
 export async function addCatalogItemToCatalog(client: ServiceNowClient, input: z.infer<typeof addItemToCatalogSchema>) {
-  const record = await client.createRecord('sc_cat_item_catalog', {
-    sc_cat_item: input.sc_cat_item,
-    sc_catalog: input.sc_catalog,
-  });
+  let recordSysId: string;
+  let alreadyExists = false;
+  let method: 'helper_api' | 'table_api' = 'table_api';
+
+  // Try the CatalogVariableHelper API first (bypasses ACL restrictions on sc_cat_item_catalog).
+  // The Table API returns 403 on this M2M table on most ServiceNow instances.
+  const helperBasePath = client.getHelperApiPath('catalogVariableHelper');
+  if (helperBasePath) {
+    try {
+      const result = await client.callScriptedRestApi<{
+        success: boolean; sys_id: string; already_exists: boolean; error?: string;
+      }>(`${helperBasePath}/add_to_catalog`, 'POST', {
+        sc_cat_item: input.sc_cat_item,
+        sc_catalog: input.sc_catalog,
+      });
+
+      if (result.success) {
+        recordSysId = result.sys_id;
+        alreadyExists = result.already_exists;
+        method = 'helper_api';
+      } else {
+        throw new Error(result.error || 'Helper API returned failure');
+      }
+    } catch (helperError) {
+      // Helper API endpoint may not be deployed yet (older instances).
+      // Fall back to Table API.
+      const record = await client.createRecord('sc_cat_item_catalog', {
+        sc_cat_item: input.sc_cat_item,
+        sc_catalog: input.sc_catalog,
+      });
+      recordSysId = record.sys_id;
+    }
+  } else {
+    // No helper API available — use Table API directly
+    const record = await client.createRecord('sc_cat_item_catalog', {
+      sc_cat_item: input.sc_cat_item,
+      sc_catalog: input.sc_catalog,
+    });
+    recordSysId = record.sys_id;
+  }
 
   let updateSetCapture: { moved: number; errors: string[] } | undefined;
-  if (client.activeUpdateSetId) {
-    updateSetCapture = await client.moveArtifactToUpdateSet('sc_cat_item_catalog', record.sys_id);
+  if (client.activeUpdateSetId && !alreadyExists) {
+    updateSetCapture = await client.moveArtifactToUpdateSet('sc_cat_item_catalog', recordSysId);
   }
 
   return {
     success: true,
-    message: `Catalog item associated with catalog`,
-    sys_id: record.sys_id,
+    message: alreadyExists
+      ? `Catalog item already associated with catalog`
+      : `Catalog item associated with catalog`,
+    sys_id: recordSysId,
     catalogItem: input.sc_cat_item,
     catalog: input.sc_catalog,
+    alreadyExists,
+    method,
     updateSetCapture: updateSetCapture ? {
       activeUpdateSet: client.activeUpdateSetId,
       moved: updateSetCapture.moved,

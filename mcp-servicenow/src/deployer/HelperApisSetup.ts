@@ -360,6 +360,88 @@ function getCatalogUiPolicyActionHelperScript(): string {
 })(request, response);`;
 }
 
+/**
+ * Add a catalog item to a catalog via GlideRecord (sc_cat_item_catalog M2M table).
+ * The Table API returns 403 on this table due to ACL restrictions.
+ * GlideRecord bypasses ACLs when run server-side in a Scripted REST API.
+ */
+function getCatalogAddToCatalogScript(): string {
+  return `(function process(/*RESTAPIRequest*/ request, /*RESTAPIResponse*/ response) {
+    var body = request.body.data;
+    var catItem = body.sc_cat_item || '';
+    var catalog = body.sc_catalog || '';
+
+    if (!catItem || !catalog) {
+        response.setStatus(400);
+        return { success: false, error: 'Missing required fields: sc_cat_item, sc_catalog' };
+    }
+
+    // Check if association already exists
+    var existing = new GlideRecord('sc_cat_item_catalog');
+    existing.addQuery('sc_cat_item', catItem);
+    existing.addQuery('sc_catalog', catalog);
+    existing.setLimit(1);
+    existing.query();
+    if (existing.next()) {
+        return { success: true, sys_id: existing.sys_id.toString(), already_exists: true };
+    }
+
+    var gr = new GlideRecord('sc_cat_item_catalog');
+    gr.initialize();
+    gr.setValue('sc_cat_item', catItem);
+    gr.setValue('sc_catalog', catalog);
+    var sysId = gr.insert();
+
+    if (sysId) {
+        return { success: true, sys_id: sysId, already_exists: false };
+    } else {
+        response.setStatus(500);
+        return { success: false, error: 'Failed to create sc_cat_item_catalog record' };
+    }
+})(request, response);`;
+}
+
+/**
+ * Add a catalog item to a category via GlideRecord (sc_cat_item_category M2M table).
+ * The Table API may return 403 on this table due to ACL restrictions.
+ * GlideRecord bypasses ACLs when run server-side in a Scripted REST API.
+ */
+function getCatalogAddToCategoryScript(): string {
+  return `(function process(/*RESTAPIRequest*/ request, /*RESTAPIResponse*/ response) {
+    var body = request.body.data;
+    var catItem = body.sc_cat_item || '';
+    var category = body.sc_category || '';
+
+    if (!catItem || !category) {
+        response.setStatus(400);
+        return { success: false, error: 'Missing required fields: sc_cat_item, sc_category' };
+    }
+
+    // Check if association already exists
+    var existing = new GlideRecord('sc_cat_item_category');
+    existing.addQuery('sc_cat_item', catItem);
+    existing.addQuery('sc_category', category);
+    existing.setLimit(1);
+    existing.query();
+    if (existing.next()) {
+        return { success: true, sys_id: existing.sys_id.toString(), already_exists: true };
+    }
+
+    var gr = new GlideRecord('sc_cat_item_category');
+    gr.initialize();
+    gr.setValue('sc_cat_item', catItem);
+    gr.setValue('sc_category', category);
+    var sysId = gr.insert();
+
+    if (sysId) {
+        return { success: true, sys_id: sysId, already_exists: false };
+    } else {
+        response.setStatus(500);
+        return { success: false, error: 'Failed to create sc_cat_item_category record' };
+    }
+})(request, response);`;
+}
+
 export class HelperApisSetup {
   private client: ServiceNowClient;
   private instanceUrl: string;
@@ -507,6 +589,52 @@ export class HelperApisSetup {
       } catch (error) {
         console.error('[HelperApisSetup] Failed to deploy CatalogVariableHelper second operation:', error);
         this.clearCache();
+      }
+
+      // Deploy /add_to_catalog endpoint (bypasses sc_cat_item_catalog ACL restrictions)
+      try {
+        const existingAddCatalog = await this.client.getRecords('sys_ws_operation', {
+          sysparm_query: `web_service_definition=${status.apis.catalogVariableHelper.sysId}^http_method=POST^relative_path=/add_to_catalog`,
+          sysparm_fields: 'sys_id',
+          sysparm_limit: 1
+        });
+        if (existingAddCatalog.length === 0) {
+          await this.client.createRecord('sys_ws_operation', {
+            web_service_definition: status.apis.catalogVariableHelper.sysId,
+            name: 'addCatalogItemToCatalog',
+            http_method: 'POST',
+            relative_path: '/add_to_catalog',
+            active: true,
+            operation_script: getCatalogAddToCatalogScript(),
+            short_description: 'Add catalog item to catalog (bypasses sc_cat_item_catalog ACL)'
+          });
+          console.log(`[HelperApisSetup] Deployed CatalogVariableHelper POST: ${status.apis.catalogVariableHelper.basePath}/add_to_catalog`);
+        }
+      } catch (error) {
+        console.error('[HelperApisSetup] Failed to deploy add_to_catalog operation:', error);
+      }
+
+      // Deploy /add_to_category endpoint (bypasses sc_cat_item_category ACL restrictions)
+      try {
+        const existingAddCategory = await this.client.getRecords('sys_ws_operation', {
+          sysparm_query: `web_service_definition=${status.apis.catalogVariableHelper.sysId}^http_method=POST^relative_path=/add_to_category`,
+          sysparm_fields: 'sys_id',
+          sysparm_limit: 1
+        });
+        if (existingAddCategory.length === 0) {
+          await this.client.createRecord('sys_ws_operation', {
+            web_service_definition: status.apis.catalogVariableHelper.sysId,
+            name: 'addCatalogItemToCategory',
+            http_method: 'POST',
+            relative_path: '/add_to_category',
+            active: true,
+            operation_script: getCatalogAddToCategoryScript(),
+            short_description: 'Add catalog item to category (bypasses sc_cat_item_category ACL)'
+          });
+          console.log(`[HelperApisSetup] Deployed CatalogVariableHelper POST: ${status.apis.catalogVariableHelper.basePath}/add_to_category`);
+        }
+      } catch (error) {
+        console.error('[HelperApisSetup] Failed to deploy add_to_category operation:', error);
       }
     }
 
