@@ -22,12 +22,27 @@
       },
       "created": "2026-03-24",
       "lastUpdated": "2026-03-24"
+    },
+    "REQ-002": {
+      "title": "Multi-Agent Harness for Long-Running SDLC Sessions",
+      "description": "Three-agent architecture (Planner, Generator, Evaluator) with structured handoffs, sprint contracts, and calibrated evaluation — inspired by Anthropic's harness design research for long-running application development",
+      "status": "spec-draft",
+      "priority": "high",
+      "phases": {
+        "spec": "draft",
+        "design": "draft",
+        "implementation": "pending",
+        "testing": "pending",
+        "deployment": "pending"
+      },
+      "created": "2026-03-24",
+      "lastUpdated": "2026-03-24"
     }
   },
   "statistics": {
-    "total": 1,
+    "total": 2,
     "deployed": 0,
-    "inProgress": 1,
+    "inProgress": 2,
     "notStarted": 0
   }
 }
