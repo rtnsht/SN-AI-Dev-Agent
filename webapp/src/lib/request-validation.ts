@@ -187,27 +187,32 @@ export function parseShareTagBody(body: unknown): ValidationResult<ParsedShareTa
     }
   }
 
-  if (body.durationMin < 1 || body.durationMin > 1440) {
+  const durationMin = body.durationMin as number;
+  const phaseCount = body.phaseCount as number;
+  const toolCount = body.toolCount as number;
+  const assistantCount = body.assistantCount as number;
+
+  if (durationMin < 1 || durationMin > 1440) {
     return { ok: false, error: "durationMin must be between 1 and 1440" };
   }
-  if (body.phaseCount < 1 || body.phaseCount > 6) {
+  if (phaseCount < 1 || phaseCount > 6) {
     return { ok: false, error: "phaseCount must be between 1 and 6" };
   }
-  if (body.toolCount < 1 || body.toolCount > 1000) {
+  if (toolCount < 1 || toolCount > 1000) {
     return { ok: false, error: "toolCount must be between 1 and 1000" };
   }
-  if (body.assistantCount < 1 || body.assistantCount > 1000) {
+  if (assistantCount < 1 || assistantCount > 1000) {
     return { ok: false, error: "assistantCount must be between 1 and 1000" };
   }
 
   return {
     ok: true,
     data: {
-      sessionId: body.sessionId,
-      durationMin: body.durationMin,
-      phaseCount: body.phaseCount,
-      toolCount: body.toolCount,
-      assistantCount: body.assistantCount,
+      sessionId: body.sessionId as string,
+      durationMin,
+      phaseCount,
+      toolCount,
+      assistantCount,
     },
   };
 }

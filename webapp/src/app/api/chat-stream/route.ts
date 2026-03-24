@@ -343,6 +343,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (errorMsg.includes("authentication") || errorMsg.includes("401") || errorMsg.includes("invalid x-api-key")) {
+      return new Response(
+        JSON.stringify({
+          error: "provider_auth",
+          code: "provider_auth",
+          message: "API key authentication failed.",
+          usedServerKey: !userSuppliedKey,
+          allowUserApiKeys: allowUserKeys,
+        }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    if (errorMsg.includes("402") || errorMsg.includes("billing") || errorMsg.includes("insufficient_quota")) {
+      return new Response(
+        JSON.stringify({
+          error: "provider_billing",
+          code: "provider_billing",
+          message: "API key billing limit reached.",
+          usedServerKey: !userSuppliedKey,
+          allowUserApiKeys: allowUserKeys,
+        }),
+        { status: 402, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     return new Response(
       JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { "Content-Type": "application/json" } }

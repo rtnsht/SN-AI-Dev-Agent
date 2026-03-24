@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
       ShareCardTemplate({
         logoDataUri: logoDataUri ?? null,
         metrics,
-        tag: metrics.aiTag || undefined,
+        tag: metrics.aiTag || "",
       }),
       size
     );
