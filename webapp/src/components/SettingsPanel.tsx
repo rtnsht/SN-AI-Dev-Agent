@@ -809,7 +809,7 @@ export default function SettingsPanel({
               </span>
             </div>
             <p className="text-[10px] mt-2 pl-6" style={{ color: "var(--text-disabled)" }}>
-              Authenticating, verifying roles, and setting up helper APIs...
+              This may take a few seconds...
             </p>
           </div>
         )}

@@ -447,8 +447,8 @@ function sanitizeApiError(raw: string): string {
   if (raw.includes('"authentication_error"') || /invalid\s+\S*\s*api.key/i.test(errorMsg) || errorMsg.includes("unauthorized")) {
     return "API authentication failed. Please check your API key in Settings.";
   }
-  // OpenRouter-specific: 402 / insufficient credits
-  if (lower.includes("openrouter 402") || lower.includes("insufficient credits") || lower.includes("payment required")) {
+  // OpenRouter-specific: 402 / insufficient credits (require "openrouter" in error to avoid false matches on generic 402s)
+  if (lower.includes("openrouter") && (lower.includes("402") || lower.includes("insufficient credits") || lower.includes("payment required"))) {
     return "Your OpenRouter API key has insufficient credits. Add credits at openrouter.ai/credits or switch to a different key.";
   }
   if (errorMsg.includes("billing") || errorMsg.includes("quota") || errorMsg.includes("insufficient_quota")) {

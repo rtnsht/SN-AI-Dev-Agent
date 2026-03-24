@@ -28,9 +28,9 @@ export function getVideoEmbedUrl(url: string): string {
   // Vimeo
   const vimeo = trimmed.match(/vimeo\.com\/(?:video\/)?([0-9]+)/);
   if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}?autoplay=1&muted=1`;
-  // Loom: share URLs → embed URLs
+  // Loom: share URLs → embed URLs (with autoplay for consistency with YouTube/Vimeo)
   const loomShare = trimmed.match(/loom\.com\/share\/([a-zA-Z0-9]+)/);
-  if (loomShare) return `https://www.loom.com/embed/${loomShare[1]}`;
+  if (loomShare) return `https://www.loom.com/embed/${loomShare[1]}?autoplay=1&muted=1`;
   if (/loom\.com\/embed\/[a-zA-Z0-9]+/.test(trimmed)) return trimmed;
   // ScreenPal: watch URLs → player URLs
   const screenpalWatch = trimmed.match(/screenpal\.com\/watch\/([a-zA-Z0-9]+)/);

@@ -889,6 +889,7 @@ export default function Home() {
           authType: "session",
         };
       } else {
+        setConnectingLabel("Verifying credentials & roles...");
         const res = await fetch("/api/test-connection", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -937,7 +938,6 @@ export default function Home() {
       }
 
       if (data.success) {
-        setConnectingLabel("Verifying roles & permissions...");
         setCredentials(effectiveCredentials);
         setConnected(true);
         setConnInfo(data);
@@ -1006,7 +1006,6 @@ export default function Home() {
               assignmentGroups: data.userInfo.assignmentGroups || [],
             }
           : undefined;
-        setConnectingLabel("Setting up workspace...");
         fetchCategorizedPromptsFromApi(effectiveCredentials, userContext);
       } else {
         const rawMsg = data.message || "Unknown error";
