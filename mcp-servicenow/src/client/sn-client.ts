@@ -394,14 +394,29 @@ export class ServiceNowClient {
   /**
    * Call the UpdateSetHelper Scripted REST API to set the current update set
    * for this session (uses GlideUpdateSet().set() on the server side).
-   * Requires SN_UPDATE_SET_API_PATH environment variable to be configured.
+   *
+   * Resolution order for API path:
+   * 1. Dynamically discovered path from HelperApisSetup (stored via setHelperApiPath)
+   * 2. SN_UPDATE_SET_API_PATH environment variable (legacy/CLI fallback)
+   *
+   * Previously only checked the env var, which is NOT set in webapp deployments
+   * (DigitalOcean). This caused Layer 1 session-based capture to silently fail
+   * in production, falling through to Layer 2 (post-creation move) which itself
+   * failed due to scope context issues.
    */
   async callSetCurrentUpdateSetApi(updateSetId: string): Promise<{ success: boolean; error?: string }> {
-    const apiPath = process.env.SN_UPDATE_SET_API_PATH;
+    // Check dynamically discovered path first (set during initializeHelperApis on connection),
+    // then fall back to env var for CLI/standalone usage
+    const dynamicPath = this.getHelperApiPath('updateSetHelper');
+    const apiPath = dynamicPath
+      ? `${dynamicPath}/set_current`
+      : process.env.SN_UPDATE_SET_API_PATH;
+
     if (!apiPath) {
       return {
         success: false,
-        error: 'SN_UPDATE_SET_API_PATH not configured in .env. Run: node src/deployer/setup-updateset-api.js'
+        error: 'UpdateSetHelper API path not available. Helper APIs may not be initialized yet. ' +
+          'Ensure sn_test_connection or sn_initialize_instance was called first.'
       };
     }
 
@@ -905,6 +920,88 @@ export class ServiceNowClient {
 
     if (this.getAuthType() === 'session' && this.config.sessionCookies?.length) {
       this.importCookies(this.config.sessionCookies, this.config.sessionToken);
+    }
+  }
+
+  /**
+   * Switch the ServiceNow session back to Global scope.
+   * Looks up the Global scope sys_id from sys_scope, then uses concoursepicker
+   * (Tier 1) and ScopeHelper (Tier 2) to switch the session.
+   *
+   * This is needed because setScope('global') previously only set an in-memory
+   * flag without actually switching the ServiceNow HTTP session back. Once a
+   * concoursepicker PUT switched to a custom scope, the session stayed there
+   * permanently, causing 403/404 errors on all Global-scope operations.
+   */
+  async switchToGlobalScope(): Promise<{ success: boolean; error?: string }> {
+    const debugLog = process.env.SN_DEBUG_SCOPE === 'true';
+    if (debugLog) console.log(`[ScopeSwitch] Switching back to Global scope`);
+
+    try {
+      // Look up Global scope sys_id from sys_scope table
+      const globalScopes = await this.getRecords('sys_scope', {
+        sysparm_query: 'scope=global',
+        sysparm_fields: 'sys_id',
+        sysparm_limit: 1
+      });
+
+      if (globalScopes.length === 0) {
+        const error = 'Could not find Global scope record in sys_scope';
+        if (debugLog) console.log(`[ScopeSwitch] ${error}`);
+        return { success: false, error };
+      }
+
+      const globalSysId = globalScopes[0].sys_id as string;
+      if (debugLog) console.log(`[ScopeSwitch] Global scope sys_id: ${globalSysId}`);
+
+      // Tier 1: Use concoursepicker to switch back to Global
+      const tier1 = await this.switchScopeViaConcoursePicker(globalSysId);
+      if (tier1.success) {
+        // Verify the switch worked
+        const verified = await this.verifyCurrentScope(globalSysId);
+        if (verified.matchesTarget) {
+          this._activeScopeId = 'global';
+          if (debugLog) console.log(`[ScopeSwitch] Successfully switched back to Global scope via concoursepicker`);
+          return { success: true };
+        }
+        if (debugLog) console.log(`[ScopeSwitch] Concoursepicker reported success but verification failed`);
+      } else {
+        if (debugLog) console.log(`[ScopeSwitch] Tier 1 (concoursepicker) failed: ${tier1.error}`);
+      }
+
+      // Tier 2: Fallback to ScopeHelper API
+      const tier2 = await this.switchScopeViaScopeHelper(globalSysId);
+      if (tier2.success) {
+        const verified = await this.verifyCurrentScope(globalSysId);
+        if (verified.matchesTarget) {
+          this._activeScopeId = 'global';
+          if (debugLog) console.log(`[ScopeSwitch] Successfully switched back to Global scope via ScopeHelper`);
+          return { success: true };
+        }
+        if (debugLog) console.log(`[ScopeSwitch] ScopeHelper reported success but verification failed`);
+      } else {
+        if (debugLog) console.log(`[ScopeSwitch] Tier 2 (ScopeHelper) failed: ${tier2.error}`);
+      }
+
+      // Tier 3: User preference write
+      const tier3 = await this.switchScopeViaPreference(globalSysId);
+      if (tier3.success) {
+        const verified = await this.verifyCurrentScope(globalSysId);
+        if (verified.matchesTarget) {
+          this._activeScopeId = 'global';
+          if (debugLog) console.log(`[ScopeSwitch] Successfully switched back to Global scope via preference`);
+          return { success: true };
+        }
+      }
+
+      return {
+        success: false,
+        error: tier1.error || tier2.error || 'All methods failed to switch back to Global scope'
+      };
+    } catch (error) {
+      const msg = `Global scope switch failed: ${error instanceof Error ? error.message : String(error)}`;
+      if (debugLog) console.log(`[ScopeSwitch] ${msg}`);
+      return { success: false, error: msg };
     }
   }
 
