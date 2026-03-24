@@ -14,7 +14,7 @@ services:
       args:
         NEXT_PUBLIC_APP_NAME: "SN AI Agent"
         NEXT_PUBLIC_APP_TAGLINE: "Say it. Ship it."
-        NEXT_PUBLIC_APP_SUBTITLE: "Spec-driven · Human-approved · AI-powered"
+        NEXT_PUBLIC_APP_SUBTITLE: ""
         NEXT_PUBLIC_APP_DESCRIPTION: "AI-powered ServiceNow development"
         NEXT_PUBLIC_APP_LOGO: "/logo-r-v10.svg"
         NEXT_PUBLIC_HERO_TAGLINE: "r Works for You."

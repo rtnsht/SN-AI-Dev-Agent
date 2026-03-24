@@ -29,7 +29,7 @@ services:
     dockerBuildArgs:
       NEXT_PUBLIC_APP_NAME: "SN AI Agent"
       NEXT_PUBLIC_APP_TAGLINE: "Say it. Ship it."
-      NEXT_PUBLIC_APP_SUBTITLE: "Spec-driven · Human-approved · AI-powered"
+      NEXT_PUBLIC_APP_SUBTITLE: ""
       NEXT_PUBLIC_APP_DESCRIPTION: "AI-powered ServiceNow development"
       NEXT_PUBLIC_APP_LOGO: "/logo-r-v10.svg"
       NEXT_PUBLIC_HERO_TAGLINE: "r Works for You."
@@ -94,7 +94,7 @@ services:
       - key: NEXT_PUBLIC_APP_TAGLINE
         value: "Say it. Ship it."
       - key: NEXT_PUBLIC_APP_SUBTITLE
-        value: "Spec-driven · Human-approved · AI-powered"
+        value: ""
       - key: NEXT_PUBLIC_PRIMARY_COLOR
         value: "blue"
       - key: NEXT_PUBLIC_ACCENT_COLOR

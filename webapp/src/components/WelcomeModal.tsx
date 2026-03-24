@@ -2,8 +2,14 @@
 
 import { useEffect } from "react";
 import Image from "next/image";
-import { APP_NAME, APP_LOGO, APP_SUBTITLE, HERO_VIDEO_URL, WELCOME_BADGE, WELCOME_CTA, WELCOME_FOOTER } from "@/lib/branding";
+import { APP_NAME, APP_LOGO, HERO_VIDEO_URL, WELCOME_BADGE, WELCOME_SUBTITLE, WELCOME_CTA, WELCOME_FOOTER } from "@/lib/branding";
 import { getVideoEmbedUrl } from "@/components/LandingPage";
+
+const WELCOME_BULLETS = [
+  { icon: "🎯", title: "Command Center", desc: "One interface to navigate, command, and control your ServiceNow instance." },
+  { icon: "🤖", title: "AI-First Execution", desc: "The AI is the team — building specs, designs, and code autonomously. You steer and approve." },
+  { icon: "🛡️", title: "Full Control", desc: "Phase-gated lifecycle. Nothing touches your instance without your sign-off." },
+];
 
 interface Props {
   open: boolean;
@@ -61,12 +67,25 @@ export default function WelcomeModal({ open, onClose }: Props) {
 
           {/* 4. Subtitle */}
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-            {APP_SUBTITLE || "Describe what you need. The AI builds it on your ServiceNow instance."}
+            {WELCOME_SUBTITLE}
           </p>
         </div>
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
+          {/* Value propositions */}
+          <div className="space-y-3 mb-4">
+            {WELCOME_BULLETS.map((b, i) => (
+              <div key={i} className="welcome-bullet">
+                <span className="text-base flex-shrink-0 mt-0.5">{b.icon}</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{b.title}</p>
+                  <p className="text-xs leading-relaxed mt-0.5" style={{ color: "var(--text-secondary)" }}>{b.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
           {/* Demo video */}
           {HERO_VIDEO_URL && (
             <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-default)" }}>

@@ -154,7 +154,7 @@ export default function LandingPage() {
         {/* 3. Badge pill */}
         <div className="landing-badge" style={{ marginBottom: 28 }}>
           <span className="landing-badge-dot" />
-          {WELCOME_BADGE || <>Spec-driven &middot; Human-approved &middot; AI-powered</>}
+          {WELCOME_BADGE || <>AI-first &middot; Human-governed &middot; Autonomous</>}
         </div>
 
         {/* 4. Auto-toggling animated text */}

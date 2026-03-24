@@ -12,8 +12,10 @@ export const APP_DESCRIPTION = process.env.NEXT_PUBLIC_APP_DESCRIPTION || "AI-po
 export const APP_LOGO        = process.env.NEXT_PUBLIC_APP_LOGO        || "/logo-r-v10.svg";
 export const APP_HERO_TAGLINE = process.env.NEXT_PUBLIC_HERO_TAGLINE   || "Ship ServiceNow Features with AI.";
 export const HERO_VIDEO_URL   = process.env.NEXT_PUBLIC_HERO_VIDEO_URL  || "";
-/** Welcome modal pill badge (e.g. "Spec-driven · Human-approved · AI-powered") */
-export const WELCOME_BADGE    = process.env.NEXT_PUBLIC_WELCOME_BADGE   || "Spec-driven · Human-approved · AI-powered";
+/** Welcome modal pill badge (e.g. "AI-first · Human-governed · Autonomous") */
+export const WELCOME_BADGE    = process.env.NEXT_PUBLIC_WELCOME_BADGE   || "AI-first · Human-governed · Autonomous";
+/** Welcome modal subtitle — isolated from APP_SUBTITLE to avoid ripple into ChatWindow/LandingPage */
+export const WELCOME_SUBTITLE = process.env.NEXT_PUBLIC_WELCOME_SUBTITLE || "The AI develops. You architect, supervise, and approve.";
 /** Welcome modal CTA button label */
 export const WELCOME_CTA      = process.env.NEXT_PUBLIC_WELCOME_CTA     || "I understand — let's go";
 /** Welcome modal footer hint */
@@ -83,13 +85,13 @@ export interface InfoModalFeature {
 }
 
 const DEFAULT_INFO_MODAL_FEATURES: InfoModalFeature[] = [
-  { icon: "💬", title: "Build with Chat", desc: "Describe what you need in plain English and the agent builds it on your instance — forms, automations, workflows, catalog items, and more.", example: `"Add a mandatory justification field when a change request is marked high impact"`, tier: "primary" },
-  { icon: "📋", title: "Structured Lifecycle", desc: "Every feature goes through Spec → Design → Implementation → Testing → Deployment. You review and approve each phase before the agent moves on — nothing gets deployed without your sign-off.", example: `"Build an approval workflow for high-priority incidents" → agent writes a spec first, waits for your OK`, tier: "primary" },
-  { icon: "🔍", title: "Smart Reuse", desc: "Before building anything new, the agent checks what already exists on your instance and reuses or extends it — avoiding duplicates.", example: `Agent finds an existing priority rule and extends it instead of creating a new one`, tier: "primary" },
-  { icon: "📦", title: "Change Tracking", desc: "All changes are grouped into a named update set. Duplicate names are detected before creation.", example: `"Group these changes under Q1-Enhancements"`, tier: "compact" },
-  { icon: "🤖", title: "AI Model Choice", desc: "Pick a faster model for quick lookups or a more powerful one for complex features.", example: `Switch models in the settings panel`, tier: "compact" },
-  { icon: "🖼️", title: "Screenshots & Images", desc: "Paste, drag-drop, or attach images. The agent reads UI mockups, errors, and diagrams.", example: `Paste a screenshot and say "Add a field like this"`, tier: "compact" },
-  { icon: "🔐", title: "Secure Connection", desc: "Credentials are validated on connect. The agent checks permissions before proceeding.", example: `Warns you if required roles are missing`, tier: "compact" },
+  { icon: "🎯", title: "Steer the Execution", desc: "You set the direction. The AI handles spec writing, design, code, and deployment — you review, approve, and course-correct at every phase gate.", example: `"Build an approval workflow for high-priority incidents"`, tier: "primary" },
+  { icon: "🏗️", title: "Your Instance Command Center", desc: "One place to navigate tables, inspect rules, create workflows, and manage update sets across your entire ServiceNow instance.", example: `"Show me all active business rules on the incident table"`, tier: "primary" },
+  { icon: "🧠", title: "More Than a Chatbot", desc: "A thought partner that understands ServiceNow deeply. It reasons through complex problems, checks what exists before building, and proposes solutions — not just answers.", example: `"How should I restructure our change management process?"`, tier: "primary" },
+  { icon: "🛡️", title: "Human Oversight Built In", desc: "Phase-gated lifecycle. Spec, design, code, test, deploy — each requires your sign-off.", example: `Nothing gets deployed without your approval`, tier: "compact" },
+  { icon: "🎛️", title: "Steerable AI", desc: "Guide the approach, tone, and scope. The AI adapts to your direction, not the other way around.", example: `Adjust strategy mid-build as requirements evolve`, tier: "compact" },
+  { icon: "📦", title: "Full Audit Trail", desc: "Every change tracked in update sets. Every artifact traceable. Every decision documented.", example: `Complete traceability from spec to deployment`, tier: "compact" },
+  { icon: "👁️", title: "Transparent Execution", desc: "See what the AI is doing in real time. Every tool call, every decision — visible and explainable.", example: `Watch each step as it happens in the chat`, tier: "compact" },
 ];
 
 function parseInfoModalFeatures(raw: string | undefined): InfoModalFeature[] {

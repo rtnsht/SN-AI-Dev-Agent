@@ -68,6 +68,13 @@ export default function InfoModal({ open, onClose, onTryPrompt }: Props) {
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-3 sm:py-4">
 
+          {/* Thesis */}
+          <div className="welcome-thesis mb-4">
+            <p>
+              The shift is not &ldquo;AI helps the team.&rdquo; It is &ldquo;AI <em>is</em> the team &mdash; with you as the architect, supervisor, and exception handler.&rdquo;
+            </p>
+          </div>
+
           {/* Video showcase */}
           {HERO_VIDEO_URL && (
             <div className="mb-4">
@@ -91,7 +98,7 @@ export default function InfoModal({ open, onClose, onTryPrompt }: Props) {
           {/* Tier 1: Primary features — full cards */}
           {primary.length > 0 && (
             <div>
-              <p className="info-section-label">How it works</p>
+              <p className="info-section-label">What you can do</p>
               <div className="space-y-1.5">
                 {primary.map((f, i) => (
                   <div key={i} className="info-primary-card" style={{ animationDelay: `${i * 60}ms` }}>
@@ -122,7 +129,7 @@ export default function InfoModal({ open, onClose, onTryPrompt }: Props) {
           {/* Tier 2: Compact features — 2-col grid */}
           {compact.length > 0 && (
             <div className="mt-4">
-              <p className="info-section-label">Tools &amp; controls</p>
+              <p className="info-section-label">You stay in control</p>
               <div className="info-compact-grid">
                 {compact.map((f, i) => (
                   <div key={i} className="info-compact-card" style={{ animationDelay: `${(primary.length + i) * 60}ms` }}>

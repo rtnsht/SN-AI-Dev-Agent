@@ -1237,6 +1237,34 @@ body {
   opacity: 0.8;
 }
 
+/* ── Welcome Modal — thesis & bullets ── */
+.welcome-thesis {
+  padding: 12px 16px;
+  border-left: 3px solid var(--color-primary);
+  border-radius: 0 8px 8px 0;
+  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+.welcome-thesis em {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.welcome-bullet {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  transition: background var(--transition-fast);
+}
+.welcome-bullet:hover {
+  background: var(--surface-secondary);
+}
+
 /* ── Info Modal — tiered layout ── */
 .info-section-label {
   font-size: 10px;
