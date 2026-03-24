@@ -725,6 +725,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
   const [showAiAssist, setShowAiAssist] = useState(false);
   const [showTOC, setShowTOC] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [queueExpanded, setQueueExpanded] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isNearBottom, setIsNearBottom] = useState(true);
@@ -1453,7 +1454,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            placeholder={!connected ? "Connect your instance first →" : isLoading ? "Type to queue a follow-up message..." : "What should we work on next?"}
+            placeholder={!connected ? "Connect your instance first →" : isLoading ? "Add a follow up..." : "What should we work on next?"}
             disabled={!connected}
             rows={1}
             className="w-full bg-transparent text-sm focus:outline-none disabled:opacity-50 resize-none overflow-y-auto"
@@ -1581,14 +1582,6 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" /></svg>
                   )}
                 </button>
-                {queueLength > 0 && (
-                  <span
-                    className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[9px] font-bold px-1"
-                    style={{ background: "var(--color-primary)", color: "#fff" }}
-                  >
-                    {queueLength}
-                  </span>
-                )}
               </div>
             </div>
           </div>
@@ -1840,7 +1833,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
           {/* Messages */}
           <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-2 sm:px-6 py-4 sm:py-6">
             <div className="max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto space-y-4 sm:space-y-5">
-              {messages.filter((msg) => !msg.hidden).map((msg, i, filtered) => {
+              {messages.filter((msg) => !msg.hidden && !msg.queued).map((msg, i, filtered) => {
                 const prevMsg = i > 0 ? filtered[i - 1] : null;
                 const showPhaseDivider = msg.phaseGate && msg.phaseGate !== prevMsg?.phaseGate;
                 const phaseInfo = showPhaseDivider ? SDLC_PHASES.find(p => p.key === msg.phaseGate) : null;
@@ -1861,8 +1854,6 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
                       onApprove={onApprove}
                       onChoiceSelect={onChoiceSelect}
                       showToolDetails={showToolDetails}
-                      userName={userName}
-                      onDequeue={onDequeue}
                     />
                   </div>
                 );
@@ -1925,6 +1916,67 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
           {/* Bottom input bar */}
           <div className="p-2 sm:p-4" style={{ borderTop: "1px solid var(--border-default)", background: "var(--surface-primary)" }}>
             <div className="max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto">
+              {(() => {
+                const queuedMessages = messages.filter(m => m.queued);
+                if (queuedMessages.length === 0) return null;
+                return (
+                  <div className="mb-2 rounded-md overflow-hidden" style={{ border: "1px solid var(--border-default)", background: "var(--surface-secondary)" }}>
+                    <button
+                      onClick={() => setQueueExpanded(!queueExpanded)}
+                      className="w-full flex items-center justify-between px-3 py-1.5 text-left transition-colors"
+                      style={{ background: "var(--surface-secondary)" }}
+                      onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-elevated)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "var(--surface-secondary)"; }}
+                    >
+                      <span className="flex items-center gap-1.5 text-[11px] font-medium" style={{ color: "var(--text-secondary)" }}>
+                        <svg className={`w-3 h-3 transition-transform ${queueExpanded ? "" : "-rotate-90"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                        {queuedMessages.length} Queued
+                      </span>
+                      {onClearQueue && queuedMessages.length > 1 && (
+                        <span
+                          onClick={(e) => { e.stopPropagation(); onClearQueue(); }}
+                          className="text-[10px] transition-colors cursor-pointer"
+                          style={{ color: "var(--text-disabled)" }}
+                          onMouseEnter={e => { e.currentTarget.style.color = "var(--color-danger)"; }}
+                          onMouseLeave={e => { e.currentTarget.style.color = "var(--text-disabled)"; }}
+                        >
+                          Clear all
+                        </span>
+                      )}
+                    </button>
+                    {queueExpanded && (
+                      <div className="px-3 pb-2 space-y-0.5" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+                        {queuedMessages.map(msg => (
+                          <div key={msg.id} className="flex items-center gap-2 py-1 group/qi rounded px-1 -mx-1 transition-colors hover:bg-[var(--surface-elevated)]">
+                            <span className="flex-1 text-xs truncate" style={{ color: "var(--text-secondary)" }}>
+                              {msg.content}
+                            </span>
+                            <span className="text-[10px] shrink-0 select-none" style={{ color: "var(--text-disabled)" }}>
+                              ⏎ to submit
+                            </span>
+                            {onDequeue && msg.id && (
+                              <button
+                                onClick={() => onDequeue(msg.id!)}
+                                className="p-0.5 rounded transition-all opacity-0 group-hover/qi:opacity-100"
+                                style={{ color: "var(--text-disabled)" }}
+                                onMouseEnter={e => { e.currentTarget.style.color = "var(--color-danger)"; }}
+                                onMouseLeave={e => { e.currentTarget.style.color = "var(--text-disabled)"; }}
+                                title="Cancel"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               {renderInputBar(false)}
               <p className="text-center text-[11px] mt-1.5 select-none" style={{ color: "var(--text-disabled)" }}>
                 This is Agentic AI and can make mistakes. Please double-check responses.

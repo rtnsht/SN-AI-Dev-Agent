@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchOpenRouterModels } from "@/lib/openrouter";
+import { resolveLlmApiKey } from "@/lib/key-resolver";
 
 /**
  * GET /api/openrouter-models — Fetch available models from OpenRouter.
@@ -7,8 +8,10 @@ import { fetchOpenRouterModels } from "@/lib/openrouter";
  */
 export async function GET(request: NextRequest) {
   try {
-    // Get API key from header or server env
-    const apiKey = request.headers.get("x-openrouter-key") || process.env.OPENROUTER_API_KEY;
+    const allowUserKeys = process.env.ALLOW_USER_API_KEYS !== "false";
+    const headerKey = request.headers.get("x-openrouter-key") || "";
+    const resolved = resolveLlmApiKey("openrouter-models", "openrouter", headerKey, allowUserKeys);
+    const apiKey = resolved?.apiKey || "";
 
     const models = await fetchOpenRouterModels(apiKey || undefined);
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAccessStatus, getTierLimits } from "@/lib/access-tier";
 import { SESSION_COOKIE_NAME, validateSession } from "@/lib/auth";
 import { getClientIp } from "@/lib/client-ip";
+import { hasServerKey } from "@/lib/key-resolver";
 
 /**
  * GET /api/config — returns public app configuration.
@@ -9,8 +10,8 @@ import { getClientIp } from "@/lib/client-ip";
  * Includes 3-tier access info.
  */
 export async function GET(request: NextRequest) {
-  const serverApiKeyConfigured = !!process.env.CLAUDE_API_KEY;
-  const serverOpenRouterKeyConfigured = !!process.env.OPENROUTER_API_KEY;
+  const serverApiKeyConfigured = hasServerKey("anthropic");
+  const serverOpenRouterKeyConfigured = hasServerKey("openrouter");
 
   // Check if server-side ServiceNow credentials are configured (all three required)
   const snUrl = process.env.SN_INSTANCE_URL || "";

@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Image from "next/image";
 import type { Credentials, ConnectionResult, UsageInfo, TrialStatus, AIProvider, ModelOption } from "@/lib/types";
 import { ANTHROPIC_MODELS } from "@/lib/types";
 import { APP_LOGO } from "@/lib/branding";
 import { hasConnectableServiceNowAuth, normalizeServiceNowAuthMethod } from "@/lib/servicenow-auth";
+
+type KeyMode = "server" | "byok";
 
 interface Props {
   credentials: Credentials;
@@ -147,6 +149,25 @@ export default function SettingsPanel({
       : snAuthType === "session"
         ? ((credentials.sessionCookies?.length || 0) > 0 ? "Connect" : "Connect in Browser")
         : "Connect";
+
+  // Key mode: "server" uses pool/env keys, "byok" lets user enter their own
+  const [keyMode, setKeyMode] = useState<KeyMode>(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("keyMode") as KeyMode) || "server";
+    }
+    return "server";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("keyMode", keyMode);
+    if (keyMode === "server") {
+      if (credentials.claudeApiKey) update("claudeApiKey", "");
+      if (credentials.openRouterApiKey) update("openRouterApiKey", "");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keyMode]);
+
+  const serverKeyAvailable = aiProvider === "anthropic" ? serverApiKeyConfigured : serverOpenRouterKeyConfigured;
 
   // Display models based on provider
   const displayModels = aiProvider === "openrouter" ? modelOptions : ANTHROPIC_MODELS;
@@ -347,85 +368,102 @@ export default function SettingsPanel({
               )}
             </div>
 
+            {/* Key Source Toggle */}
+            <div className="pt-3" style={{ borderTop: "1px solid var(--border-default)" }}>
+              <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>API Key Source</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => !fieldsDisabled && setKeyMode("server")}
+                  disabled={fieldsDisabled || !serverKeyAvailable}
+                  className={`flex-1 px-3 py-2 rounded-md text-[11px] font-medium transition-colors ${(fieldsDisabled || !serverKeyAvailable) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+                  style={{
+                    background: keyMode === "server" ? "color-mix(in srgb, var(--color-primary) 10%, transparent)" : "var(--surface-elevated)",
+                    border: `1px solid ${keyMode === "server" ? "color-mix(in srgb, var(--color-primary) 30%, transparent)" : "var(--border-emphasis)"}`,
+                    color: keyMode === "server" ? "var(--color-primary)" : "var(--text-secondary)",
+                  }}
+                >
+                  Server Keys
+                </button>
+                <button
+                  onClick={() => !fieldsDisabled && allowUserApiKeys && setKeyMode("byok")}
+                  disabled={fieldsDisabled || !allowUserApiKeys}
+                  className={`flex-1 px-3 py-2 rounded-md text-[11px] font-medium transition-colors ${(fieldsDisabled || !allowUserApiKeys) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+                  style={{
+                    background: keyMode === "byok" ? "color-mix(in srgb, var(--color-primary) 10%, transparent)" : "var(--surface-elevated)",
+                    border: `1px solid ${keyMode === "byok" ? "color-mix(in srgb, var(--color-primary) 30%, transparent)" : "var(--border-emphasis)"}`,
+                    color: keyMode === "byok" ? "var(--color-primary)" : "var(--text-secondary)",
+                  }}
+                >
+                  Your API Key
+                </button>
+              </div>
+              <p className="text-[10px] mt-1.5" style={{ color: "var(--text-disabled)" }}>
+                {keyMode === "server"
+                  ? "Using the app\u2019s shared AI capacity. During busy periods you may see temporary limits."
+                  : "Using your own API account. Your billing, your limits."}
+              </p>
+            </div>
+
             {/* API Key Section */}
             <div className="pt-3" style={{ borderTop: "1px solid var(--border-default)" }}>
-              <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>
-                {aiProvider === "openrouter" ? "OpenRouter API Key" : "Claude API Key"}
-              </label>
-
-              {aiProvider === "anthropic" ? (
+              {keyMode === "server" ? (
                 <>
-                  {!allowUserApiKeys && serverApiKeyConfigured ? (
+                  {serverKeyAvailable ? (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
                       <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
-                      <span className="text-[11px]" style={{ color: "var(--color-success)" }}>Managed by server</span>
-                      <svg className="w-3 h-3 ml-auto" style={{ color: "var(--text-disabled)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                      <span className="text-[11px]" style={{ color: "var(--color-success)" }}>Using shared server keys</span>
                     </div>
-                  ) : serverApiKeyConfigured && !rateLimitHit && !credentials.claudeApiKey ? (
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
-                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
-                      <span className="text-[11px]" style={{ color: "var(--color-success)" }}>Provided by server</span>
-                    </div>
-                  ) : allowUserApiKeys ? (
-                    <>
-                      {rateLimitHit && (
-                        <div className="mb-2 px-3 py-2 rounded-md" style={{ background: "rgba(245,196,81,0.06)", border: "1px solid rgba(245,196,81,0.15)" }}>
-                          <p className="text-[11px] font-medium" style={{ color: "var(--color-warning)" }}>⚡ Free tier limit reached</p>
-                          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-disabled)" }}>Enter your own API key below to continue.</p>
-                        </div>
-                      )}
-                      <input
-                        type="password"
-                        placeholder="sk-ant-..."
-                        value={credentials.claudeApiKey}
-                        onChange={(e) => {
-                          update("claudeApiKey", e.target.value);
-                          if (e.target.value && rateLimitHit) onApiKeyProvided();
-                        }}
-                        className={INPUT_CLS}
-                        style={{
-                          background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)",
-                          border: rateLimitHit ? "1px solid rgba(245,196,81,0.3)" : "1px solid var(--border-emphasis)",
-                          color: "var(--text-primary)",
-                          opacity: fieldsDisabled ? 0.7 : 1,
-                          ...(rateLimitHit ? { boxShadow: "0 0 0 2px rgba(245,196,81,0.15)" } : {}),
-                        }}
-                        disabled={fieldsDisabled}
-                      />
-                    </>
                   ) : (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(249,115,115,0.06)", border: "1px solid rgba(249,115,115,0.15)" }}>
                       <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-failed)" }} />
-                      <span className="text-[11px]" style={{ color: "var(--color-danger)" }}>No API key configured. Contact admin.</span>
+                      <span className="text-[11px]" style={{ color: "var(--color-danger)" }}>No server key configured. Switch to &quot;Your API Key&quot; or contact admin.</span>
                     </div>
                   )}
                 </>
               ) : (
                 <>
-                  {serverOpenRouterKeyConfigured && !credentials.openRouterApiKey ? (
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
-                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
-                      <span className="text-[11px]" style={{ color: "var(--color-success)" }}>Provided by server</span>
+                  <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>
+                    {aiProvider === "openrouter" ? "OpenRouter API Key" : "Claude API Key"}
+                  </label>
+                  {rateLimitHit && (
+                    <div className="mb-2 px-3 py-2 rounded-md" style={{ background: "rgba(245,196,81,0.06)", border: "1px solid rgba(245,196,81,0.15)" }}>
+                      <p className="text-[11px] font-medium" style={{ color: "var(--color-warning)" }}>Shared key hit a limit</p>
+                      <p className="text-[10px] mt-0.5" style={{ color: "var(--text-disabled)" }}>Enter your own API key below to continue.</p>
                     </div>
-                  ) : (
-                    <input
-                      type="password"
-                      placeholder="sk-or-v1-..."
-                      value={credentials.openRouterApiKey}
-                      onChange={(e) => update("openRouterApiKey", e.target.value)}
-                      className={INPUT_CLS}
-                      style={{ background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-primary)", opacity: fieldsDisabled ? 0.7 : 1 }}
-                      disabled={fieldsDisabled}
-                    />
                   )}
+                  <input
+                    type="password"
+                    placeholder={aiProvider === "openrouter" ? "sk-or-v1-..." : "sk-ant-..."}
+                    value={aiProvider === "openrouter" ? credentials.openRouterApiKey : credentials.claudeApiKey}
+                    onChange={(e) => {
+                      const field = aiProvider === "openrouter" ? "openRouterApiKey" : "claudeApiKey";
+                      update(field, e.target.value);
+                      if (e.target.value && rateLimitHit) onApiKeyProvided();
+                    }}
+                    className={INPUT_CLS}
+                    style={{
+                      background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)",
+                      border: rateLimitHit ? "1px solid rgba(245,196,81,0.3)" : "1px solid var(--border-emphasis)",
+                      color: "var(--text-primary)",
+                      opacity: fieldsDisabled ? 0.7 : 1,
+                    }}
+                    disabled={fieldsDisabled}
+                  />
                   <p className="text-[10px] mt-1.5 leading-relaxed" style={{ color: "var(--text-disabled)" }}>
-                    Get your key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: OPENROUTER_COLOR }}>openrouter.ai/keys</a>
+                    Get your key at{" "}
+                    <a
+                      href={aiProvider === "openrouter" ? "https://openrouter.ai/keys" : "https://console.anthropic.com/settings/keys"}
+                      target="_blank" rel="noopener noreferrer" className="hover:underline"
+                      style={{ color: aiProvider === "openrouter" ? OPENROUTER_COLOR : "var(--color-primary)" }}
+                    >
+                      {aiProvider === "openrouter" ? "openrouter.ai/keys" : "console.anthropic.com"}
+                    </a>
                   </p>
                 </>
               )}
 
               {/* Usage info */}
-              {usage && ((aiProvider === "anthropic" && serverApiKeyConfigured && !credentials.claudeApiKey) || (aiProvider === "openrouter" && serverOpenRouterKeyConfigured && !credentials.openRouterApiKey)) && (
+              {keyMode === "server" && usage && serverKeyAvailable && (
                 <UsageDisplay usage={usage} onRefresh={onRefreshUsage} />
               )}
 
@@ -453,7 +491,7 @@ export default function SettingsPanel({
                   </div>
                   {(trialStatus.trialExpired || trialStatus.dailyUsed >= trialStatus.dailyLimit) && allowUserApiKeys && (
                     <p className="text-[10px] mt-1" style={{ color: "var(--color-warning)" }}>
-                      Connect your own API key to continue
+                      Switch to &quot;Your API Key&quot; to continue
                     </p>
                   )}
                 </div>

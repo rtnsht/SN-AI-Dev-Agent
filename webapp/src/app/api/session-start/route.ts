@@ -16,7 +16,12 @@ import { checkSessionStart } from "@/lib/auth-rate-limiter";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
     const parsed = parseSessionStartBody(body);
     if (!parsed.ok) {
       return NextResponse.json({ error: parsed.error }, { status: 400 });
@@ -47,9 +52,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Persist session metadata before logging/telemetry so unauthorized callers cannot poison an existing session.
-    await createSessionLog(sessionId, userId, {
-      instanceUrl, username, userFullName, aiProvider, model,
-    }, ip, userAgent);
+    try {
+      await createSessionLog(sessionId, userId, {
+        instanceUrl, username, userFullName, aiProvider, model,
+      }, ip, userAgent);
+    } catch (logErr) {
+      console.error("[session-start] session_logs write failed:", logErr);
+      return NextResponse.json(
+        { error: "Failed to persist session. Check database connectivity.", success: false },
+        { status: 503 }
+      );
+    }
 
     log("info", sessionId, "session_connect", "Session started — user connected to instance", {
       instanceUrl: instanceUrl || "",
@@ -101,12 +114,16 @@ async function resolveUserId(request: NextRequest): Promise<string | null> {
  *  the row is created. Checks and logs Supabase errors instead of swallowing them. */
 async function getExistingSessionOwner(sessionId: string): Promise<{ exists: boolean; userId: string | null }> {
   const db = getSupabase();
-  const { data } = await db
+  const { data, error } = await db
     .from("session_logs")
     .select("user_id")
     .eq("session_id", sessionId)
     .maybeSingle();
 
+  if (error) {
+    console.error("[session-start] session ownership check failed:", error.message);
+    throw new Error("Failed to verify session ownership");
+  }
   if (!data) return { exists: false, userId: null };
   return { exists: true, userId: data.user_id || null };
 }
@@ -118,29 +135,26 @@ async function createSessionLog(
   ip: string,
   userAgent: string
 ): Promise<void> {
-  try {
-    const db = getSupabase();
+  const db = getSupabase();
 
-    const { error } = await db.from("session_logs").upsert(
-      {
-        session_id: sessionId,
-        user_id: userId || null,
-        instance_url: metadata.instanceUrl || null,
-        username: metadata.username || null,
-        user_full_name: metadata.userFullName || null,
-        ai_provider: metadata.aiProvider || null,
-        model: metadata.model || null,
-        ip_address: ip,
-        user_agent: userAgent,
-        status: "active",
-      },
-      { onConflict: "session_id" }
-    );
-    if (error) {
-      console.error("[session-start] session_logs write FAILED:", error.message, error.details, error.hint);
-    }
-  } catch (err) {
-    console.error("[session-start] session_logs write error:", err);
+  const { error } = await db.from("session_logs").upsert(
+    {
+      session_id: sessionId,
+      user_id: userId || null,
+      instance_url: metadata.instanceUrl || null,
+      username: metadata.username || null,
+      user_full_name: metadata.userFullName || null,
+      ai_provider: metadata.aiProvider || null,
+      model: metadata.model || null,
+      ip_address: ip,
+      user_agent: userAgent,
+      status: "active",
+    },
+    { onConflict: "session_id" }
+  );
+  if (error) {
+    console.error("[session-start] session_logs write FAILED:", error.message, error.details, error.hint);
+    throw new Error(error.message);
   }
 }
 

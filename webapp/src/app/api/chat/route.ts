@@ -8,12 +8,14 @@ import { normalizeServiceNowAuthMethod, validateServiceNowCredentials } from "@/
 import { requireAdmin } from "@/lib/admin-auth";
 import { getClientIp } from "@/lib/client-ip";
 import { parseChatBody } from "@/lib/request-validation";
+import { resolveLlmApiKey } from "@/lib/key-resolver";
 
 export const maxDuration = 300; // Allow up to 5 minutes for tool-use loops
 
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
   let sessionId = "unknown";
+  let userSuppliedKey = false;
 
   try {
     const body = await request.json();
@@ -94,38 +96,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Resolve API key based on provider
+    // Resolve API key via pool + BYOK + env fallback
     const allowUserKeys = process.env.ALLOW_USER_API_KEYS !== "false";
-    let userSuppliedKey = false;
+    const provider = credentials.aiProvider === "openrouter" ? "openrouter" as const : "anthropic" as const;
+    const userKey = provider === "openrouter"
+      ? (allowUserKeys ? credentials.openRouterApiKey || "" : "")
+      : (allowUserKeys ? credentials.claudeApiKey || "" : "");
 
-    if (credentials.aiProvider === "openrouter") {
-      // OpenRouter: use user-supplied key or server env var
-      const userProvidedOpenRouterKey = allowUserKeys && !!credentials.openRouterApiKey;
-      const openRouterKey = (allowUserKeys ? credentials.openRouterApiKey : "") || process.env.OPENROUTER_API_KEY || "";
-      if (!openRouterKey) {
-        logger.error(sessionId, "validation", "No OpenRouter API key available");
-        return NextResponse.json(
-          { error: "No OpenRouter API key available. Provide one in settings or ask admin to configure it." },
-          { status: 400 }
-        );
-      }
-      credentials.openRouterApiKey = openRouterKey;
-      userSuppliedKey = userProvidedOpenRouterKey;
-    } else {
-      // Anthropic: use user-supplied key or server env var
-      userSuppliedKey = allowUserKeys && !!credentials.claudeApiKey;
-      const claudeApiKey = (allowUserKeys ? credentials.claudeApiKey : "") || process.env.CLAUDE_API_KEY || "";
-      if (!claudeApiKey) {
-        logger.error(sessionId, "validation", "No Claude API key available", { userSuppliedKey, allowUserKeys });
-        return NextResponse.json(
-          { error: allowUserKeys
-              ? "No Claude API key available. Either provide one in settings or ask the admin to configure a server-side key."
-              : "No Claude API key configured on the server. Please contact the admin." },
-          { status: 400 }
-        );
-      }
-      credentials.claudeApiKey = claudeApiKey;
+    const resolved = resolveLlmApiKey(sessionId, provider, userKey, allowUserKeys);
+    if (!resolved) {
+      const label = provider === "openrouter" ? "OpenRouter" : "Claude";
+      logger.error(sessionId, "validation", `No ${label} API key available`, { provider, allowUserKeys });
+      return NextResponse.json(
+        { error: allowUserKeys
+            ? `No ${label} API key available. Either provide one in settings or ask the admin to configure a server-side key.`
+            : `No ${label} API key configured on the server. Please contact the admin.` },
+        { status: 400 }
+      );
     }
+
+    if (provider === "openrouter") {
+      credentials.openRouterApiKey = resolved.apiKey;
+    } else {
+      credentials.claudeApiKey = resolved.apiKey;
+    }
+    userSuppliedKey = resolved.userSuppliedKey;
 
     // 3-tier access check: anonymous (IP) → authenticated (user) → BYOK (unlimited)
     const userId = request.headers.get("x-user-id");
@@ -259,28 +254,50 @@ export async function POST(request: NextRequest) {
       stack: error instanceof Error ? error.stack : undefined,
     });
 
-    // Detect Anthropic rate limit (after retries exhausted in sn-engine)
+    const allowUserKeys = process.env.ALLOW_USER_API_KEYS !== "false";
+
+    // Unified provider error taxonomy — same shape for chat and chat-stream
     if (message === "anthropic_rate_limit") {
-      const allowUserKeys = process.env.ALLOW_USER_API_KEYS !== "false";
       logger.error(sessionId, "claude_api", "Anthropic rate limit exceeded after retries");
       return NextResponse.json(
         {
-          error: "anthropic_rate_limit",
-          message: allowUserKeys
-            ? "Claude API rate limit exceeded after retries. Provide your own API key to continue."
-            : "Claude API rate limit exceeded after retries. Please try again later.",
-          needsApiKey: allowUserKeys,
-          retryable: true,
+          error: "provider_rate_limit",
+          code: "provider_rate_limit",
+          message: "Claude API rate limit exceeded after retries.",
+          usedServerKey: !userSuppliedKey,
           allowUserApiKeys: allowUserKeys,
+          retryable: true,
         },
         { status: 429 }
       );
     }
 
-    // Detect specific error types
     if (message.includes("authentication") || message.includes("401") || message.includes("invalid x-api-key")) {
       logger.error(sessionId, "auth", "Authentication failed", { error: message });
-      return NextResponse.json({ error: "Authentication failed" }, { status: 401 });
+      return NextResponse.json(
+        {
+          error: "provider_auth",
+          code: "provider_auth",
+          message: "API key authentication failed.",
+          usedServerKey: !userSuppliedKey,
+          allowUserApiKeys: allowUserKeys,
+        },
+        { status: 401 }
+      );
+    }
+
+    if (message.includes("402") || message.includes("billing") || message.includes("insufficient_quota")) {
+      logger.error(sessionId, "billing", "Provider billing error", { error: message });
+      return NextResponse.json(
+        {
+          error: "provider_billing",
+          code: "provider_billing",
+          message: "API key billing limit reached.",
+          usedServerKey: !userSuppliedKey,
+          allowUserApiKeys: allowUserKeys,
+        },
+        { status: 402 }
+      );
     }
 
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

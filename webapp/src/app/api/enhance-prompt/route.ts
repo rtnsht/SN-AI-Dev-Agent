@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkAccess } from "@/lib/access-tier";
 import { getClientIp } from "@/lib/client-ip";
 import { parseEnhancePromptBody } from "@/lib/request-validation";
+import { resolveLlmApiKey } from "@/lib/key-resolver";
 
 const SYSTEM_PROMPTS: Record<string, string> = {
   grammar: `You are a grammar and spelling corrector. Fix any grammar, spelling, and punctuation errors in the user's text. Preserve the original meaning and tone. Return ONLY the corrected text with no explanation, preamble, or surrounding quotes.`,
@@ -30,7 +31,8 @@ export async function POST(request: NextRequest) {
 
     const systemPrompt = SYSTEM_PROMPTS[mode];
 
-    const apiKey = process.env.CLAUDE_API_KEY || "";
+    const resolved = resolveLlmApiKey("enhance-prompt", "anthropic", "", false);
+    const apiKey = resolved?.apiKey || "";
     if (!apiKey) {
       return NextResponse.json({ error: "AI service not configured" }, { status: 503 });
     }

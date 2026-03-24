@@ -132,3 +132,18 @@ export async function checkSessionStart(ip: string): Promise<RateLimitResult> {
   return check(`sessionstart:${ip}`, SESSION_START_MAX, SESSION_START_WINDOW);
 }
 
+/** Share prompt tracking: 10 requests per IP per hour */
+export async function checkShareTracking(ip: string): Promise<RateLimitResult> {
+  return check(`sharetracking:${ip}`, 10, 60 * 60 * 1000);
+}
+
+/** Share tag generation: 3 requests per IP per hour */
+export async function checkShareTagGeneration(ip: string): Promise<RateLimitResult> {
+  return check(`sharetag:${ip}`, 3, 60 * 60 * 1000);
+}
+
+/** Share card rendering: 20 requests per IP per hour */
+export async function checkShareCard(ip: string): Promise<RateLimitResult> {
+  return check(`sharecard:${ip}`, 20, 60 * 60 * 1000);
+}
+
