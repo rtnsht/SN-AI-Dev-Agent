@@ -1985,9 +1985,21 @@ export default function Home() {
                 Not connected
               </span>
             ) : null}
+
+            {/* New Chat — left zone, primary action near app identity */}
+            {messages.length > 0 && (
+              <button
+                onClick={handleNewChat}
+                className="header-nav-btn flex-shrink-0"
+                title="Start a new conversation"
+              >
+                <Plus className="w-4 h-4" strokeWidth={1.5} />
+                <span className="hidden md:inline">New</span>
+              </button>
+            )}
           </div>
 
-          {/* Right zone: about + release + feedback + theme + new chat + profile + right-panel toggle */}
+          {/* Right zone: about + release + feedback + theme + profile + right-panel toggle */}
           <div className="flex items-center gap-0.5 sm:gap-1">
             {/* About / Info */}
             {SHOW_INFO_BUTTON && (
@@ -2141,18 +2153,6 @@ export default function Home() {
 
             {/* Theme toggle */}
             <ThemeToggle />
-
-            {/* New Chat */}
-            {messages.length > 0 && (
-              <button
-                onClick={handleNewChat}
-                className="header-nav-btn flex-shrink-0"
-                title="New Chat"
-              >
-                <Plus className="w-4 h-4" strokeWidth={1.5} />
-                <span className="hidden md:inline">New</span>
-              </button>
-            )}
 
             {/* Profile / Sign In */}
             {!appUser ? (
