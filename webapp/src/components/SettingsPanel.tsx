@@ -508,7 +508,7 @@ export default function SettingsPanel({
                       </ul>
                       <div className="pt-1" style={{ borderTop: "1px solid color-mix(in srgb, var(--color-primary) 10%, transparent)" }}>
                         <p style={{ color: "var(--text-disabled)" }}>
-                          <strong style={{ color: "var(--color-warning)" }}>Note:</strong> The server proxies your requests to {aiProvider === "openrouter" ? "OpenRouter" : "Anthropic"} and handles the key in-memory during the call. This is the industry-standard pattern (same as Cursor, TypingMind, etc.) since {aiProvider === "openrouter" ? "OpenRouter" : "Anthropic"} APIs do not support direct browser-to-API calls (CORS).
+                          <strong style={{ color: "var(--color-warning)" }}>Note:</strong> The server securely proxies requests to {aiProvider === "openrouter" ? "OpenRouter" : "Anthropic"} and handles the API key in memory during each call. This follows an industry-standard architecture pattern used by leading AI app frameworks and clients, as {aiProvider === "openrouter" ? "OpenRouter" : "Anthropic"} APIs don&apos;t support direct browser-to-API communication (CORS).
                         </p>
                       </div>
                       <div className="pt-1" style={{ borderTop: "1px solid color-mix(in srgb, var(--color-primary) 10%, transparent)" }}>
