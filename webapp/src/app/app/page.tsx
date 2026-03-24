@@ -874,7 +874,7 @@ export default function Home() {
         browserSessionBootstrapped = true;
       }
 
-      setConnectingLabel(authType === "session" ? "Validating ServiceNow session..." : "Connecting...");
+      setConnectingLabel(authType === "session" ? "Validating ServiceNow session..." : "Authenticating...");
 
       // If browser-proxied validation already ran inside the Playwright browser,
       // use that result directly instead of calling /api/test-connection (which
@@ -937,6 +937,7 @@ export default function Home() {
       }
 
       if (data.success) {
+        setConnectingLabel("Verifying roles & permissions...");
         setCredentials(effectiveCredentials);
         setConnected(true);
         setConnInfo(data);
@@ -1004,6 +1005,7 @@ export default function Home() {
               assignmentGroups: data.userInfo.assignmentGroups || [],
             }
           : undefined;
+        setConnectingLabel("Setting up workspace...");
         fetchCategorizedPromptsFromApi(effectiveCredentials, userContext);
       } else {
         const rawMsg = data.message || "Unknown error";
@@ -1959,6 +1961,29 @@ export default function Home() {
               )}
               <h1 className="hidden sm:block text-sm sm:text-[15px] font-semibold truncate" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>{APP_NAME}</h1>
             </Link>
+
+            {/* Connection status — always visible in header */}
+            {connected && connInfo ? (
+              <span
+                className="hidden sm:flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full flex-shrink-0"
+                style={{
+                  background: "color-mix(in srgb, var(--color-success) 8%, transparent)",
+                  color: "var(--color-success)",
+                  border: "1px solid color-mix(in srgb, var(--color-success) 15%, transparent)",
+                }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--status-success)" }} />
+                {credentials.instanceUrl.replace(/https?:\/\//, "").replace(/\.service-now\.com\/?$/, "")}
+              </span>
+            ) : !isConnecting ? (
+              <span
+                className="hidden sm:flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full flex-shrink-0"
+                style={{ color: "var(--text-disabled)" }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--text-disabled)", opacity: 0.5 }} />
+                Not connected
+              </span>
+            ) : null}
           </div>
 
           {/* Right zone: about + release + feedback + theme + new chat + profile + right-panel toggle */}
