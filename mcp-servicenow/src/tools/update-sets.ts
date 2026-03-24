@@ -144,11 +144,25 @@ export async function getUpdateSet(client: ServiceNowClient, input: z.infer<type
 }
 
 export async function createUpdateSet(client: ServiceNowClient, input: z.infer<typeof createUpdateSetSchema>) {
-  // ── Scope guard: ensure scope is active for custom-scope update sets ──
-  if (input.application && input.application !== 'global' && client.getActiveScope() !== input.application) {
-    const scopeResult = await client.ensureScopeActive(input.application);
+  // ── Scope guard: ensure session is in the correct scope ──
+  const targetIsCustomScope = input.application && input.application !== 'global';
+  const currentScope = client.getActiveScope();
+
+  if (targetIsCustomScope && currentScope !== input.application) {
+    // Custom scope requested — switch to it
+    const scopeResult = await client.ensureScopeActive(input.application!);
     if (!scopeResult.success) {
       return scopeResult;
+    }
+  } else if (!targetIsCustomScope && currentScope && currentScope !== 'global') {
+    // Global scope requested but session is stuck in a custom scope — switch back.
+    // Without this, the update set is created in the wrong scope context (403/404).
+    const globalResult = await client.switchToGlobalScope();
+    if (!globalResult.success) {
+      return {
+        success: false,
+        error: `Session is in custom scope "${currentScope}" and could not switch to Global: ${globalResult.error}`
+      };
     }
   }
 
@@ -231,15 +245,24 @@ export async function setCurrentUpdateSet(client: ServiceNowClient, input: z.inf
       return { success: false, error: 'Update set is not in progress' };
     }
 
-    // ── Scope guard: if this update set is in a custom scope, ensure scope is active ──
+    // ── Scope guard: ensure session is in the correct scope for this update set ──
     const usApplication = typeof updateSet.application === 'string'
       ? updateSet.application
       : (updateSet.application as Record<string, unknown>)?.value as string || '';
-    if (usApplication && usApplication !== 'global' && client.getActiveScope() !== usApplication) {
+    const usIsCustomScope = usApplication && usApplication !== 'global';
+    const sessionScope = client.getActiveScope();
+
+    if (usIsCustomScope && sessionScope !== usApplication) {
+      // Update set is in a custom scope — switch to it
       const scopeResult = await client.ensureScopeActive(usApplication);
       if (!scopeResult.success && scopeResult.userActionRequired) {
         return scopeResult;
       }
+    } else if (!usIsCustomScope && sessionScope && sessionScope !== 'global') {
+      // Update set is in Global but session is in a custom scope — switch back.
+      // Without this, the GlideUpdateSet().set() call on the server runs in the
+      // wrong scope context, and subsequent artifact capture fails.
+      await client.switchToGlobalScope();
     }
 
     // Layer 1: Call the UpdateSetHelper Scripted REST API (session-based)
@@ -500,18 +523,51 @@ export async function verifyUpdateSetCapture(
  * sn_set_scope — Switch to a specific application scope.
  * Runs the five-tier fallback via client.ensureScopeActive().
  * Returns success with method used, or userActionRequired with a checklist.
+ *
+ * IMPORTANT: When switching to Global, this now actually switches the ServiceNow
+ * session back via concoursepicker. Previously it only set an in-memory flag,
+ * leaving the SN session stuck in the custom scope permanently. This caused
+ * 403/404 cascades on all subsequent Global-scope operations.
  */
 export async function setScope(client: ServiceNowClient, input: z.infer<typeof setScopeSchema>) {
   const scopeId = input.scope_id;
 
   if (!scopeId || scopeId === 'global') {
+    const currentScope = client.getActiveScope();
+
+    // If session was previously in a custom scope, we MUST actually switch
+    // the ServiceNow HTTP session back to Global — not just set the in-memory flag.
+    // The concoursepicker PUT that switched to the custom scope is still active
+    // on the ServiceNow side; without switching back, all REST calls operate
+    // in the custom scope context, causing 403/404 on Global operations.
+    if (currentScope && currentScope !== 'global') {
+      const switchResult = await client.switchToGlobalScope();
+      if (!switchResult.success) {
+        return {
+          success: false,
+          error: `Failed to switch ServiceNow session back to Global scope: ${switchResult.error}`,
+          scopeId: 'global',
+          scopeName: 'Global'
+        };
+      }
+      client.setActiveScope('global');
+      return {
+        success: true,
+        message: 'Scope switched back to Global',
+        scopeId: 'global',
+        scopeName: 'Global',
+        method: 'concoursepicker'
+      };
+    }
+
+    // Already in Global — no switch needed
     client.setActiveScope('global');
     return {
       success: true,
-      message: 'Scope set to Global (no scope switch needed)',
+      message: 'Scope set to Global (already in Global scope)',
       scopeId: 'global',
       scopeName: 'Global',
-      method: 'global_default'
+      method: 'already_global'
     };
   }
 
