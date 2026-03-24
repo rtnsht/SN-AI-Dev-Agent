@@ -22,7 +22,7 @@ import {
 } from '../types/index.js';
 
 // Helper API key type
-type HelperApiKey = 'uiPolicyActionHelper' | 'updateSetHelper' | 'addToUpdateSetHelper' | 'scopeHelper';
+type HelperApiKey = 'uiPolicyActionHelper' | 'updateSetHelper' | 'addToUpdateSetHelper' | 'scopeHelper' | 'catalogVariableHelper';
 
 /** Result of a scope-switching attempt */
 export interface ScopeSwitchResult {

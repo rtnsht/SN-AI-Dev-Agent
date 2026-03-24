@@ -19,12 +19,16 @@ export interface CommandContext {
   sessionId: string;
   /** Active requirement ID (e.g. "REQ-001") */
   activeReqId: string | null;
+  /** Number of non-hidden assistant messages in the session */
+  assistantMessageCount: number;
+  /** Phases completed so far */
+  completedPhases: SDLCPhase[];
 }
 
 export type CommandResult =
   | { type: "state_update"; updates: Partial<CommandStateUpdates> }
   | { type: "system_message"; content: string; messageType: "info" | "success" | "warning" }
-  | { type: "action"; action: "new_chat" | "toggle_settings" }
+  | { type: "action"; action: "new_chat" | "toggle_settings" | "open_share_modal" }
   | { type: "passthrough" };
 
 export interface CommandStateUpdates {

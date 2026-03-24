@@ -40,18 +40,23 @@ export default function CommandPalette({ inputText, ctx, onSelect, onDismiss, vi
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (!visible || commands.length === 0) return;
+      if (e.isComposing || e.key === "Process") return;
 
       if (e.key === "ArrowDown") {
         e.preventDefault();
+        e.stopPropagation();
         setSelectedIndex((prev) => (prev + 1) % commands.length);
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
+        e.stopPropagation();
         setSelectedIndex((prev) => (prev - 1 + commands.length) % commands.length);
       } else if (e.key === "Enter" || e.key === "Tab") {
         e.preventDefault();
+        e.stopPropagation();
         onSelect(commands[selectedIndex].name);
       } else if (e.key === "Escape") {
         e.preventDefault();
+        e.stopPropagation();
         onDismiss();
       }
     },
@@ -59,8 +64,8 @@ export default function CommandPalette({ inputText, ctx, onSelect, onDismiss, vi
   );
 
   useEffect(() => {
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => document.removeEventListener("keydown", handleKeyDown, true);
   }, [handleKeyDown]);
 
   // Scroll selected item into view

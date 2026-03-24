@@ -49,6 +49,9 @@ export async function testConnection(client: ServiceNowClient) {
       if (status.apis.scopeHelper.basePath) {
         client.setHelperApiPath('scopeHelper', status.apis.scopeHelper.basePath);
       }
+      if (status.apis.catalogVariableHelper.basePath) {
+        client.setHelperApiPath('catalogVariableHelper', status.apis.catalogVariableHelper.basePath);
+      }
 
       client.helperApisInitialized = true;
 
@@ -71,6 +74,10 @@ export async function testConnection(client: ServiceNowClient) {
           scopeHelper: {
             deployed: status.apis.scopeHelper.deployed,
             path: status.apis.scopeHelper.basePath
+          },
+          catalogVariableHelper: {
+            deployed: status.apis.catalogVariableHelper.deployed,
+            path: status.apis.catalogVariableHelper.basePath
           }
         }
       };
@@ -168,6 +175,7 @@ export async function initializeInstance(
     const updateSetPath = client.getHelperApiPath('updateSetHelper');
     const addToUpdateSetPath = client.getHelperApiPath('addToUpdateSetHelper');
     const scopeHelperPath = client.getHelperApiPath('scopeHelper');
+    const catalogVariableHelperPath = client.getHelperApiPath('catalogVariableHelper');
     return {
       success: true,
       message: 'Instance already initialized',
@@ -176,7 +184,8 @@ export async function initializeInstance(
         uiPolicyActionHelper: { path: uiPolicyPath, deployed: !!uiPolicyPath },
         updateSetHelper: { path: updateSetPath, deployed: !!updateSetPath },
         addToUpdateSetHelper: { path: addToUpdateSetPath, deployed: !!addToUpdateSetPath },
-        scopeHelper: { path: scopeHelperPath, deployed: !!scopeHelperPath }
+        scopeHelper: { path: scopeHelperPath, deployed: !!scopeHelperPath },
+        catalogVariableHelper: { path: catalogVariableHelperPath, deployed: !!catalogVariableHelperPath }
       }
     };
   }
@@ -199,6 +208,9 @@ export async function initializeInstance(
     }
     if (status.apis.scopeHelper.basePath) {
       client.setHelperApiPath('scopeHelper', status.apis.scopeHelper.basePath);
+    }
+    if (status.apis.catalogVariableHelper.basePath) {
+      client.setHelperApiPath('catalogVariableHelper', status.apis.catalogVariableHelper.basePath);
     }
 
     client.helperApisInitialized = true;
@@ -223,6 +235,10 @@ export async function initializeInstance(
         scopeHelper: {
           deployed: status.apis.scopeHelper.deployed,
           path: status.apis.scopeHelper.basePath
+        },
+        catalogVariableHelper: {
+          deployed: status.apis.catalogVariableHelper.deployed,
+          path: status.apis.catalogVariableHelper.basePath
         }
       }
     };

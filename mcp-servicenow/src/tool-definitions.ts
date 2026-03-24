@@ -2168,7 +2168,22 @@ export const SERVICE_PORTAL_TOOLS: ToolDefinition[] = [
   }
 ];
 
-export const ALL_TOOLS = [...TOOLS, ...MORE_TOOLS, ...ADDITIONAL_TOOLS, ...BROWNFIELD_TOOLS, ...FLOW_DESIGNER_TOOLS, ...SCOPED_APP_TOOLS, ...SERVICE_PORTAL_TOOLS];
+// Service Catalog creation / management tools
+export const CATALOG_TOOLS: ToolDefinition[] = [
+  { name: 'sn_get_catalog_categories', description: 'List service catalog categories. Use to discover available categories before creating or assigning catalog items.', inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'Encoded query (e.g. "titleSTARTSWITHHardware")' }, activeOnly: { type: 'boolean', default: true }, limit: { type: 'number', default: 50 } } } },
+  { name: 'sn_create_catalog_item', description: 'Create a new service catalog item. After creation, add variables with sn_create_catalog_variable and associate with categories/catalogs.', inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'Catalog item name' }, short_description: { type: 'string', description: 'Short description shown in lists' }, description: { type: 'string', description: 'Full HTML description' }, category: { type: 'string', description: 'Primary category sys_id' }, active: { type: 'boolean', default: true }, price: { type: 'string', description: 'Price (e.g. "0" or "49.99")' }, recurring_price: { type: 'string', description: 'Recurring price' }, order: { type: 'number', default: 0, description: 'Display order' }, workflow: { type: 'string', description: 'Workflow sys_id for fulfillment' } }, required: ['name'] } },
+  { name: 'sn_create_catalog_variable', description: 'Add a variable (form field) to an existing catalog item. Common types: 6=Single Line Text, 7=Multi Line, 8=Reference, 10=Select Box, 1=Yes/No, 21=List Collector.', inputSchema: { type: 'object', properties: { cat_item: { type: 'string', description: 'Parent catalog item sys_id' }, name: { type: 'string', description: 'Internal variable name' }, question_text: { type: 'string', description: 'Label shown to the user' }, type: { type: 'number', default: 6, description: 'Variable type code' }, order: { type: 'number', default: 100, description: 'Display order' }, mandatory: { type: 'boolean', default: false }, default_value: { type: 'string' }, reference: { type: 'string', description: 'Reference table (for type 8)' }, reference_qual: { type: 'string', description: 'Reference qualifier' } }, required: ['cat_item', 'name', 'question_text'] } },
+  { name: 'sn_create_record_producer', description: 'Create a record producer — a catalog item that creates a record on a target table (e.g. incident, change_request) when submitted.', inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'Record producer name' }, table_name: { type: 'string', description: 'Target table for record creation' }, short_description: { type: 'string' }, description: { type: 'string' }, category: { type: 'string', description: 'Primary category sys_id' }, active: { type: 'boolean', default: true }, script: { type: 'string', description: 'Post-insert script' } }, required: ['name', 'table_name'] } },
+  { name: 'sn_update_catalog_item', description: 'Update an existing catalog item fields (name, description, active, category, etc.)', inputSchema: { type: 'object', properties: { sys_id: { type: 'string', description: 'Catalog item sys_id' }, data: { type: 'object', description: 'Fields to update' } }, required: ['sys_id', 'data'] } },
+  { name: 'sn_delete_catalog_item', description: 'Deactivate (default) or permanently delete a catalog item. Use hard_delete=true only when permanent removal is intended.', inputSchema: { type: 'object', properties: { sys_id: { type: 'string', description: 'Catalog item sys_id' }, hard_delete: { type: 'boolean', default: false, description: 'If true, permanently deletes instead of deactivating' } }, required: ['sys_id'] } },
+  { name: 'sn_add_catalog_item_to_category', description: 'Associate a catalog item with an additional category (M2M). The primary category is set on the item itself; use this for extra category associations.', inputSchema: { type: 'object', properties: { sc_cat_item: { type: 'string', description: 'Catalog item sys_id' }, sc_category: { type: 'string', description: 'Category sys_id' } }, required: ['sc_cat_item', 'sc_category'] } },
+  { name: 'sn_add_catalog_item_to_catalog', description: 'Associate a catalog item with a service catalog (M2M). Controls which catalogs display this item.', inputSchema: { type: 'object', properties: { sc_cat_item: { type: 'string', description: 'Catalog item sys_id' }, sc_catalog: { type: 'string', description: 'Catalog sys_id' } }, required: ['sc_cat_item', 'sc_catalog'] } },
+  { name: 'sn_create_request', description: 'Submit a service catalog request for an existing catalog item, creating a requested item (sc_req_item).', inputSchema: { type: 'object', properties: { catalogItem: { type: 'string', description: 'Catalog item sys_id' }, requestedFor: { type: 'string', description: 'Requested for user sys_id' }, variables: { type: 'object', description: 'Variable values as key-value pairs' } }, required: ['catalogItem'] } },
+  { name: 'sn_create_catalog_client_script', description: 'Create a client script on a catalog variable (catalog_script_client table). Automatically binds the variable reference via server-side GlideRecord. Use instead of sn_create_client_script for catalog item form behavior.', inputSchema: { type: 'object', properties: { cat_item: { type: 'string', description: 'Catalog item sys_id' }, name: { type: 'string', description: 'Script name' }, script: { type: 'string', description: 'Script code' }, type: { type: 'string', enum: ['onLoad', 'onChange', 'onSubmit'], description: 'Script type' }, cat_variable: { type: 'string', description: 'Variable name to bind (for onChange). Must exist on the catalog item.' }, apply_to: { type: 'string', default: 'item', description: 'Apply to: item or variable_set' }, active: { type: 'boolean', default: true } }, required: ['cat_item', 'name', 'script', 'type'] } },
+  { name: 'sn_create_catalog_ui_policy_action', description: 'Create a UI policy action for a catalog variable (catalog_ui_policy_action table). Automatically binds the variable reference via server-side GlideRecord. Use for show/hide/mandatory on catalog item variables.', inputSchema: { type: 'object', properties: { catalog_ui_policy: { type: 'string', description: 'sys_id of the parent catalog UI policy' }, variable: { type: 'string', description: 'Variable name to target (must exist on the catalog item)' }, cat_item: { type: 'string', description: 'Catalog item sys_id (used to look up variable)' }, mandatory: { type: 'string', enum: ['true', 'false', 'ignore'], default: 'ignore' }, visible: { type: 'string', enum: ['true', 'false', 'ignore'], default: 'ignore' }, disabled: { type: 'string', enum: ['true', 'false', 'ignore'], default: 'ignore' } }, required: ['catalog_ui_policy', 'variable', 'cat_item'] } },
+];
+
+export const ALL_TOOLS = [...TOOLS, ...MORE_TOOLS, ...ADDITIONAL_TOOLS, ...BROWNFIELD_TOOLS, ...FLOW_DESIGNER_TOOLS, ...SCOPED_APP_TOOLS, ...SERVICE_PORTAL_TOOLS, ...CATALOG_TOOLS];
 
 /**
  * Convert tool definitions to Anthropic Messages API format.
@@ -2238,6 +2253,7 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
     'sn_get_notifications', 'sn_get_events',
     'sn_get_acls', 'sn_get_roles',
     'sn_get_catalog_items', 'sn_get_catalog_item', 'sn_get_catalog_variables', 'sn_get_requests',
+    'sn_get_catalog_categories',
     'sn_get_scheduled_jobs', 'sn_get_fix_scripts',
     // Instance analysis & brownfield discovery
     'sn_analyze_instance', 'sn_detect_ootb_overrides', 'sn_get_dependency_graph',
@@ -2273,6 +2289,7 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
     'sn_get_notifications', 'sn_get_events',
     'sn_get_acls', 'sn_get_roles',
     'sn_get_catalog_items', 'sn_get_catalog_item', 'sn_get_catalog_variables', 'sn_get_requests',
+    'sn_get_catalog_categories',
     'sn_get_scheduled_jobs', 'sn_get_fix_scripts',
     'sn_analyze_instance', 'sn_detect_ootb_overrides', 'sn_get_dependency_graph',
     'sn_find_anti_patterns', 'sn_code_quality_score', 'sn_find_dead_code',
@@ -2298,9 +2315,16 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
     'sn_get_notifications', 'sn_get_events',
     'sn_get_acls', 'sn_get_roles',
     'sn_get_catalog_items', 'sn_get_catalog_item', 'sn_get_catalog_variables',
+    'sn_get_catalog_categories',
     'sn_get_scheduled_jobs', 'sn_get_fix_scripts',
     // Generic create/update
     'sn_create_record', 'sn_update_record',
+    // Catalog creation & management
+    'sn_create_catalog_item', 'sn_create_catalog_variable', 'sn_create_record_producer',
+    'sn_update_catalog_item', 'sn_delete_catalog_item',
+    'sn_add_catalog_item_to_category', 'sn_add_catalog_item_to_catalog',
+    'sn_create_request',
+    'sn_create_catalog_client_script', 'sn_create_catalog_ui_policy_action',
     // Artifact creation
     'sn_create_business_rule', 'sn_create_script_include', 'sn_create_client_script',
     'sn_create_ui_policy', 'sn_create_ui_policy_action', 'sn_create_ui_action',
@@ -2343,6 +2367,7 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
     'sn_get_ui_policies', 'sn_get_ui_policy_actions', 'sn_get_ui_actions',
     'sn_get_acls',
     'sn_get_catalog_items', 'sn_get_catalog_item', 'sn_get_catalog_variables',
+    'sn_get_catalog_categories',
     // Service Portal read (verification)
     'sn_get_sp_widgets', 'sn_get_sp_pages', 'sn_get_sp_portals', 'sn_get_sp_themes',
     'sn_get_sp_css', 'sn_get_sp_angular_providers', 'sn_get_sp_header_footers',

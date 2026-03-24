@@ -11,6 +11,7 @@ import buildCommand from "./commands/build";
 import freeformCommand from "./commands/freeform";
 import statusCommand from "./commands/status";
 import helpCommand from "./commands/help";
+import shareCommand from "./commands/share";
 
 export type { SlashCommand, CommandContext, CommandResult, CommandCategory } from "./types";
 export type { CommandStateUpdates } from "./types";
@@ -19,6 +20,7 @@ const COMMANDS: SlashCommand[] = [
   buildCommand,
   freeformCommand,
   statusCommand,
+  shareCommand,
   helpCommand,
 ];
 

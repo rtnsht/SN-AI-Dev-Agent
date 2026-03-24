@@ -153,7 +153,9 @@ Before recommending custom scripting, evaluate whether the requirement can be me
 - Round-robin or criteria-based assignment → Assignment Rule, NOT scripted Business Rule
 - Access control (who sees/edits what) → ACL, NOT script-based gs.hasRole() + setAbortAction
 - Email/SMS notification on record events → Notification record, NOT GlideEmailOutbound in script
-- Service Catalog form behavior → Catalog Client Script, NOT standard Client Script
+- Service Catalog form behavior → Catalog Client Script via sn_create_catalog_client_script (NOT standard sn_create_client_script or sn_create_record)
+- Catalog UI policy actions (show/hide/mandatory on catalog variables) → sn_create_catalog_ui_policy_action (NOT sn_create_record on catalog_ui_policy_action)
+- Creating catalog items / record producers / variables / catalog client scripts / catalog UI policy actions → use dedicated sn_create_catalog_item, sn_create_catalog_variable, sn_create_record_producer, sn_create_catalog_client_script, sn_create_catalog_ui_policy_action tools (NOT generic sn_create_record). Creation order: item first → category/catalog associations → variables → catalog client scripts → catalog UI policies + actions
 - Data import field mapping → Transform Map mapping, NOT onBefore transform script
 - New feature development → Scoped App, NOT Global scope
 - Reusable server logic → Script Include class, NOT inline Business Rule script

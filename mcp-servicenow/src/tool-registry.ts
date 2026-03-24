@@ -110,6 +110,17 @@ const TOOL_HANDLERS: Record<string, (snClient: ServiceNowClient, args: unknown) 
   sn_get_catalog_item: async (c, a) => catalog.getCatalogItem(c, catalog.getCatalogItemSchema.parse(a)),
   sn_get_catalog_variables: async (c, a) => catalog.getCatalogVariables(c, catalog.getCatalogVariablesSchema.parse(a)),
   sn_get_requests: async (c, a) => catalog.getRequests(c, catalog.getRequestsSchema.parse(a)),
+  sn_get_catalog_categories: async (c, a) => catalog.getCatalogCategories(c, catalog.getCatalogCategoriesSchema.parse(a)),
+  sn_create_catalog_item: async (c, a) => catalog.createCatalogItem(c, catalog.createCatalogItemSchema.parse(a)),
+  sn_create_catalog_variable: async (c, a) => catalog.createCatalogVariable(c, catalog.createCatalogVariableSchema.parse(a)),
+  sn_create_record_producer: async (c, a) => catalog.createRecordProducer(c, catalog.createRecordProducerSchema.parse(a)),
+  sn_update_catalog_item: async (c, a) => catalog.updateCatalogItem(c, catalog.updateCatalogItemSchema.parse(a)),
+  sn_delete_catalog_item: async (c, a) => catalog.deleteCatalogItem(c, catalog.deleteCatalogItemSchema.parse(a)),
+  sn_add_catalog_item_to_category: async (c, a) => catalog.addCatalogItemToCategory(c, catalog.addItemToCategorySchema.parse(a)),
+  sn_add_catalog_item_to_catalog: async (c, a) => catalog.addCatalogItemToCatalog(c, catalog.addItemToCatalogSchema.parse(a)),
+  sn_create_request: async (c, a) => catalog.createRequest(c, catalog.createRequestSchema.parse(a)),
+  sn_create_catalog_client_script: async (c, a) => catalog.createCatalogClientScript(c, catalog.createCatalogClientScriptSchema.parse(a)),
+  sn_create_catalog_ui_policy_action: async (c, a) => catalog.createCatalogUiPolicyAction(c, catalog.createCatalogUiPolicyActionSchema.parse(a)),
 
   // Scheduled Jobs & Fix Scripts
   sn_get_scheduled_jobs: async (c, a) => scheduledJobs.getScheduledJobs(c, scheduledJobs.getScheduledJobsSchema.parse(a)),

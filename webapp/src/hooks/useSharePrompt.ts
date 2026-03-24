@@ -13,6 +13,12 @@ interface ActivityLogEntry {
   toolName?: string;
 }
 
+export interface ShareCard {
+  phase: string;
+  imageUrl: string;
+  timestamp: string;
+}
+
 interface UseSharePromptArgs {
   connected: boolean;
   clientSessionId: string;
@@ -30,8 +36,9 @@ interface UseSharePromptResult {
   showPanelLink: boolean;
   fingerprint: string | null;
   sessionStats: ShareMetrics;
+  generatedCards: ShareCard[];
+  shareImageLoading: boolean;
   markConnected: () => void;
-  /** Clear share session timer when SN disconnects (avoids inflated duration after reconnect). */
   markDisconnected: () => void;
   openModalFromBanner: () => void;
   openModalFromPanel: () => void;
@@ -39,6 +46,7 @@ interface UseSharePromptResult {
   closeModal: () => void;
   onShared: (platform: "linkedin" | "x") => Promise<void>;
   resetSession: () => void;
+  generateShareImage: () => Promise<ShareCard | null>;
 }
 
 function readSessionBool(key: string): boolean {
@@ -86,10 +94,13 @@ export function useSharePrompt({
     return sessionStorage.getItem(SHARE_FINGERPRINT_KEY);
   });
   const [clockTick, setClockTick] = useState(() => Date.now());
+  const [generatedCards, setGeneratedCards] = useState<ShareCard[]>([]);
+  const [shareImageLoading, setShareImageLoading] = useState(false);
 
   const checkingRef = useRef(false);
   const lockRef = useRef(false);
   const dismissOnCloseRef = useRef(false);
+  const lastGenPhaseCountRef = useRef(0);
 
   const assistantCount = useMemo(
     () => messages.filter((message) => message.role === "assistant" && !message.hidden).length,
@@ -216,7 +227,7 @@ export function useSharePrompt({
           writeLocalPromptCount(data.fingerprint, 2);
         }
       } catch {
-        // Non-blocking: sharing should still work even if analytics tracking fails.
+        // Non-blocking
       }
     },
     [fingerprint, trackAction]
@@ -229,9 +240,12 @@ export function useSharePrompt({
     setShowPanelLink(false);
     setFingerprint(null);
     setClockTick(Date.now());
+    setGeneratedCards([]);
+    setShareImageLoading(false);
     checkingRef.current = false;
     lockRef.current = false;
     dismissOnCloseRef.current = false;
+    lastGenPhaseCountRef.current = 0;
     if (typeof window !== "undefined") {
       sessionStorage.removeItem(SHARE_CONNECTED_AT_KEY);
       sessionStorage.removeItem(SHARE_PANEL_LINK_KEY);
@@ -239,25 +253,88 @@ export function useSharePrompt({
     }
   }, []);
 
+  const generateShareImage = useCallback(async (): Promise<ShareCard | null> => {
+    if (shareImageLoading) return null;
+    setShareImageLoading(true);
+
+    try {
+      const currentStats = {
+        ...sessionStats,
+        durationMin: connectedAt ? Math.max(1, Math.round((Date.now() - connectedAt) / 60_000)) : 1,
+      };
+
+      const response = await fetch("/api/share-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: clientSessionId,
+          durationMin: currentStats.durationMin,
+          phaseCount: currentStats.phaseCount,
+          toolCount: currentStats.toolCount,
+          assistantCount: currentStats.assistantCount,
+          tag: currentStats.aiTag || "",
+        }),
+      });
+
+      if (!response.ok) {
+        console.error("[share-prompt] Image generation failed:", response.status);
+        return null;
+      }
+
+      const data = await response.json();
+
+      if (data.fallback) {
+        // Server couldn't generate an image; the modal will use a CSS fallback
+        return null;
+      }
+
+      if (data.imageBase64 && data.mimeType) {
+        const blob = new Blob(
+          [Uint8Array.from(atob(data.imageBase64), c => c.charCodeAt(0))],
+          { type: data.mimeType },
+        );
+        const imageUrl = URL.createObjectURL(blob);
+        const latestPhase = completedPhases.length > 0
+          ? completedPhases[completedPhases.length - 1]
+          : "session";
+
+        const card: ShareCard = {
+          phase: latestPhase,
+          imageUrl,
+          timestamp: new Date().toISOString(),
+        };
+
+        setGeneratedCards(prev => [...prev, card]);
+        return card;
+      }
+
+      return null;
+    } catch (err) {
+      console.error("[share-prompt] Image generation error:", err);
+      return null;
+    } finally {
+      setShareImageLoading(false);
+    }
+  }, [clientSessionId, completedPhases, connectedAt, sessionStats, shareImageLoading]);
+
+  // Phase-based share prompt: trigger when a new phase is completed
   useEffect(() => {
-    if (!connected || !connectedAt || showBanner || showModal || showPanelLink || lockRef.current) return;
+    if (!connected || !connectedAt) return;
+
+    const phaseCount = completedPhases.length;
+    if (phaseCount <= lastGenPhaseCountRef.current) return;
+    lastGenPhaseCountRef.current = phaseCount;
 
     const assistantMessages = Math.max(assistantCount, 1);
     const errorRatio = errorCount / assistantMessages;
+    if (errorRatio >= 0.15) return;
+    if (connectionError !== null) return;
+    if (rateLimitHit) return;
+    if (pendingRetry !== null) return;
+    if (assistantCount < 3) return;
 
-    const tick = () => {
-      setClockTick(Date.now());
-
-      const durationMin = connectedAt ? Math.max(1, Math.round((Date.now() - connectedAt) / 60_000)) : 0;
-      if (durationMin < 12) return;
-      if (errorRatio >= 0.15) return;
-      if (connectionError !== null) return;
-      if (rateLimitHit) return;
-      if (pendingRetry !== null) return;
-      if (assistantCount < 3) return;
-      if (completedPhases.length < 1) return;
-      if (checkingRef.current) return;
-
+    // Show the banner on phase completion
+    if (!showBanner && !showModal && !lockRef.current) {
       if (fingerprint && readLocalPromptCount(fingerprint) >= 2) {
         lockRef.current = true;
         return;
@@ -266,46 +343,49 @@ export function useSharePrompt({
       checkingRef.current = true;
       void trackAction("shown")
         .then((data) => {
-          if (data.fingerprint) {
-            setFingerprint(data.fingerprint);
-          }
-
+          if (data.fingerprint) setFingerprint(data.fingerprint);
           if (!data.canShow) {
             if (data.fingerprint) writeLocalPromptCount(data.fingerprint, 2);
             lockRef.current = true;
             return;
           }
-
           if (data.fingerprint) {
-            const nextCount = readLocalPromptCount(data.fingerprint) + 1;
-            writeLocalPromptCount(data.fingerprint, nextCount);
+            writeLocalPromptCount(data.fingerprint, readLocalPromptCount(data.fingerprint) + 1);
           }
           setShowBanner(true);
+          setShowPanelLink(true);
         })
         .catch(() => {})
-        .finally(() => {
-          checkingRef.current = false;
-        });
-    };
+        .finally(() => { checkingRef.current = false; });
+    }
 
-    tick();
-    const interval = window.setInterval(tick, 60_000);
-    return () => window.clearInterval(interval);
+    // Generate a share image in the background (non-blocking, skip if we already have one)
+    if (generatedCards.length === 0) {
+      void generateShareImage();
+    }
   }, [
     assistantCount,
-    completedPhases.length,
+    completedPhases,
     connected,
     connectedAt,
     connectionError,
     errorCount,
     fingerprint,
+    generateShareImage,
+    generatedCards,
     pendingRetry,
     rateLimitHit,
     showBanner,
     showModal,
-    showPanelLink,
     trackAction,
   ]);
+
+  // Keep clock ticking for duration stat
+  useEffect(() => {
+    if (!connected || !connectedAt) return;
+    const interval = window.setInterval(() => setClockTick(Date.now()), 60_000);
+    return () => window.clearInterval(interval);
+  }, [connected, connectedAt]);
 
   return {
     showBanner,
@@ -313,6 +393,8 @@ export function useSharePrompt({
     showPanelLink,
     fingerprint,
     sessionStats,
+    generatedCards,
+    shareImageLoading,
     markConnected,
     markDisconnected,
     openModalFromBanner,
@@ -321,5 +403,6 @@ export function useSharePrompt({
     closeModal,
     onShared,
     resetSession,
+    generateShareImage,
   };
 }

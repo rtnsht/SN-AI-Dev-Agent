@@ -19,7 +19,7 @@ export default function ShareBanner({ stats, onShare, onDismiss }: ShareBannerPr
       <div className="app-banner-inner" style={{ justifyContent: "flex-start", paddingRight: "4rem" }}>
         <Share2 className="app-banner-icon" strokeWidth={1.8} />
         <div className="app-banner-text">
-          You moved through <strong>{stageLabel}</strong> in <strong>{durationLabel}</strong>. Want to share the win?
+          <strong>{stageLabel}</strong> down, <strong>{durationLabel}</strong> in. Other ServiceNow builders could learn from this.
         </div>
         <button
           type="button"
@@ -33,7 +33,7 @@ export default function ShareBanner({ stats, onShare, onDismiss }: ShareBannerPr
           }}
         >
           <Share2 className="w-3.5 h-3.5" strokeWidth={1.8} />
-          Share
+          Share this
         </button>
       </div>
       <button type="button" onClick={onDismiss} className="app-banner-dismiss" aria-label="Dismiss share prompt">

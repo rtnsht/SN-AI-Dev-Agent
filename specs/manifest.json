@@ -7,11 +7,27 @@
     "repository": "SN AI Dev",
     "defaultInstance": "dev181312"
   },
-  "requirements": {},
+  "requirements": {
+    "REQ-001": {
+      "title": "Service Catalog Item Creation Capability",
+      "description": "Add first-class create/update/delete MCP tools for catalog items, variables, record producers, and category/catalog associations",
+      "status": "implemented",
+      "priority": "high",
+      "phases": {
+        "spec": "complete",
+        "design": "complete",
+        "implementation": "complete",
+        "testing": "pending",
+        "deployment": "pending"
+      },
+      "created": "2026-03-24",
+      "lastUpdated": "2026-03-24"
+    }
+  },
   "statistics": {
-    "total": 0,
+    "total": 1,
     "deployed": 0,
-    "inProgress": 0,
+    "inProgress": 1,
     "notStarted": 0
   }
 }

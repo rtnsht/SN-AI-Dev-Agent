@@ -249,6 +249,8 @@ export default function Home() {
     showModal: showShareModal,
     showPanelLink: showSharePanelLink,
     sessionStats: shareSessionStats,
+    generatedCards: shareGeneratedCards,
+    shareImageLoading,
     markConnected: markShareConnected,
     markDisconnected: markShareDisconnected,
     openModalFromBanner: openShareModalFromBanner,
@@ -347,13 +349,11 @@ export default function Home() {
         }));
       }
 
-      // Restore model/provider
+      // Restore model/provider (but NOT modelLocked — let user change before reconnecting)
       const savedProvider = sessionStorage.getItem(SK.PROVIDER);
       if (savedProvider) setAiProvider(savedProvider as AIProvider);
       const savedModel = sessionStorage.getItem(SK.MODEL);
       if (savedModel) setSelectedModel(savedModel);
-      const savedLocked = sessionStorage.getItem(SK.MODEL_LOCKED);
-      if (savedLocked === "true") setModelLocked(true);
 
       // Restore SDLC phases
       const savedReqId = sessionStorage.getItem(SK.REQ_ID);
@@ -651,15 +651,20 @@ export default function Home() {
     fetchModels();
   }, [aiProvider, credentials.openRouterApiKey, openRouterModels.length, selectedModel]);
 
-  // Reset model selection when switching providers
+  // Reset model selection when switching providers (preserves valid restored/user-selected models)
   useEffect(() => {
-    if (modelLocked) return; // Don't reset if locked
+    if (modelLocked) return;
     if (aiProvider === "anthropic") {
-      setSelectedModel("sonnet-4");
+      setSelectedModel(prev => {
+        if (ANTHROPIC_MODELS.some(m => m.key === prev)) return prev;
+        return "sonnet-4";
+      });
     } else if (aiProvider === "openrouter" && openRouterModels.length > 0) {
-      // Pick a good default - prefer Claude models on OpenRouter
-      const claudeModel = openRouterModels.find(m => m.key.includes("claude"));
-      setSelectedModel(claudeModel?.key || openRouterModels[0].key);
+      setSelectedModel(prev => {
+        if (openRouterModels.some(m => m.key === prev)) return prev;
+        const claudeModel = openRouterModels.find(m => m.key.includes("claude"));
+        return claudeModel?.key || openRouterModels[0].key;
+      });
     }
   }, [aiProvider, modelLocked, openRouterModels]);
 
@@ -1057,6 +1062,8 @@ export default function Home() {
           connected,
           sessionId: clientSessionId,
           activeReqId,
+          assistantMessageCount: messagesRef.current.filter(m => m.role === "assistant" && !m.hidden).length,
+          completedPhases,
         };
         const result = dispatchSlashCommand(text.trim(), cmdCtx);
         if (result.type === "state_update") {
@@ -1080,6 +1087,7 @@ export default function Home() {
         }
         if (result.type === "action") {
           if (result.action === "new_chat") handleNewChat();
+          if (result.action === "open_share_modal") openShareModalFromPanel();
           return;
         }
         // "passthrough" — not a recognized command, send as normal message
@@ -2247,6 +2255,7 @@ export default function Home() {
           }}
           activeReqId={activeReqId}
           clientSessionId={clientSessionId}
+          completedPhases={completedPhases}
         />
       </main>
 
@@ -2295,7 +2304,7 @@ export default function Home() {
               </div>
             )}
 
-            {showSharePanelLink && (
+            {(showSharePanelLink || shareGeneratedCards.length > 0) && (
               <div>
                 <div className="sidebar-group-label">Share</div>
                 <button
@@ -2309,8 +2318,38 @@ export default function Home() {
                   }}
                 >
                   <Share2 className="w-3.5 h-3.5" strokeWidth={1.8} />
-                  Share your session
+                  Let others see what you built
                 </button>
+
+                {shareGeneratedCards.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    <div className="text-[10px] font-medium uppercase tracking-wide" style={{ color: "var(--text-tertiary)" }}>
+                      Session highlights
+                    </div>
+                    {shareGeneratedCards.slice(-3).map((card, idx) => (
+                      <button
+                        key={`${card.phase}-${idx}`}
+                        type="button"
+                        onClick={openShareModalFromPanel}
+                        className="w-full rounded-lg overflow-hidden transition-opacity hover:opacity-90"
+                        style={{ border: "1px solid var(--border-default)" }}
+                      >
+                        <img
+                          src={card.imageUrl}
+                          alt={`Share card for ${card.phase} phase`}
+                          className="w-full h-auto block"
+                        />
+                        <div
+                          className="flex items-center justify-between px-2.5 py-1.5 text-[10px]"
+                          style={{ background: "var(--surface-secondary)", color: "var(--text-secondary)" }}
+                        >
+                          <span className="font-medium capitalize">{card.phase}</span>
+                          <span>{new Date(card.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -2388,6 +2427,8 @@ export default function Home() {
         open={showShareModal}
         sessionId={clientSessionId}
         stats={shareSessionStats}
+        preGeneratedImageUrl={shareGeneratedCards.length > 0 ? shareGeneratedCards[shareGeneratedCards.length - 1].imageUrl : null}
+        backgroundImageLoading={shareImageLoading}
         onClose={closeShareModal}
         onShared={onSharePromptShared}
       />

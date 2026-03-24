@@ -200,6 +200,17 @@ function friendlyToolLabel(toolName: string, input?: Record<string, unknown>): s
     sn_get_catalog_items: "Browsing service catalog",
     sn_get_catalog_item: "Reading catalog item details",
     sn_get_catalog_variables: "Catalog item variables",
+    sn_get_catalog_categories: "Browsing catalog categories",
+    sn_create_catalog_item: "Creating catalog item",
+    sn_create_catalog_variable: "Adding catalog variable",
+    sn_create_record_producer: "Creating record producer",
+    sn_update_catalog_item: "Updating catalog item",
+    sn_delete_catalog_item: "Removing catalog item",
+    sn_add_catalog_item_to_category: "Assigning item category",
+    sn_add_catalog_item_to_catalog: "Adding item to catalog",
+    sn_create_request: "Submitting catalog request",
+    sn_create_catalog_client_script: "Creating catalog client script",
+    sn_create_catalog_ui_policy_action: "Setting catalog UI policy action",
     // Update sets
     sn_get_update_set: "Reading update set",
     sn_get_update_set_contents: "Update set contents",
@@ -383,6 +394,8 @@ interface Props {
   activeReqId?: string | null;
   /** Client session ID for command context */
   clientSessionId?: string;
+  /** Phases completed in this session */
+  completedPhases?: SDLCPhase[];
   /** Number of messages waiting in the queue */
   queueLength?: number;
   /** Remove a queued message by ID */
@@ -714,7 +727,7 @@ function InlineAgentActivity({ activityLog, liveStatus, onCancel }: { activityLo
   );
 }
 
-export default function ChatWindow({ messages, isLoading, onSend, onCancel, onApprove, onChoiceSelect, connected, inputRef, showToolDetails = true, liveStatus, userName, categorizedPrompts, activityLog = [], taskPlan, onGetStarted, pendingPrompt, onPendingPromptConsumed, sddMode = false, currentPhase = null, onSddModeChange, activeReqId, clientSessionId = "", queueLength = 0, onDequeue, onClearQueue }: Props) {
+export default function ChatWindow({ messages, isLoading, onSend, onCancel, onApprove, onChoiceSelect, connected, inputRef, showToolDetails = true, liveStatus, userName, categorizedPrompts, activityLog = [], taskPlan, onGetStarted, pendingPrompt, onPendingPromptConsumed, sddMode = false, currentPhase = null, onSddModeChange, activeReqId, clientSessionId = "", completedPhases, queueLength = 0, onDequeue, onClearQueue }: Props) {
   const [input, setInput] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [files, setFiles] = useState<FileAttachment[]>([]);
@@ -723,6 +736,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
   const [expandedUpdates, setExpandedUpdates] = useState<Set<string>>(new Set());
   const [showAttachDropdown, setShowAttachDropdown] = useState(false);
   const [showAiAssist, setShowAiAssist] = useState(false);
+  const [inputExpanded, setInputExpanded] = useState(false);
   const [showTOC, setShowTOC] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [queueExpanded, setQueueExpanded] = useState(true);
@@ -1164,15 +1178,22 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
     }
   }, [messages, isLoading, isNearBottom]);
 
-  // Auto-grow textarea
+  useEffect(() => {
+    if (!connected) setInputExpanded(false);
+  }, [connected]);
+
+  // Auto-grow textarea (skip when user has manually expanded)
   useEffect(() => {
     const ta = inputRef.current;
     if (!ta) return;
+    if (inputExpanded) {
+      ta.style.height = "";
+      return;
+    }
     ta.style.height = "auto";
-    // Clamp between 1 row (~40px) and 50vh
     const maxH = window.innerHeight * 0.5;
     ta.style.height = `${Math.min(ta.scrollHeight, maxH)}px`;
-  }, [input, inputRef]);
+  }, [input, inputRef, inputExpanded]);
 
   const handleSubmit = useCallback(() => {
     if (!input.trim() && images.length === 0 && files.length === 0) return;
@@ -1185,16 +1206,16 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
     setInput("");
     setImages([]);
     setFiles([]);
+    setInputExpanded(false);
     if (inputRef.current) inputRef.current.style.height = "auto";
   }, [input, images, files, isLoading, isRecording, stopRecording, onSend, inputRef]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Enter = send, Shift+Enter = new line
+    if (e.nativeEvent.isComposing) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
     }
-    // Shift+Enter allows default behavior (new line in textarea)
   };
 
   /** Process image files and add as base64 data URIs */
@@ -1425,7 +1446,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
       ) : (
         /* ════ NORMAL INPUT MODE ════ */
         <>
-          {/* SDD Mode chip + Command palette */}
+          {/* SDD Mode chip + Command palette + expand toggle */}
           <div className="flex items-center gap-2 relative">
             <SDDModeChip
               active={sddMode}
@@ -1441,11 +1462,30 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
                 connected,
                 sessionId: clientSessionId,
                 activeReqId: activeReqId ?? null,
+                assistantMessageCount: messages.filter(m => m.role === "assistant" && !m.hidden).length,
+                completedPhases: (completedPhases ?? []) as SDLCPhase[],
               }}
               visible={isSlashPrefix(input)}
               onSelect={(cmd) => { setInput(""); onSend(cmd); }}
               onDismiss={() => inputRef.current?.focus()}
             />
+            <div className="flex-1" />
+            {connected && (
+              <button
+                onClick={() => setInputExpanded((v) => !v)}
+                className="flex items-center justify-center w-6 h-6 rounded transition-colors opacity-40 hover:opacity-70"
+                style={{ color: "var(--text-secondary)" }}
+                title={inputExpanded ? "Collapse input" : "Expand input"}
+                aria-label={inputExpanded ? "Collapse input" : "Expand input"}
+                type="button"
+              >
+                {inputExpanded ? (
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" /></svg>
+                ) : (
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" /></svg>
+                )}
+              </button>
+            )}
           </div>
           {/* Textarea row */}
           <textarea
@@ -1456,9 +1496,9 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
             onPaste={handlePaste}
             placeholder={!connected ? "Connect your instance first →" : isLoading ? "Add a follow up..." : "What should we work on next?"}
             disabled={!connected}
-            rows={1}
+            rows={inputExpanded ? 8 : 1}
             className="w-full bg-transparent text-sm focus:outline-none disabled:opacity-50 resize-none overflow-y-auto"
-            style={{ color: "var(--text-primary)", maxHeight: inHero ? "120px" : "50vh" }}
+            style={{ color: "var(--text-primary)", maxHeight: inputExpanded ? (inHero ? "60vh" : "70vh") : (inHero ? "120px" : "50vh") }}
           />
           {/* Bottom row: + button, mic, send */}
           <div className="flex items-center gap-1 mt-2">

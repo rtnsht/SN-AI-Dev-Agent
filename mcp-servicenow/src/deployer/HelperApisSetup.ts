@@ -9,6 +9,8 @@
  * 2. UpdateSetHelper - Sets current update set for artifact capture
  * 3. AddToUpdateSetHelper - Uses GlideUpdateManager2().saveRecord() to explicitly add any
  *    record to a specified update set (Layer 3 fallback for artifact capture)
+ * 4. CatalogVariableHelper - Creates catalog client scripts and catalog UI policy actions
+ *    with properly bound variable references (cat_variable / variable fields)
  */
 
 import { ServiceNowClient } from '../client/sn-client.js';
@@ -29,6 +31,7 @@ export interface HelperApisStatus {
     updateSetHelper: HelperApiInfo;
     addToUpdateSetHelper: HelperApiInfo;
     scopeHelper: HelperApiInfo;
+    catalogVariableHelper: HelperApiInfo;
   };
 }
 
@@ -258,6 +261,105 @@ function getScopeHelperGetScript(): string {
 })(request, response);`;
 }
 
+/**
+ * Create a catalog client script with properly bound cat_variable reference.
+ * Looks up the variable by name + cat_item, then sets cat_variable via GlideRecord.
+ */
+function getCatalogClientScriptHelperScript(): string {
+  return `(function process(/*RESTAPIRequest*/ request, /*RESTAPIResponse*/ response) {
+    var body = request.body.data;
+    var catItem = body.cat_item || '';
+    var name = body.name || '';
+    var script = body.script || '';
+    var type = body.type || 'onChange';
+    var catVariableName = body.cat_variable_name || '';
+    var applyTo = body.apply_to || 'item';
+    var active = body.active !== undefined ? body.active : true;
+    var uiType = body.ui_type || 'Desktop';
+
+    if (!catItem || !name || !script) {
+        return { success: false, error: 'Missing required fields: cat_item, name, script' };
+    }
+
+    var gr = new GlideRecord('catalog_script_client');
+    gr.initialize();
+    gr.setValue('cat_item', catItem);
+    gr.setValue('name', name);
+    gr.setValue('script', script);
+    gr.setValue('type', type);
+    gr.setValue('apply_to', applyTo);
+    gr.setValue('active', active);
+    gr.setValue('ui_type', uiType);
+
+    var variableBound = false;
+    var variableSysId = '';
+    if (catVariableName) {
+        var varGr = new GlideRecord('item_option_new');
+        varGr.addQuery('name', catVariableName);
+        varGr.addQuery('cat_item', catItem);
+        varGr.setLimit(1);
+        varGr.query();
+        if (varGr.next()) {
+            variableSysId = varGr.sys_id.toString();
+            gr.setValue('cat_variable', variableSysId);
+            variableBound = true;
+        }
+    }
+
+    var sysId = gr.insert();
+    if (sysId) {
+        return { success: true, sys_id: sysId, variable_bound: variableBound, variable_sys_id: variableSysId };
+    } else {
+        return { success: false, error: 'Failed to create catalog client script' };
+    }
+})(request, response);`;
+}
+
+/**
+ * Create a catalog UI policy action with properly bound variable reference.
+ * Looks up the variable by name + cat_item, then sets variable via GlideRecord.
+ */
+function getCatalogUiPolicyActionHelperScript(): string {
+  return `(function process(/*RESTAPIRequest*/ request, /*RESTAPIResponse*/ response) {
+    var body = request.body.data;
+    var catalogUiPolicy = body.catalog_ui_policy || '';
+    var catItem = body.cat_item || '';
+    var variableName = body.variable_name || '';
+    var mandatory = body.mandatory || 'ignore';
+    var visible = body.visible || 'ignore';
+    var disabled = body.disabled || 'ignore';
+
+    if (!catalogUiPolicy || !catItem || !variableName) {
+        return { success: false, error: 'Missing required fields: catalog_ui_policy, cat_item, variable_name' };
+    }
+
+    var varGr = new GlideRecord('item_option_new');
+    varGr.addQuery('name', variableName);
+    varGr.addQuery('cat_item', catItem);
+    varGr.setLimit(1);
+    varGr.query();
+    if (!varGr.next()) {
+        return { success: false, error: 'Variable not found: ' + variableName + ' on cat_item ' + catItem };
+    }
+    var variableSysId = varGr.sys_id.toString();
+
+    var gr = new GlideRecord('catalog_ui_policy_action');
+    gr.initialize();
+    gr.setValue('catalog_ui_policy', catalogUiPolicy);
+    gr.setValue('variable', variableSysId);
+    gr.setValue('mandatory', mandatory);
+    gr.setValue('visible', visible);
+    gr.setValue('disabled', disabled);
+    var sysId = gr.insert();
+
+    if (sysId) {
+        return { success: true, sys_id: sysId, variable_sys_id: variableSysId };
+    } else {
+        return { success: false, error: 'Failed to create catalog UI policy action' };
+    }
+})(request, response);`;
+}
+
 export class HelperApisSetup {
   private client: ServiceNowClient;
   private instanceUrl: string;
@@ -301,6 +403,11 @@ export class HelperApisSetup {
         scopeHelper: {
           name: 'ScopeHelper',
           serviceId: 'scope_helper',
+          deployed: false
+        },
+        catalogVariableHelper: {
+          name: 'CatalogVariableHelper',
+          serviceId: 'catalog_variable_helper',
           deployed: false
         }
       }
@@ -368,6 +475,41 @@ export class HelperApisSetup {
       }
     }
 
+    // Check/deploy Catalog Variable Helper (binds cat_variable / variable references)
+    await this.checkOrDeployApi(status.apis.catalogVariableHelper, {
+      resourceName: 'createCatalogClientScript',
+      resourcePath: '/create_client_script',
+      httpMethod: 'POST',
+      script: getCatalogClientScriptHelperScript(),
+      description: 'Create catalog client script with bound variable reference'
+    });
+
+    // Deploy the second POST endpoint for catalog UI policy actions on the same definition
+    if (status.apis.catalogVariableHelper.deployed && status.apis.catalogVariableHelper.sysId) {
+      try {
+        const existingOp = await this.client.getRecords('sys_ws_operation', {
+          sysparm_query: `web_service_definition=${status.apis.catalogVariableHelper.sysId}^http_method=POST^relative_path=/create_ui_policy_action`,
+          sysparm_fields: 'sys_id',
+          sysparm_limit: 1
+        });
+        if (existingOp.length === 0) {
+          await this.client.createRecord('sys_ws_operation', {
+            web_service_definition: status.apis.catalogVariableHelper.sysId,
+            name: 'createCatalogUiPolicyAction',
+            http_method: 'POST',
+            relative_path: '/create_ui_policy_action',
+            active: true,
+            operation_script: getCatalogUiPolicyActionHelperScript(),
+            short_description: 'Create catalog UI policy action with bound variable reference'
+          });
+          console.log(`[HelperApisSetup] Deployed CatalogVariableHelper POST: ${status.apis.catalogVariableHelper.basePath}/create_ui_policy_action`);
+        }
+      } catch (error) {
+        console.error('[HelperApisSetup] Failed to deploy CatalogVariableHelper second operation:', error);
+        this.clearCache();
+      }
+    }
+
     status.initialized = true;
     apiPathCache.set(this.instanceUrl, status);
 
@@ -384,7 +526,7 @@ export class HelperApisSetup {
   /**
    * Get the API path for a specific helper
    */
-  getApiPath(apiKey: 'uiPolicyActionHelper' | 'updateSetHelper' | 'addToUpdateSetHelper' | 'scopeHelper'): string | undefined {
+  getApiPath(apiKey: 'uiPolicyActionHelper' | 'updateSetHelper' | 'addToUpdateSetHelper' | 'scopeHelper' | 'catalogVariableHelper'): string | undefined {
     const cached = apiPathCache.get(this.instanceUrl);
     return cached?.apis[apiKey]?.basePath;
   }

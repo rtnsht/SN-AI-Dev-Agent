@@ -147,3 +147,8 @@ export async function checkShareCard(ip: string): Promise<RateLimitResult> {
   return check(`sharecard:${ip}`, 20, 60 * 60 * 1000);
 }
 
+/** AI share image generation: 50 requests per IP per hour (Satori rendering is local, no external API cost) */
+export async function checkShareImage(ip: string): Promise<RateLimitResult> {
+  return check(`shareimage:${ip}`, 50, 60 * 60 * 1000);
+}
+

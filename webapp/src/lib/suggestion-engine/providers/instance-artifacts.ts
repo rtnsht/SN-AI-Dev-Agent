@@ -43,6 +43,8 @@ const CATALOG_BUILD = [
   (name: string) => `Add approval workflow or notifications to catalog item "${name}"`,
   (name: string) => `Create order guide combining "${name}" with related items`,
   (name: string) => `Add dynamic variable visibility rules to "${name}"`,
+  (name: string) => `Create a new catalog item similar to "${name}" with variables and category`,
+  (name: string) => `Build a record producer based on "${name}" for a custom table`,
 ];
 
 const JOB_EXPLORE = [
