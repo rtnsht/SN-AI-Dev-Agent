@@ -146,7 +146,7 @@ export default function Home() {
   const [connectingLabel, setConnectingLabel] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(true);
-  const [showRightPanel, setShowRightPanel] = useState(true);
+  const [showRightPanel, setShowRightPanel] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [leftWidth, setLeftWidth] = useState(320);
   const [rightWidth, setRightWidth] = useState(374);
@@ -942,6 +942,7 @@ export default function Home() {
         setConnected(true);
         setConnInfo(data);
         setShowSettings(false);
+        setShowRightPanel(true);
         setMobileStep("hero"); // dismiss mobile full-screen connection panel
         markShareConnected();
 
@@ -2221,17 +2222,19 @@ export default function Home() {
               </div>
             )}
 
-            {/* Right panel toggle */}
-            <button
-              onClick={() => {
-                setFocusMode(false);
-                setShowRightPanel(!showRightPanel);
-              }}
-              className="header-btn flex-shrink-0"
-              title={showRightPanel ? "Collapse right panel" : "Expand right panel"}
-            >
-              {showRightPanel ? <PanelRightClose className="w-5 h-5" strokeWidth={1.5} /> : <PanelRightOpen className="w-5 h-5" strokeWidth={1.5} />}
-            </button>
+            {/* Right panel toggle — only shown when connected (panel has no content before connection) */}
+            {connected && (
+              <button
+                onClick={() => {
+                  setFocusMode(false);
+                  setShowRightPanel(!showRightPanel);
+                }}
+                className="header-btn flex-shrink-0"
+                title={showRightPanel ? "Collapse right panel" : "Expand right panel"}
+              >
+                {showRightPanel ? <PanelRightClose className="w-5 h-5" strokeWidth={1.5} /> : <PanelRightOpen className="w-5 h-5" strokeWidth={1.5} />}
+              </button>
+            )}
           </div>
         </header>
 
