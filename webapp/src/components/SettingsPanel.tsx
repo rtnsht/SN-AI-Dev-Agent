@@ -508,7 +508,7 @@ export default function SettingsPanel({
                       </ul>
                       <div className="pt-1" style={{ borderTop: "1px solid color-mix(in srgb, var(--color-primary) 10%, transparent)" }}>
                         <p style={{ color: "var(--text-disabled)" }}>
-                          <strong style={{ color: "var(--color-warning)" }}>Note:</strong> The server securely proxies requests to {aiProvider === "openrouter" ? "OpenRouter" : "Anthropic"} and handles the API key in memory during each call. This follows an industry-standard architecture pattern used by leading AI app frameworks and clients, as {aiProvider === "openrouter" ? "OpenRouter" : "Anthropic"} APIs don&apos;t support direct browser-to-API communication (CORS).
+                          <strong style={{ color: "var(--color-warning)" }}>Note:</strong> This app sends chat requests to the backend, which calls {aiProvider === "openrouter" ? "OpenRouter" : "Anthropic"} with the API key for that request. Your BYOK key stays in the browser until you use it; it isn&apos;t saved on the server or written to disk. That keeps LLM access together with ServiceNow tooling and access controls on the backend.
                         </p>
                       </div>
                       <div className="pt-1" style={{ borderTop: "1px solid color-mix(in srgb, var(--color-primary) 10%, transparent)" }}>

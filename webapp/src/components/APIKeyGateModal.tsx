@@ -164,7 +164,7 @@ export default function APIKeyGateModal({ open, onClose, onKeyProvided, dailyUse
                 <li>Stored in <strong style={{ color: "var(--text-secondary)" }}>browser memory only</strong> &mdash; cleared on tab close</li>
                 <li>Sent over <strong style={{ color: "var(--text-secondary)" }}>HTTPS</strong>, used transiently per-request, never persisted</li>
                 <li><strong style={{ color: "var(--text-secondary)" }}>Redacted from all logs</strong></li>
-                <li>The server securely proxies requests to {provider === "openrouter" ? "OpenRouter" : "Anthropic"} and handles the API key in memory during each call. This follows an industry-standard architecture pattern used by leading AI app frameworks and clients, as {provider === "openrouter" ? "OpenRouter" : "Anthropic"} APIs don&apos;t support direct browser-to-API communication (CORS).</li>
+                <li>This app sends chat requests to the backend, which calls {provider === "openrouter" ? "OpenRouter" : "Anthropic"} with the API key for that request. Your BYOK key stays in the browser until you use it; it isn&apos;t saved on the server or written to disk. That keeps LLM access together with ServiceNow tooling and access controls on the backend.</li>
               </ul>
               <p className="pt-1" style={{ color: "var(--text-secondary)", borderTop: "1px solid color-mix(in srgb, var(--color-primary) 10%, transparent)" }}>
                 <strong>Tip:</strong> Use a dedicated key with spend limits rather than your primary key.
