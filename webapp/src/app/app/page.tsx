@@ -68,7 +68,7 @@ function stripHeavyData(messages: ChatMessage[]): ChatMessage[] {
 function getFriendlyErrorMessage(raw: string): string {
   const lower = raw.toLowerCase();
   if (lower.includes("oauth") || lower.includes("browser-assisted") || lower.includes("browser session") || lower.includes("popup"))
-    return raw;
+    return sanitizePassthroughError(raw);
   if (lower.includes("enotfound"))
     return "Instance not found. Please check that the URL is correct (e.g., https://your-instance.service-now.com) and try again.";
   if (lower.includes("econnrefused"))
@@ -78,11 +78,11 @@ function getFriendlyErrorMessage(raw: string): string {
   if (lower.includes("econnreset") || lower.includes("socket hang up"))
     return "Connection was reset unexpectedly. Please try again.";
   if (lower.includes("sso") || lower.includes("mfa"))
-    return raw;
+    return sanitizePassthroughError(raw);
   if (lower.includes("login page") || lower.includes("redirect"))
     return "Authentication failed. The instance redirected to a login page instead of responding to the API request. If this instance uses SSO or MFA, switch the auth method to OAuth Authorization Code or Browser Session and try again.";
   if (lower.includes("user") && lower.includes("not found"))
-    return "The username was not found on this instance. Please check the username and try again.";
+    return "Authentication failed. Please check your username and password, then try again.";
   if (lower.includes("401") || lower.includes("unauthorized") || lower.includes("invalid user") || lower.includes("invalid password"))
     return "Authentication failed. Please check your username and password, then try again.";
   if (lower.includes("403") || lower.includes("forbidden"))
@@ -92,7 +92,7 @@ function getFriendlyErrorMessage(raw: string): string {
   if (lower.includes("no roles") || lower.includes("does not have any roles"))
     return "This user does not have any roles assigned on the instance. Please assign the required roles (e.g., admin, itil) and try again.";
   if (lower.includes("missing required fields") || lower.includes("please provide"))
-    return raw;
+    return sanitizePassthroughError(raw);
   if (
     lower.includes("certificate") ||
     lower.includes("ssl") ||
@@ -107,6 +107,21 @@ function getFriendlyErrorMessage(raw: string): string {
   if (lower.includes("networkerror") || lower.includes("network error") || lower.includes("failed to fetch"))
     return "Network error. Please check your internet connection and try again.";
   return "Connection failed. Please verify your settings and try again.";
+}
+
+/**
+ * Strip potential credentials, API keys, and internal URLs from error messages
+ * before passing them through to the UI. Used for error paths that need to
+ * preserve some of the original message context (OAuth, SSO, validation).
+ */
+function sanitizePassthroughError(msg: string): string {
+  return msg
+    .replace(/sk-ant-[A-Za-z0-9_-]+/g, "sk-ant-***")
+    .replace(/sk-or-v1-[A-Za-z0-9_-]+/g, "sk-or-v1-***")
+    .replace(/sk-[A-Za-z0-9_-]{20,}/g, "sk-***")
+    .replace(/password["\s:=]+\S+/gi, "password=***")
+    .replace(/Bearer\s+\S+/gi, "Bearer ***")
+    .replace(/Basic\s+[A-Za-z0-9+/=]+/gi, "Basic ***");
 }
 
 function getPostBrowserSessionValidationMessage(raw: string): string {
@@ -1796,6 +1811,8 @@ export default function Home() {
     setProviderError(null);
     setShowApiKeyGate(false);
     setByokError(null);
+    setConnectingError(null);
+    setConnectionError(null);
     setActivityLog([]);
     setTaskPlan(null);
     // Clear persisted session state

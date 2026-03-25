@@ -300,7 +300,7 @@ export async function POST(request: NextRequest) {
           logger.error(sessionId, "chat_stream", "Stream error", { error: errorMsg });
 
           const lowerErr = errorMsg.toLowerCase();
-          const isAuthError = lowerErr.includes("authentication") || lowerErr.includes("invalid") && lowerErr.includes("api key") || lowerErr.includes("unauthorized") || lowerErr.includes("401");
+          const isAuthError = lowerErr.includes("authentication") || (lowerErr.includes("invalid") && lowerErr.includes("api key")) || lowerErr.includes("unauthorized") || lowerErr.includes("401");
           const isBillingError = lowerErr.includes("billing") || lowerErr.includes("insufficient") || lowerErr.includes("402") || lowerErr.includes("payment required");
           const isRateLimit = lowerErr.includes("rate limit") || lowerErr.includes("429") || lowerErr.includes("too many requests");
 
