@@ -284,11 +284,11 @@ export default function Home() {
     credentials.clientSecret,
   ]);
 
-  // Clear BYOK error when user changes API keys
+  // Clear BYOK error when user changes API keys or AI provider
   useEffect(() => {
     if (byokError) setByokError(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [credentials.claudeApiKey, credentials.openRouterApiKey]);
+  }, [credentials.claudeApiKey, credentials.openRouterApiKey, aiProvider]);
 
   // Accumulate liveStatus changes into the activity log (skip tool events — handled directly in stream parser)
   useEffect(() => {
@@ -949,6 +949,7 @@ export default function Home() {
       }
 
       if (data.success) {
+        setConnectingError(null);
         setCredentials(effectiveCredentials);
         setConnected(true);
         setConnInfo(data);
@@ -1608,10 +1609,32 @@ export default function Home() {
           } else {
             setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: data.message || "Rate limit reached. Please try again later.", timestamp: new Date().toISOString() }]);
           }
+        } else if (res.status === 401 || res.status === 402 || data.code === "provider_auth" || data.code === "provider_billing") {
+          const hasUserKey3 = aiProvider === "openrouter" ? !!credentials.openRouterApiKey : !!credentials.claudeApiKey;
+          const isServerKey3 = !hasUserKey3;
+          const isAuth = res.status === 401 || data.code === "provider_auth";
+          if (allowUserApiKeys) {
+            setPendingRetry({ text, images, files });
+            setProviderError(isAuth ? "provider_auth" : "provider_billing");
+            setShowApiKeyGate(true);
+            if (!isServerKey3) {
+              setByokError(isAuth
+                ? "Your API key failed authentication. Please check the key and try again."
+                : "Your API key has insufficient credits.");
+            }
+          }
+          const errMsg3 = isServerKey3
+            ? isAuth
+              ? "**Server API key error** -- The server key failed authentication. Switch to BYOK to continue."
+              : "**Server key credits exhausted** -- Switch to BYOK to continue."
+            : isAuth
+              ? "**API key error** -- Your API key failed authentication. Please check or replace your key."
+              : "**Insufficient credits** -- Your API key does not have enough credits.";
+          setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: errMsg3, timestamp: new Date().toISOString() }]);
         } else {
           setMessages((prev) => [
             ...prev,
-            { id: genMsgId(), role: "system", type: "error", content: `Error: ${data.error}`, timestamp: new Date().toISOString() },
+            { id: genMsgId(), role: "system", type: "error", content: `Error: ${data.error || data.message || "Unknown error"}`, timestamp: new Date().toISOString() },
           ]);
         }
       } catch (err) {
@@ -1772,6 +1795,7 @@ export default function Home() {
     setPendingRetry(null);
     setProviderError(null);
     setShowApiKeyGate(false);
+    setByokError(null);
     setActivityLog([]);
     setTaskPlan(null);
     // Clear persisted session state

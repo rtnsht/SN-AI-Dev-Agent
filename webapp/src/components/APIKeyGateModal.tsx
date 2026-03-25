@@ -58,11 +58,12 @@ export default function APIKeyGateModal({ open, onClose, onKeyProvided, dailyUse
       ? `You\u2019ve used ${dailyUsed}/${dailyLimit} requests today`
       : "BYOK \u2014 Bring Your Own Key";
 
+  const billingUrl = provider === "openrouter" ? "openrouter.ai/credits" : "console.anthropic.com/settings/plans";
   const subtext = providerError
     ? providerError === "provider_auth"
       ? "The API key failed authentication. Please check the key and enter a valid one to continue."
       : providerError === "provider_billing"
-        ? "The API key\u2019s credits are exhausted. Enter a key with available balance, or add credits at openrouter.ai/credits."
+        ? `The API key\u2019s credits are exhausted. Enter a key with available balance, or add credits at ${billingUrl}.`
         : "The AI key is temporarily rate-limited. Enter a different key to continue this conversation."
     : dailyUsed >= dailyLimit
       ? "Add your own API key to continue with unlimited access."
