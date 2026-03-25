@@ -146,7 +146,7 @@ export default function Home() {
   const [connectingLabel, setConnectingLabel] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(true);
-  const [showRightPanel, setShowRightPanel] = useState(true);
+  const [showRightPanel, setShowRightPanel] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [leftWidth, setLeftWidth] = useState(320);
   const [rightWidth, setRightWidth] = useState(374);
@@ -874,7 +874,7 @@ export default function Home() {
         browserSessionBootstrapped = true;
       }
 
-      setConnectingLabel(authType === "session" ? "Validating ServiceNow session..." : "Connecting...");
+      setConnectingLabel(authType === "session" ? "Validating ServiceNow session..." : "Authenticating...");
 
       // If browser-proxied validation already ran inside the Playwright browser,
       // use that result directly instead of calling /api/test-connection (which
@@ -889,6 +889,7 @@ export default function Home() {
           authType: "session",
         };
       } else {
+        setConnectingLabel("Verifying credentials & roles...");
         const res = await fetch("/api/test-connection", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -941,6 +942,7 @@ export default function Home() {
         setConnected(true);
         setConnInfo(data);
         setShowSettings(false);
+        setShowRightPanel(true);
         setMobileStep("hero"); // dismiss mobile full-screen connection panel
         markShareConnected();
 
@@ -1368,7 +1370,11 @@ export default function Home() {
                           setShowApiKeyGate(true);
                         }
                       }
-                      if (msg.startsWith("openrouter_rate_limit|")) {
+                      if (msg.startsWith("openrouter_billing|")) {
+                        const parts = msg.split("|");
+                        const billingModel = parts[1] || "the selected model";
+                        errorContent = `**Insufficient credits** — Your OpenRouter API key does not have enough credits to use \`${billingModel}\`.\n\n**What you can do:**\n- **Add credits** at [openrouter.ai/credits](https://openrouter.ai/credits)\n- **Switch to a free model** from the model selector\n- **Use a different API key** with available balance`;
+                      } else if (msg.startsWith("openrouter_rate_limit|")) {
                         const parts = msg.split("|");
                         const rateLimitedModel = parts[1] || "the selected model";
                         errorContent = `**Rate limited** -- The model \`${rateLimitedModel}\` is temporarily rate-limited by its upstream provider after multiple retry attempts.\n\n**What you can do:**\n- **Switch to a different model** from the model selector\n- **Wait a few minutes** and try again\n- **Use BYOK** (Bring Your Own Key) from [OpenRouter](https://openrouter.ai/settings/integrations) for higher limits`;
@@ -1955,9 +1961,44 @@ export default function Home() {
               )}
               <h1 className="hidden sm:block text-sm sm:text-[15px] font-semibold truncate" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>{APP_NAME}</h1>
             </Link>
+
+            {/* Connection status — always visible in header */}
+            {connected && connInfo ? (
+              <span
+                className="hidden sm:flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full flex-shrink-0"
+                style={{
+                  background: "color-mix(in srgb, var(--color-success) 8%, transparent)",
+                  color: "var(--color-success)",
+                  border: "1px solid color-mix(in srgb, var(--color-success) 15%, transparent)",
+                }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--status-success)" }} />
+                {credentials.instanceUrl.replace(/https?:\/\//, "").replace(/\.service-now\.com\/?$/, "")}
+              </span>
+            ) : !isConnecting ? (
+              <span
+                className="hidden sm:flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full flex-shrink-0"
+                style={{ color: "var(--text-disabled)" }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--text-disabled)", opacity: 0.5 }} />
+                Not connected
+              </span>
+            ) : null}
+
+            {/* New Chat — left zone, primary action near app identity */}
+            {messages.length > 0 && (
+              <button
+                onClick={handleNewChat}
+                className="header-nav-btn flex-shrink-0"
+                title="Start a new conversation"
+              >
+                <Plus className="w-4 h-4" strokeWidth={1.5} />
+                <span className="hidden md:inline">New</span>
+              </button>
+            )}
           </div>
 
-          {/* Right zone: about + release + feedback + theme + new chat + profile + right-panel toggle */}
+          {/* Right zone: about + release + feedback + theme + profile + right-panel toggle */}
           <div className="flex items-center gap-0.5 sm:gap-1">
             {/* About / Info */}
             {SHOW_INFO_BUTTON && (
@@ -2094,9 +2135,13 @@ export default function Home() {
 
             {/* Clear Cache */}
             <button
-              onClick={() => { window.location.href = "/clearcache"; }}
+              onClick={() => {
+                if (window.confirm("This will sign you out, clear all session data, cookies, and cached settings, then redirect to the home page.\n\nAny active ServiceNow connection will be lost.\n\nContinue?")) {
+                  window.location.href = "/clearcache";
+                }
+              }}
               className="header-nav-btn"
-              title="Clear cache & refresh"
+              title="Clears session data, cookies, cached settings, and signs you out"
             >
               <RotateCcw className="w-4 h-4" strokeWidth={1.5} />
               <span className="hidden md:inline">Clear Cache</span>
@@ -2107,18 +2152,6 @@ export default function Home() {
 
             {/* Theme toggle */}
             <ThemeToggle />
-
-            {/* New Chat */}
-            {messages.length > 0 && (
-              <button
-                onClick={handleNewChat}
-                className="header-nav-btn flex-shrink-0"
-                title="New Chat"
-              >
-                <Plus className="w-4 h-4" strokeWidth={1.5} />
-                <span className="hidden md:inline">New</span>
-              </button>
-            )}
 
             {/* Profile / Sign In */}
             {!appUser ? (
@@ -2164,7 +2197,16 @@ export default function Home() {
                           Admin Dashboard
                         </a>
                       )}
-                      <button onClick={() => { setProfileOpen(false); window.location.href = "/clearcache"; }} className="header-dropdown-item w-full">
+                      <button
+                        onClick={() => {
+                          setProfileOpen(false);
+                          if (window.confirm("This will sign you out, clear all session data, cookies, and cached settings, then redirect to the home page.\n\nAny active ServiceNow connection will be lost.\n\nContinue?")) {
+                            window.location.href = "/clearcache";
+                          }
+                        }}
+                        className="header-dropdown-item w-full"
+                        title="Clears session data, cookies, cached settings, and signs you out"
+                      >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                         Clear cache
                       </button>
@@ -2179,17 +2221,19 @@ export default function Home() {
               </div>
             )}
 
-            {/* Right panel toggle */}
-            <button
-              onClick={() => {
-                setFocusMode(false);
-                setShowRightPanel(!showRightPanel);
-              }}
-              className="header-btn flex-shrink-0"
-              title={showRightPanel ? "Collapse right panel" : "Expand right panel"}
-            >
-              {showRightPanel ? <PanelRightClose className="w-5 h-5" strokeWidth={1.5} /> : <PanelRightOpen className="w-5 h-5" strokeWidth={1.5} />}
-            </button>
+            {/* Right panel toggle — only shown when connected (panel has no content before connection) */}
+            {connected && (
+              <button
+                onClick={() => {
+                  setFocusMode(false);
+                  setShowRightPanel(!showRightPanel);
+                }}
+                className="header-btn flex-shrink-0"
+                title={showRightPanel ? "Collapse right panel" : "Expand right panel"}
+              >
+                {showRightPanel ? <PanelRightClose className="w-5 h-5" strokeWidth={1.5} /> : <PanelRightOpen className="w-5 h-5" strokeWidth={1.5} />}
+              </button>
+            )}
           </div>
         </header>
 

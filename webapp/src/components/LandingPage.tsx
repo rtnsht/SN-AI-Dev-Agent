@@ -14,7 +14,7 @@ import {
   HIGHLIGHT_TITLE, HIGHLIGHT_DESC, CTA_HEADLINE, CTA_SUBTEXT,
 } from "@/lib/branding";
 
-/** Normalise any YouTube/Vimeo URL to a proper embed URL with autoplay */
+/** Normalise any YouTube/Vimeo/Loom/ScreenPal URL to a proper embed URL with autoplay */
 export function getVideoEmbedUrl(url: string): string {
   if (!url) return url;
   const trimmed = url.trim();
@@ -28,6 +28,17 @@ export function getVideoEmbedUrl(url: string): string {
   // Vimeo
   const vimeo = trimmed.match(/vimeo\.com\/(?:video\/)?([0-9]+)/);
   if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}?autoplay=1&muted=1`;
+  // Loom: share URLs → embed URLs (with autoplay for consistency with YouTube/Vimeo)
+  const loomShare = trimmed.match(/loom\.com\/share\/([a-zA-Z0-9]+)/);
+  if (loomShare) return `https://www.loom.com/embed/${loomShare[1]}?autoplay=1&muted=1`;
+  if (/loom\.com\/embed\/[a-zA-Z0-9]+/.test(trimmed)) return trimmed;
+  // ScreenPal: watch URLs → player URLs
+  const screenpalWatch = trimmed.match(/screenpal\.com\/watch\/([a-zA-Z0-9]+)/);
+  if (screenpalWatch) return `https://screenpal.com/player/${screenpalWatch[1]}`;
+  // ScreenPal legacy domain (screencast-o-matic.com)
+  const somWatch = trimmed.match(/screencast-o-matic\.com\/watch\/([a-zA-Z0-9]+)/);
+  if (somWatch) return `https://screenpal.com/player/${somWatch[1]}`;
+  if (/screenpal\.com\/player\/[a-zA-Z0-9]+/.test(trimmed)) return trimmed;
   return trimmed;
 }
 
