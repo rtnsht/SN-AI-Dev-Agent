@@ -387,7 +387,7 @@ export default function SettingsPanel({
               {(modelLocked || connected) && (
                 <p className="text-[10px] mt-1 flex items-center gap-1" style={{ color: "var(--text-disabled)" }}>
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                  Locked — click Reconnect to change
+                  Locked — disconnect to change
                 </p>
               )}
             </div>
@@ -560,6 +560,11 @@ export default function SettingsPanel({
             {/* Model selection */}
             <div className="pt-3" style={{ borderTop: "1px solid var(--border-default)" }}>
               <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>AI Model</label>
+              {aiProvider === "openrouter" && !modelsLoading && (
+                <p className="text-[10px] mt-0.5 mb-1.5" style={{ color: "var(--text-disabled)" }}>
+                  Pick a recent model from a top provider for reliable tool execution
+                </p>
+              )}
 
               {modelsLoading ? (
                 <div className="flex items-center gap-2 px-3 py-3 rounded-md" style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-emphasis)" }}>
@@ -702,7 +707,7 @@ export default function SettingsPanel({
               {(modelLocked || connected) && (
                 <p className="text-[10px] mt-1.5 flex items-center gap-1" style={{ color: "var(--text-disabled)" }}>
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                  Locked — click Reconnect to change
+                  Locked — disconnect to change
                 </p>
               )}
 
@@ -715,8 +720,9 @@ export default function SettingsPanel({
                     color: "var(--text-secondary)",
                   }}
                 >
-                  <span className="font-semibold" style={{ color: OPENROUTER_COLOR }}>Tested with</span>{" "}
-                  Claude, Gemini, ChatGPT, and Qwen. Other models in the list may also work — all listed models support tool calling and coding.
+                  <span className="font-semibold" style={{ color: OPENROUTER_COLOR }}>Tip</span>{" "}
+                  For best results, select the latest model from a top provider &mdash; Claude (Anthropic), Gemini (Google), GPT/o-series (OpenAI), Qwen, or DeepSeek.
+                  All listed models report tool calling support, but some may not execute tools reliably. If a model fails, try switching to another.
                   <span className="block mt-1" style={{ color: "var(--text-disabled)" }}>
                     {displayModels.length} models available
                   </span>
@@ -783,54 +789,54 @@ export default function SettingsPanel({
             )}
           </div>
         )}
-      </div>
 
-      {connectionError && !connected && (
-        <div
-          className="mt-3 p-3 rounded-md text-[11px]"
-          style={{
-            background: "rgba(249,115,115,0.08)",
-            border: "1px solid rgba(249,115,115,0.25)",
-          }}
-          role="alert"
-          aria-live="assertive"
-        >
-          <div className="font-medium mb-1" style={{ color: "var(--color-danger)" }}>
-            Connection Failed
+        {connectionError && !connected && (
+          <div
+            className="p-3 rounded-md text-[11px]"
+            style={{
+              background: "rgba(249,115,115,0.08)",
+              border: "1px solid rgba(249,115,115,0.25)",
+            }}
+            role="alert"
+            aria-live="assertive"
+          >
+            <div className="font-medium mb-1" style={{ color: "var(--color-danger)" }}>
+              Connection Failed
+            </div>
+            <div className="text-[10px] whitespace-pre-line" style={{ color: "var(--text-secondary)" }}>{connectionError}</div>
           </div>
-          <div className="text-[10px] whitespace-pre-line" style={{ color: "var(--text-secondary)" }}>{connectionError}</div>
-        </div>
-      )}
-
-      <div className="mt-4">
-        {connected ? (
-          <button
-            onClick={onReconnect}
-            className="w-full py-2.5 px-4 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2"
-            style={{ background: "var(--color-warning)", color: "#0A0A0B" }}
-            onMouseEnter={e => (e.currentTarget.style.opacity = "0.9")}
-            onMouseLeave={e => (e.currentTarget.style.opacity = "1")}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-            Reconnect
-          </button>
-        ) : (
-          <button
-            onClick={onConnect}
-            disabled={!canConnect}
-            className="w-full py-2.5 px-4 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ background: canConnect ? "var(--color-primary)" : "var(--surface-elevated)", color: canConnect ? "white" : "var(--text-disabled)" }}
-            onMouseEnter={e => canConnect && (e.currentTarget.style.background = "var(--color-primary-hover)")}
-            onMouseLeave={e => canConnect && (e.currentTarget.style.background = "var(--color-primary)")}
-          >
-            {isConnecting ? (
-              <>
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                {connectLabel}
-              </>
-            ) : connectLabel}
-          </button>
         )}
+
+        <div className="pb-2">
+          {connected ? (
+            <button
+              onClick={onReconnect}
+              className="w-full py-2.5 px-4 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2"
+              style={{ background: "var(--color-warning)", color: "#0A0A0B" }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = "0.9")}
+              onMouseLeave={e => (e.currentTarget.style.opacity = "1")}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.36 6.64a9 9 0 11-12.73 0M12 2v10" /></svg>
+              Disconnect
+            </button>
+          ) : (
+            <button
+              onClick={onConnect}
+              disabled={!canConnect}
+              className="w-full py-2.5 px-4 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ background: canConnect ? "var(--color-primary)" : "var(--surface-elevated)", color: canConnect ? "white" : "var(--text-disabled)" }}
+              onMouseEnter={e => canConnect && (e.currentTarget.style.background = "var(--color-primary-hover)")}
+              onMouseLeave={e => canConnect && (e.currentTarget.style.background = "var(--color-primary)")}
+            >
+              {isConnecting ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                  {connectLabel}
+                </>
+              ) : connectLabel}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

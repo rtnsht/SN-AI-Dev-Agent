@@ -170,7 +170,7 @@ export function useSessionState(): SessionState {
       const notice: ChatMessage = {
         role: "system",
         type: "info",
-        content: "Previous session restored. Please reconnect to continue.",
+        content: "Previous session restored. Please connect to continue.",
         timestamp: new Date().toISOString(),
       };
       messagesRef.current = [...parsed, notice];

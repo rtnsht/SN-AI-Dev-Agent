@@ -74,7 +74,7 @@ function getFriendlyErrorMessage(raw: string): string {
   if (lower.includes("econnrefused"))
     return "Connection refused. The instance may be down or the URL may be incorrect. Please verify and try again.";
   if (lower.includes("etimedout") || lower.includes("econnaborted") || lower.includes("timeout"))
-    return "Connection timed out. The instance may be hibernating or unreachable. Try opening it in your browser first, then reconnect.";
+    return "Connection timed out. The instance may be hibernating or unreachable. Try opening it in your browser first, then connect again.";
   if (lower.includes("econnreset") || lower.includes("socket hang up"))
     return "Connection was reset unexpectedly. Please try again.";
   if (lower.includes("sso") || lower.includes("mfa"))
@@ -82,15 +82,15 @@ function getFriendlyErrorMessage(raw: string): string {
   if (lower.includes("login page") || lower.includes("redirect"))
     return "Authentication failed. The instance redirected to a login page instead of responding to the API request. If this instance uses SSO or MFA, switch the auth method to OAuth Authorization Code or Browser Session and try again.";
   if (lower.includes("user") && lower.includes("not found"))
-    return "The username was not found on this instance. Please check the username and reconnect with valid credentials.";
+    return "The username was not found on this instance. Please check the username and try again.";
   if (lower.includes("401") || lower.includes("unauthorized") || lower.includes("invalid user") || lower.includes("invalid password"))
-    return "Authentication failed. Please check your username and password, then reconnect.";
+    return "Authentication failed. Please check your username and password, then try again.";
   if (lower.includes("403") || lower.includes("forbidden"))
-    return "Access denied. This user may not have REST API access on this instance. Please verify the user's permissions and reconnect.";
+    return "Access denied. This user may not have REST API access on this instance. Please verify the user's permissions and try again.";
   if (lower.includes("404"))
     return "Instance API endpoint not found. Please verify the instance URL is correct and try again.";
   if (lower.includes("no roles") || lower.includes("does not have any roles"))
-    return "This user does not have any roles assigned on the instance. Please assign the required roles (e.g., admin, itil) and reconnect.";
+    return "This user does not have any roles assigned on the instance. Please assign the required roles (e.g., admin, itil) and try again.";
   if (lower.includes("missing required fields") || lower.includes("please provide"))
     return raw;
   if (
@@ -146,7 +146,7 @@ export default function Home() {
   const [connectingLabel, setConnectingLabel] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(true);
-  const [showRightPanel, setShowRightPanel] = useState(true);
+  const [showRightPanel, setShowRightPanel] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [leftWidth, setLeftWidth] = useState(320);
   const [rightWidth, setRightWidth] = useState(374);
@@ -349,7 +349,7 @@ export default function Home() {
         }));
       }
 
-      // Restore model/provider (but NOT modelLocked — let user change before reconnecting)
+      // Restore model/provider (but NOT modelLocked — let user change before connecting again)
       const savedProvider = sessionStorage.getItem(SK.PROVIDER);
       if (savedProvider) setAiProvider(savedProvider as AIProvider);
       const savedModel = sessionStorage.getItem(SK.MODEL);
@@ -384,7 +384,7 @@ export default function Home() {
         id: genMsgId(),
         role: "system",
         type: "info",
-        content: "Previous session restored. Please reconnect to continue.",
+        content: "Previous session restored. Please connect to continue.",
         timestamp: new Date().toISOString(),
       };
       messagesRef.current = [...parsed, notice];
@@ -848,7 +848,7 @@ export default function Home() {
       .catch((err) => { console.warn("[session-start] failed:", err); });
   }, [aiProvider, openRouterModels, selectedModel]);
 
-  // Log a session row in Supabase for each browser chat session id (incl. New Chat), without double-posting on reconnect churn.
+  // Log a session row in Supabase for each browser chat session id (incl. New Chat), without double-posting on disconnect/connect churn.
   useEffect(() => {
     if (!connected || !connInfo || !clientSessionId) return;
     if (trackedSessionStartIdRef.current === clientSessionId) return;
@@ -874,7 +874,7 @@ export default function Home() {
         browserSessionBootstrapped = true;
       }
 
-      setConnectingLabel(authType === "session" ? "Validating ServiceNow session..." : "Connecting...");
+      setConnectingLabel(authType === "session" ? "Validating ServiceNow session..." : "Authenticating...");
 
       // If browser-proxied validation already ran inside the Playwright browser,
       // use that result directly instead of calling /api/test-connection (which
@@ -889,6 +889,7 @@ export default function Home() {
           authType: "session",
         };
       } else {
+        setConnectingLabel("Verifying credentials & roles...");
         const res = await fetch("/api/test-connection", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -925,9 +926,9 @@ export default function Home() {
         data = await res.json();
       }
 
-      // Handle no-roles: block connection and show error with reconnect guidance
+      // Handle no-roles: block connection and show error with guidance
       if (data.success && data.noRoles) {
-        const noRolesMsg = "This user does not have any roles assigned on this instance. Please assign the required roles (e.g., admin, itil) and reconnect.";
+        const noRolesMsg = "This user does not have any roles assigned on this instance. Please assign the required roles (e.g., admin, itil) and try again.";
         setConnectionError(noRolesMsg);
         const errMsgs = [...messagesRef.current, { id: genMsgId(), role: "system" as const, type: "error" as const, content: `Connection failed: ${noRolesMsg}`, timestamp: new Date().toISOString() }];
         messagesRef.current = errMsgs;
@@ -941,6 +942,7 @@ export default function Home() {
         setConnected(true);
         setConnInfo(data);
         setShowSettings(false);
+        setShowRightPanel(true);
         setMobileStep("hero"); // dismiss mobile full-screen connection panel
         markShareConnected();
 
@@ -1368,7 +1370,11 @@ export default function Home() {
                           setShowApiKeyGate(true);
                         }
                       }
-                      if (msg.startsWith("openrouter_rate_limit|")) {
+                      if (msg.startsWith("openrouter_billing|")) {
+                        const parts = msg.split("|");
+                        const billingModel = parts[1] || "the selected model";
+                        errorContent = `**Insufficient credits** — Your OpenRouter API key does not have enough credits to use \`${billingModel}\`.\n\n**What you can do:**\n- **Add credits** at [openrouter.ai/credits](https://openrouter.ai/credits)\n- **Switch to a free model** from the model selector\n- **Use a different API key** with available balance`;
+                      } else if (msg.startsWith("openrouter_rate_limit|")) {
                         const parts = msg.split("|");
                         const rateLimitedModel = parts[1] || "the selected model";
                         errorContent = `**Rate limited** -- The model \`${rateLimitedModel}\` is temporarily rate-limited by its upstream provider after multiple retry attempts.\n\n**What you can do:**\n- **Switch to a different model** from the model selector\n- **Wait a few minutes** and try again\n- **Use BYOK** (Bring Your Own Key) from [OpenRouter](https://openrouter.ai/settings/integrations) for higher limits`;
@@ -1809,8 +1815,8 @@ export default function Home() {
     setPendingPrompt(null);
   }, []);
 
-  /** Disconnect and unlock fields so user can edit before reconnecting */
-  const handleReconnect = useCallback(() => {
+  /** Disconnect and unlock fields so user can edit credentials */
+  const handleDisconnect = useCallback(() => {
     const authType = normalizeServiceNowAuthMethod(credentials.snAuthType);
     trackedSessionStartIdRef.current = null;
     markShareDisconnected();
@@ -1877,7 +1883,7 @@ export default function Home() {
   /** Shared SettingsPanel props (reused for sidebar + mobile full-screen) */
   const settingsPanelProps = {
     credentials, setCredentials, connected, connInfo, isConnecting, connectingLabel, connectionError,
-    onConnect: handleConnect, onReconnect: handleReconnect,
+    onConnect: handleConnect, onReconnect: handleDisconnect,
     serverApiKeyConfigured, serverOpenRouterKeyConfigured, serverSnCredsConfigured,
     usage, rateLimitHit, trialStatus, onRefreshUsage: refreshUsage,
     onApiKeyProvided: () => {
@@ -1955,9 +1961,44 @@ export default function Home() {
               )}
               <h1 className="hidden sm:block text-sm sm:text-[15px] font-semibold truncate" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>{APP_NAME}</h1>
             </Link>
+
+            {/* Connection status — always visible in header */}
+            {connected && connInfo ? (
+              <span
+                className="hidden sm:flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full flex-shrink-0"
+                style={{
+                  background: "color-mix(in srgb, var(--color-success) 8%, transparent)",
+                  color: "var(--color-success)",
+                  border: "1px solid color-mix(in srgb, var(--color-success) 15%, transparent)",
+                }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--status-success)" }} />
+                {credentials.instanceUrl.replace(/https?:\/\//, "").replace(/\.service-now\.com\/?$/, "")}
+              </span>
+            ) : !isConnecting ? (
+              <span
+                className="hidden sm:flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full flex-shrink-0"
+                style={{ color: "var(--text-disabled)" }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--text-disabled)", opacity: 0.5 }} />
+                Not connected
+              </span>
+            ) : null}
+
+            {/* New Chat — left zone, primary action near app identity */}
+            {messages.length > 0 && (
+              <button
+                onClick={handleNewChat}
+                className="header-nav-btn flex-shrink-0"
+                title="Start a new conversation"
+              >
+                <Plus className="w-4 h-4" strokeWidth={1.5} />
+                <span className="hidden md:inline">New</span>
+              </button>
+            )}
           </div>
 
-          {/* Right zone: about + release + feedback + theme + new chat + profile + right-panel toggle */}
+          {/* Right zone: about + release + feedback + theme + profile + right-panel toggle */}
           <div className="flex items-center gap-0.5 sm:gap-1">
             {/* About / Info */}
             {SHOW_INFO_BUTTON && (
@@ -2094,9 +2135,13 @@ export default function Home() {
 
             {/* Clear Cache */}
             <button
-              onClick={() => { window.location.href = "/clearcache"; }}
+              onClick={() => {
+                if (window.confirm("This will sign you out, clear all session data, cookies, and cached settings, then redirect to the home page.\n\nAny active ServiceNow connection will be lost.\n\nContinue?")) {
+                  window.location.href = "/clearcache";
+                }
+              }}
               className="header-nav-btn"
-              title="Clear cache & refresh"
+              title="Clears session data, cookies, cached settings, and signs you out"
             >
               <RotateCcw className="w-4 h-4" strokeWidth={1.5} />
               <span className="hidden md:inline">Clear Cache</span>
@@ -2107,18 +2152,6 @@ export default function Home() {
 
             {/* Theme toggle */}
             <ThemeToggle />
-
-            {/* New Chat */}
-            {messages.length > 0 && (
-              <button
-                onClick={handleNewChat}
-                className="header-nav-btn flex-shrink-0"
-                title="New Chat"
-              >
-                <Plus className="w-4 h-4" strokeWidth={1.5} />
-                <span className="hidden md:inline">New</span>
-              </button>
-            )}
 
             {/* Profile / Sign In */}
             {!appUser ? (
@@ -2164,7 +2197,16 @@ export default function Home() {
                           Admin Dashboard
                         </a>
                       )}
-                      <button onClick={() => { setProfileOpen(false); window.location.href = "/clearcache"; }} className="header-dropdown-item w-full">
+                      <button
+                        onClick={() => {
+                          setProfileOpen(false);
+                          if (window.confirm("This will sign you out, clear all session data, cookies, and cached settings, then redirect to the home page.\n\nAny active ServiceNow connection will be lost.\n\nContinue?")) {
+                            window.location.href = "/clearcache";
+                          }
+                        }}
+                        className="header-dropdown-item w-full"
+                        title="Clears session data, cookies, cached settings, and signs you out"
+                      >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                         Clear cache
                       </button>
@@ -2179,17 +2221,19 @@ export default function Home() {
               </div>
             )}
 
-            {/* Right panel toggle */}
-            <button
-              onClick={() => {
-                setFocusMode(false);
-                setShowRightPanel(!showRightPanel);
-              }}
-              className="header-btn flex-shrink-0"
-              title={showRightPanel ? "Collapse right panel" : "Expand right panel"}
-            >
-              {showRightPanel ? <PanelRightClose className="w-5 h-5" strokeWidth={1.5} /> : <PanelRightOpen className="w-5 h-5" strokeWidth={1.5} />}
-            </button>
+            {/* Right panel toggle — only shown when connected (panel has no content before connection) */}
+            {connected && (
+              <button
+                onClick={() => {
+                  setFocusMode(false);
+                  setShowRightPanel(!showRightPanel);
+                }}
+                className="header-btn flex-shrink-0"
+                title={showRightPanel ? "Collapse right panel" : "Expand right panel"}
+              >
+                {showRightPanel ? <PanelRightClose className="w-5 h-5" strokeWidth={1.5} /> : <PanelRightOpen className="w-5 h-5" strokeWidth={1.5} />}
+              </button>
+            )}
           </div>
         </header>
 
@@ -2491,6 +2535,43 @@ export default function Home() {
         dailyLimit={gateInfo.dailyLimit}
         providerError={providerError}
       />
+
+      {/* ═══ Centered Connection Modal — full-screen overlay while connecting ═══ */}
+      {isConnecting && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div
+            className="rounded-xl shadow-2xl px-8 py-7 flex flex-col items-center gap-4 max-w-sm w-full mx-4"
+            style={{ background: "var(--surface-primary)", border: "1px solid var(--border-emphasis)" }}
+          >
+            {/* Spinner */}
+            <div className="relative w-12 h-12">
+              <svg className="w-12 h-12 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-20" cx="12" cy="12" r="10" stroke="var(--color-primary)" strokeWidth="3" />
+                <path className="opacity-90" fill="var(--color-primary)" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            </div>
+
+            {/* Stage label */}
+            <div className="text-center">
+              <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                {connectingLabel || "Connecting..."}
+              </p>
+              <p className="text-xs mt-1.5" style={{ color: "var(--text-disabled)" }}>
+                {credentials.instanceUrl
+                  ? credentials.instanceUrl.replace(/https?:\/\//, "").replace(/\/$/, "")
+                  : "ServiceNow instance"}
+              </p>
+            </div>
+
+            {/* Subtle progress dots animation */}
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "var(--color-primary)", animationDelay: "0ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "var(--color-primary)", animationDelay: "300ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "var(--color-primary)", animationDelay: "600ms" }} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
