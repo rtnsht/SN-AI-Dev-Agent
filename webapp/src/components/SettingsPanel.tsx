@@ -44,6 +44,8 @@ interface Props {
   onRefreshUsage?: () => Promise<void>;
   /** Mobile full-screen mode: back button callback */
   onBack?: () => void;
+  /** Error message for the BYOK API key field (e.g., invalid key) */
+  byokError?: string | null;
 }
 
 const INPUT_CLS = "w-full px-3 py-2.5 rounded-md text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-info)] focus:border-transparent";
@@ -116,7 +118,7 @@ export default function SettingsPanel({
   serverApiKeyConfigured, serverOpenRouterKeyConfigured, serverSnCredsConfigured,
   usage, rateLimitHit, onApiKeyProvided,
   aiProvider, setAiProvider, selectedModel, setSelectedModel, modelOptions, modelsLoading = false,
-  modelLocked, allowUserApiKeys = true, trialStatus, onRefreshUsage, onBack
+  modelLocked, allowUserApiKeys = true, trialStatus, onRefreshUsage, onBack, byokError
 }: Props) {
   const update = (field: keyof Credentials, value: string) => {
     const nextCredentials: Credentials = { ...credentials, [field]: value };
@@ -467,12 +469,22 @@ export default function SettingsPanel({
                     className={INPUT_CLS}
                     style={{
                       background: fieldsDisabled ? "var(--surface-app)" : "var(--surface-elevated)",
-                      border: rateLimitHit ? "1px solid rgba(245,196,81,0.3)" : "1px solid var(--border-emphasis)",
+                      border: byokError ? "1px solid rgba(249,115,115,0.5)" : rateLimitHit ? "1px solid rgba(245,196,81,0.3)" : "1px solid var(--border-emphasis)",
                       color: "var(--text-primary)",
                       opacity: fieldsDisabled ? 0.7 : 1,
                     }}
                     disabled={fieldsDisabled}
                   />
+                  {byokError && (
+                    <div
+                      className="mt-1.5 px-3 py-2 rounded-md"
+                      style={{ background: "rgba(249,115,115,0.08)", border: "1px solid rgba(249,115,115,0.25)" }}
+                      role="alert"
+                    >
+                      <p className="text-[11px] font-medium" style={{ color: "var(--color-danger)" }}>API Key Error</p>
+                      <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{byokError}</p>
+                    </div>
+                  )}
                   <p className="text-[10px] mt-1.5 leading-relaxed" style={{ color: "var(--text-disabled)" }}>
                     Get your key at{" "}
                     <a
