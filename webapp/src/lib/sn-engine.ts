@@ -1084,11 +1084,12 @@ export async function testConnection(credentials: Omit<UserCredentials, "claudeA
     console.warn("[testConnection] User lookup failed:", err);
   }
 
-  // If the user was not found and the caller supplied a username, treat it as a mismatch.
+  // If the user was not found and the caller supplied a username, treat it as an auth failure.
+  // Generic message avoids confirming/denying whether the username exists (prevents enumeration).
   if ((!user || !userSysId) && credentials.username) {
     return {
       success: false,
-      message: `User "${credentials.username}" was not found on this instance. Please check the username and try again.`,
+      message: "Authentication failed. Please check your username and password, then try again.",
     };
   }
 
