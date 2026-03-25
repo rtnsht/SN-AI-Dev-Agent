@@ -2535,6 +2535,43 @@ export default function Home() {
         dailyLimit={gateInfo.dailyLimit}
         providerError={providerError}
       />
+
+      {/* ═══ Centered Connection Modal — full-screen overlay while connecting ═══ */}
+      {isConnecting && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div
+            className="rounded-xl shadow-2xl px-8 py-7 flex flex-col items-center gap-4 max-w-sm w-full mx-4"
+            style={{ background: "var(--surface-primary)", border: "1px solid var(--border-emphasis)" }}
+          >
+            {/* Spinner */}
+            <div className="relative w-12 h-12">
+              <svg className="w-12 h-12 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-20" cx="12" cy="12" r="10" stroke="var(--color-primary)" strokeWidth="3" />
+                <path className="opacity-90" fill="var(--color-primary)" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            </div>
+
+            {/* Stage label */}
+            <div className="text-center">
+              <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                {connectingLabel || "Connecting..."}
+              </p>
+              <p className="text-xs mt-1.5" style={{ color: "var(--text-disabled)" }}>
+                {credentials.instanceUrl
+                  ? credentials.instanceUrl.replace(/https?:\/\//, "").replace(/\/$/, "")
+                  : "ServiceNow instance"}
+              </p>
+            </div>
+
+            {/* Subtle progress dots animation */}
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "var(--color-primary)", animationDelay: "0ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "var(--color-primary)", animationDelay: "300ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "var(--color-primary)", animationDelay: "600ms" }} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
