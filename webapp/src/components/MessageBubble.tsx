@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ChatMessage, ToolExecution, SDLCPhase, UserChoicesBlock } from "@/lib/types";
 import { stripPhaseGateMarker, SDLC_PHASES, parseUserChoices, stripUserChoicesMarker } from "@/lib/types";
+import { getVideoEmbedUrl } from "@/components/LandingPage";
 
 interface Props {
   message: ChatMessage;
@@ -476,6 +477,33 @@ const MD_COMPONENTS_SYSTEM: Record<string, any> = {
   code: ({ children }: any) => <code className="px-1 py-0.5 rounded text-[11px] font-mono" style={{ background: "rgba(255,255,255,0.08)" }}>{children}</code>,
 };
 
+/** Returns true if the URL is a known video platform link (YouTube, Loom, ScreenPal, Vimeo) */
+function isVideoUrl(url: string): boolean {
+  if (!url) return false;
+  return /youtu\.?be|youtube\.com|loom\.com|screenpal\.com|screencast-o-matic\.com|vimeo\.com/i.test(url);
+}
+
+/** Inline video embed for recognized video links in chat messages */
+function VideoEmbed({ href }: { href: string }) {
+  const embedUrl = getVideoEmbedUrl(href);
+  return (
+    <div className="my-2 rounded-lg overflow-hidden" style={{ border: "1px solid var(--border-default)" }}>
+      <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, background: "var(--surface-secondary)" }}>
+        <iframe
+          src={embedUrl}
+          title="Video"
+          allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
+          allowFullScreen
+          frameBorder={0}
+          referrerPolicy="no-referrer-when-downgrade"
+          loading="lazy"
+          style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
+        />
+      </div>
+    </div>
+  );
+}
+
 const MD_COMPONENTS: Record<string, any> = {
   p: ({ children }: any) => <p className="mb-2 last:mb-0">{children}</p>,
   strong: ({ children }: any) => <strong className="font-semibold" style={{ color: "var(--text-primary)" }}>{children}</strong>,
@@ -504,7 +532,17 @@ const MD_COMPONENTS: Record<string, any> = {
   th: ({ children }: any) => <th className="px-3 py-1.5 text-left font-medium" style={{ color: "var(--text-secondary)", borderBottom: "1px solid var(--border-emphasis)" }}>{children}</th>,
   td: ({ children }: any) => <td className="px-3 py-1.5" style={{ borderBottom: "1px solid var(--border-subtle)", color: "var(--text-secondary)" }}>{children}</td>,
   blockquote: ({ children }: any) => <blockquote className="pl-3 my-2 italic" style={{ borderLeft: "2px solid var(--color-primary)", color: "var(--text-secondary)" }}>{children}</blockquote>,
-  a: ({ href, children }: any) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: "var(--color-primary)" }}>{children}</a>,
+  a: ({ href, children }: any) => {
+    if (href && isVideoUrl(href)) {
+      return (
+        <span>
+          <a href={href} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: "var(--color-primary)" }}>{children}</a>
+          <VideoEmbed href={href} />
+        </span>
+      );
+    }
+    return <a href={href} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: "var(--color-primary)" }}>{children}</a>;
+  },
   hr: () => <hr className="my-3" style={{ borderColor: "var(--border-default)" }} />,
 };
 /* eslint-enable @typescript-eslint/no-explicit-any */
