@@ -53,17 +53,17 @@ export default function APIKeyGateModal({ open, onClose, onKeyProvided, dailyUse
       ? "API key error"
       : providerError === "provider_billing"
         ? "Credits exhausted"
-        : "Shared key hit a limit"
+        : "Key hit a limit"
     : dailyUsed >= dailyLimit
       ? `You\u2019ve used ${dailyUsed}/${dailyLimit} requests today`
       : "BYOK \u2014 Bring Your Own Key";
 
   const subtext = providerError
     ? providerError === "provider_auth"
-      ? "The server API key failed authentication. Enter your own key to continue."
+      ? "The API key failed authentication. Please check the key and enter a valid one to continue."
       : providerError === "provider_billing"
         ? "The API key\u2019s credits are exhausted. Enter a key with available balance, or add credits at openrouter.ai/credits."
-        : "The app\u2019s shared AI key is temporarily rate-limited. Enter your own key to continue this conversation."
+        : "The AI key is temporarily rate-limited. Enter a different key to continue this conversation."
     : dailyUsed >= dailyLimit
       ? "Add your own API key to continue with unlimited access."
       : `Use your own ${APP_NAME === "SN AI Agent" ? "Anthropic or OpenRouter" : ""} API key.`;

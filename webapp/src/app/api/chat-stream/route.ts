@@ -299,9 +299,23 @@ export async function POST(request: NextRequest) {
           const errorMsg = err instanceof Error ? err.message : String(err);
           logger.error(sessionId, "chat_stream", "Stream error", { error: errorMsg });
 
+          const lowerErr = errorMsg.toLowerCase();
+          const isAuthError = lowerErr.includes("authentication") || lowerErr.includes("invalid") && lowerErr.includes("api key") || lowerErr.includes("unauthorized") || lowerErr.includes("401");
+          const isBillingError = lowerErr.includes("billing") || lowerErr.includes("insufficient") || lowerErr.includes("402") || lowerErr.includes("payment required");
+          const isRateLimit = lowerErr.includes("rate limit") || lowerErr.includes("429") || lowerErr.includes("too many requests");
+
+          let userMessage = "Stream request failed";
+          if (isAuthError) {
+            userMessage = "API authentication failed. Please check your API key in Settings.";
+          } else if (isBillingError) {
+            userMessage = "Insufficient API credits. Check your balance and add funds, or switch to a different API key.";
+          } else if (isRateLimit) {
+            userMessage = "Rate limit exceeded after retries. Please wait a moment and try again.";
+          }
+
           const errorEvent = `data: ${JSON.stringify({
             type: "error",
-            message: "Stream request failed",
+            message: userMessage,
           })}\n\n`;
           safeEnqueue(encoder.encode(errorEvent));
           // Don't end session on stream error - client may retry
