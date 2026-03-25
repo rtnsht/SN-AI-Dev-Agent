@@ -74,7 +74,7 @@ function getFriendlyErrorMessage(raw: string): string {
   if (lower.includes("econnrefused"))
     return "Connection refused. The instance may be down or the URL may be incorrect. Please verify and try again.";
   if (lower.includes("etimedout") || lower.includes("econnaborted") || lower.includes("timeout"))
-    return "Connection timed out. The instance may be hibernating or unreachable. Try opening it in your browser first, then reconnect.";
+    return "Connection timed out. The instance may be hibernating or unreachable. Try opening it in your browser first, then connect again.";
   if (lower.includes("econnreset") || lower.includes("socket hang up"))
     return "Connection was reset unexpectedly. Please try again.";
   if (lower.includes("sso") || lower.includes("mfa"))
@@ -82,15 +82,15 @@ function getFriendlyErrorMessage(raw: string): string {
   if (lower.includes("login page") || lower.includes("redirect"))
     return "Authentication failed. The instance redirected to a login page instead of responding to the API request. If this instance uses SSO or MFA, switch the auth method to OAuth Authorization Code or Browser Session and try again.";
   if (lower.includes("user") && lower.includes("not found"))
-    return "The username was not found on this instance. Please check the username and reconnect with valid credentials.";
+    return "The username was not found on this instance. Please check the username and try again.";
   if (lower.includes("401") || lower.includes("unauthorized") || lower.includes("invalid user") || lower.includes("invalid password"))
-    return "Authentication failed. Please check your username and password, then reconnect.";
+    return "Authentication failed. Please check your username and password, then try again.";
   if (lower.includes("403") || lower.includes("forbidden"))
-    return "Access denied. This user may not have REST API access on this instance. Please verify the user's permissions and reconnect.";
+    return "Access denied. This user may not have REST API access on this instance. Please verify the user's permissions and try again.";
   if (lower.includes("404"))
     return "Instance API endpoint not found. Please verify the instance URL is correct and try again.";
   if (lower.includes("no roles") || lower.includes("does not have any roles"))
-    return "This user does not have any roles assigned on the instance. Please assign the required roles (e.g., admin, itil) and reconnect.";
+    return "This user does not have any roles assigned on the instance. Please assign the required roles (e.g., admin, itil) and try again.";
   if (lower.includes("missing required fields") || lower.includes("please provide"))
     return raw;
   if (
@@ -349,7 +349,7 @@ export default function Home() {
         }));
       }
 
-      // Restore model/provider (but NOT modelLocked — let user change before reconnecting)
+      // Restore model/provider (but NOT modelLocked — let user change before connecting again)
       const savedProvider = sessionStorage.getItem(SK.PROVIDER);
       if (savedProvider) setAiProvider(savedProvider as AIProvider);
       const savedModel = sessionStorage.getItem(SK.MODEL);
@@ -384,7 +384,7 @@ export default function Home() {
         id: genMsgId(),
         role: "system",
         type: "info",
-        content: "Previous session restored. Please reconnect to continue.",
+        content: "Previous session restored. Please connect to continue.",
         timestamp: new Date().toISOString(),
       };
       messagesRef.current = [...parsed, notice];
@@ -848,7 +848,7 @@ export default function Home() {
       .catch((err) => { console.warn("[session-start] failed:", err); });
   }, [aiProvider, openRouterModels, selectedModel]);
 
-  // Log a session row in Supabase for each browser chat session id (incl. New Chat), without double-posting on reconnect churn.
+  // Log a session row in Supabase for each browser chat session id (incl. New Chat), without double-posting on disconnect/connect churn.
   useEffect(() => {
     if (!connected || !connInfo || !clientSessionId) return;
     if (trackedSessionStartIdRef.current === clientSessionId) return;
@@ -926,9 +926,9 @@ export default function Home() {
         data = await res.json();
       }
 
-      // Handle no-roles: block connection and show error with reconnect guidance
+      // Handle no-roles: block connection and show error with guidance
       if (data.success && data.noRoles) {
-        const noRolesMsg = "This user does not have any roles assigned on this instance. Please assign the required roles (e.g., admin, itil) and reconnect.";
+        const noRolesMsg = "This user does not have any roles assigned on this instance. Please assign the required roles (e.g., admin, itil) and try again.";
         setConnectionError(noRolesMsg);
         const errMsgs = [...messagesRef.current, { id: genMsgId(), role: "system" as const, type: "error" as const, content: `Connection failed: ${noRolesMsg}`, timestamp: new Date().toISOString() }];
         messagesRef.current = errMsgs;
@@ -1815,8 +1815,8 @@ export default function Home() {
     setPendingPrompt(null);
   }, []);
 
-  /** Disconnect and unlock fields so user can edit before reconnecting */
-  const handleReconnect = useCallback(() => {
+  /** Disconnect and unlock fields so user can edit credentials */
+  const handleDisconnect = useCallback(() => {
     const authType = normalizeServiceNowAuthMethod(credentials.snAuthType);
     trackedSessionStartIdRef.current = null;
     markShareDisconnected();
@@ -1883,7 +1883,7 @@ export default function Home() {
   /** Shared SettingsPanel props (reused for sidebar + mobile full-screen) */
   const settingsPanelProps = {
     credentials, setCredentials, connected, connInfo, isConnecting, connectingLabel, connectionError,
-    onConnect: handleConnect, onReconnect: handleReconnect,
+    onConnect: handleConnect, onReconnect: handleDisconnect,
     serverApiKeyConfigured, serverOpenRouterKeyConfigured, serverSnCredsConfigured,
     usage, rateLimitHit, trialStatus, onRefreshUsage: refreshUsage,
     onApiKeyProvided: () => {
