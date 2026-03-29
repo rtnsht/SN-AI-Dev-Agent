@@ -68,7 +68,7 @@ function stripHeavyData(messages: ChatMessage[]): ChatMessage[] {
 function getFriendlyErrorMessage(raw: string): string {
   const lower = raw.toLowerCase();
   if (lower.includes("oauth") || lower.includes("browser-assisted") || lower.includes("browser session") || lower.includes("popup"))
-    return raw;
+    return sanitizePassthroughError(raw);
   if (lower.includes("enotfound"))
     return "Instance not found. Please check that the URL is correct (e.g., https://your-instance.service-now.com) and try again.";
   if (lower.includes("econnrefused"))
@@ -78,11 +78,11 @@ function getFriendlyErrorMessage(raw: string): string {
   if (lower.includes("econnreset") || lower.includes("socket hang up"))
     return "Connection was reset unexpectedly. Please try again.";
   if (lower.includes("sso") || lower.includes("mfa"))
-    return raw;
+    return sanitizePassthroughError(raw);
   if (lower.includes("login page") || lower.includes("redirect"))
     return "Authentication failed. The instance redirected to a login page instead of responding to the API request. If this instance uses SSO or MFA, switch the auth method to OAuth Authorization Code or Browser Session and try again.";
   if (lower.includes("user") && lower.includes("not found"))
-    return "The username was not found on this instance. Please check the username and try again.";
+    return "Authentication failed. Please check your username and password, then try again.";
   if (lower.includes("401") || lower.includes("unauthorized") || lower.includes("invalid user") || lower.includes("invalid password"))
     return "Authentication failed. Please check your username and password, then try again.";
   if (lower.includes("403") || lower.includes("forbidden"))
@@ -92,7 +92,7 @@ function getFriendlyErrorMessage(raw: string): string {
   if (lower.includes("no roles") || lower.includes("does not have any roles"))
     return "This user does not have any roles assigned on the instance. Please assign the required roles (e.g., admin, itil) and try again.";
   if (lower.includes("missing required fields") || lower.includes("please provide"))
-    return raw;
+    return sanitizePassthroughError(raw);
   if (
     lower.includes("certificate") ||
     lower.includes("ssl") ||
@@ -107,6 +107,21 @@ function getFriendlyErrorMessage(raw: string): string {
   if (lower.includes("networkerror") || lower.includes("network error") || lower.includes("failed to fetch"))
     return "Network error. Please check your internet connection and try again.";
   return "Connection failed. Please verify your settings and try again.";
+}
+
+/**
+ * Strip potential credentials, API keys, and internal URLs from error messages
+ * before passing them through to the UI. Used for error paths that need to
+ * preserve some of the original message context (OAuth, SSO, validation).
+ */
+function sanitizePassthroughError(msg: string): string {
+  return msg
+    .replace(/sk-ant-[A-Za-z0-9_-]+/g, "sk-ant-***")
+    .replace(/sk-or-v1-[A-Za-z0-9_-]+/g, "sk-or-v1-***")
+    .replace(/sk-[A-Za-z0-9_-]{20,}/g, "sk-***")
+    .replace(/password["\s:=]+\S+/gi, "password=***")
+    .replace(/Bearer\s+\S+/gi, "Bearer ***")
+    .replace(/Basic\s+[A-Za-z0-9+/=]+/gi, "Basic ***");
 }
 
 function getPostBrowserSessionValidationMessage(raw: string): string {
@@ -145,6 +160,8 @@ export default function Home() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectingLabel, setConnectingLabel] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [connectingError, setConnectingError] = useState<string | null>(null);
+  const [byokError, setByokError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(true);
   const [showRightPanel, setShowRightPanel] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
@@ -281,6 +298,12 @@ export default function Home() {
     credentials.clientId,
     credentials.clientSecret,
   ]);
+
+  // Clear BYOK error when user changes API keys or AI provider
+  useEffect(() => {
+    if (byokError) setByokError(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [credentials.claudeApiKey, credentials.openRouterApiKey, aiProvider]);
 
   // Accumulate liveStatus changes into the activity log (skip tool events — handled directly in stream parser)
   useEffect(() => {
@@ -860,6 +883,7 @@ export default function Home() {
     setIsConnecting(true);
     setConnectingLabel("Connecting...");
     setConnectionError(null);
+    setConnectingError(null);
     let browserSessionBootstrapped = false;
     try {
       const authType = normalizeServiceNowAuthMethod(credentials.snAuthType);
@@ -916,6 +940,7 @@ export default function Home() {
             ? getPostBrowserSessionValidationMessage(rawMsg)
             : getFriendlyErrorMessage(rawMsg);
           setConnectionError(friendly);
+          setConnectingError(friendly);
           const errMsgs = [...messagesRef.current, { id: genMsgId(), role: "system" as const, type: "error" as const, content: `Connection failed: ${friendly}`, timestamp: new Date().toISOString() }];
           messagesRef.current = errMsgs;
           setMessages(errMsgs);
@@ -930,6 +955,7 @@ export default function Home() {
       if (data.success && data.noRoles) {
         const noRolesMsg = "This user does not have any roles assigned on this instance. Please assign the required roles (e.g., admin, itil) and try again.";
         setConnectionError(noRolesMsg);
+        setConnectingError(noRolesMsg);
         const errMsgs = [...messagesRef.current, { id: genMsgId(), role: "system" as const, type: "error" as const, content: `Connection failed: ${noRolesMsg}`, timestamp: new Date().toISOString() }];
         messagesRef.current = errMsgs;
         setMessages(errMsgs);
@@ -938,6 +964,7 @@ export default function Home() {
       }
 
       if (data.success) {
+        setConnectingError(null);
         setCredentials(effectiveCredentials);
         setConnected(true);
         setConnInfo(data);
@@ -1013,6 +1040,7 @@ export default function Home() {
           ? getPostBrowserSessionValidationMessage(rawMsg)
           : getFriendlyErrorMessage(rawMsg);
         setConnectionError(friendly);
+        setConnectingError(friendly);
         const errMsgs = [...messagesRef.current, { id: genMsgId(), role: "system" as const, type: "error" as const, content: `Connection failed: ${friendly}`, timestamp: new Date().toISOString() }];
         messagesRef.current = errMsgs;
         setMessages(errMsgs);
@@ -1023,6 +1051,7 @@ export default function Home() {
         ? getPostBrowserSessionValidationMessage(rawMsg)
         : getFriendlyErrorMessage(rawMsg);
       setConnectionError(friendly);
+      setConnectingError(friendly);
       const errMsgs = [...messagesRef.current, { id: genMsgId(), role: "system" as const, type: "error" as const, content: `Connection failed: ${friendly}`, timestamp: new Date().toISOString() }];
       messagesRef.current = errMsgs;
       setMessages(errMsgs);
@@ -1194,23 +1223,34 @@ export default function Home() {
                   { id: genMsgId(), role: "system", type: "error", content: errorData.message || "Daily limit reached. Add your API key to continue.", timestamp: new Date().toISOString() },
                 ]);
               } else if (errorData.error === "anthropic_rate_limit" || errorData.code === "provider_rate_limit" || errorData.code === "provider_billing" || errorData.code === "provider_auth") {
-                const isServerKey = errorData.usedServerKey !== false;
-                if (allowUserApiKeys && isServerKey) {
+                const hasUserKey2 = aiProvider === "openrouter" ? !!credentials.openRouterApiKey : !!credentials.claudeApiKey;
+                const isServerKey2 = !hasUserKey2;
+                if (allowUserApiKeys) {
                   setPendingRetry({ text, images, files });
                   setProviderError(errorData.code || errorData.error);
                   setShowApiKeyGate(true);
+                  if (!isServerKey2) {
+                    setByokError(errorData.code === "provider_auth"
+                      ? "Your API key failed authentication. Please check the key and try again."
+                      : errorData.code === "provider_billing"
+                        ? "Your API key has insufficient credits."
+                        : "Rate limit hit on your API key.");
+                  }
                 }
+                const errContent = isServerKey2
+                  ? `**Shared key limit hit** -- The app's server key is temporarily limited. Switch to BYOK (Bring Your Own Key) to continue.`
+                  : errorData.code === "provider_auth"
+                    ? `**API key error** -- Your API key failed authentication. Please check or replace your key.`
+                    : errorData.code === "provider_billing"
+                      ? `**Insufficient credits** -- Your API key does not have enough credits.`
+                      : `**API rate limit hit** -- Please try again later.`;
                 setMessages((prev) => [
                   ...prev,
                   {
                     id: genMsgId(),
                     role: "system",
                     type: "error",
-                    content: (allowUserApiKeys && isServerKey)
-                      ? `**Shared key limit hit** -- The app's server key is temporarily limited. Switch to BYOK (Bring Your Own Key) to continue.`
-                      : errorData.code === "provider_auth"
-                        ? `**API key error** -- Check your API key in Settings.`
-                        : `**API rate limit hit** -- Please try again later.`,
+                    content: errContent,
                     timestamp: new Date().toISOString(),
                   },
                 ]);
@@ -1360,14 +1400,22 @@ export default function Home() {
                       const msg = typeof event.message === "string" ? event.message : "";
                       // Detect provider errors forwarded from sn-engine via SSE
                       const isProviderRateLimit = msg.includes("Rate limit exceeded after retries") || msg.startsWith("openrouter_rate_limit|");
-                      const isProviderAuth = msg.includes("authentication failed") || msg.includes("invalid") && msg.includes("api key");
-                      if (isProviderRateLimit || isProviderAuth) {
+                      const isProviderAuth = msg.includes("authentication failed") || (msg.includes("invalid") && msg.includes("api key")) || msg.includes("API authentication failed");
+                      const isProviderBilling = msg.includes("insufficient") && (msg.includes("credit") || msg.includes("balance")) || msg.includes("billing");
+                      if (isProviderRateLimit || isProviderAuth || isProviderBilling) {
                         const hasUserKey = aiProvider === "openrouter" ? !!credentials.openRouterApiKey : !!credentials.claudeApiKey;
                         const isServerKey = !hasUserKey;
-                        if (allowUserApiKeys && isServerKey) {
+                        if (allowUserApiKeys) {
                           setPendingRetry({ text, images, files });
-                          setProviderError(isProviderAuth ? "provider_auth" : "provider_rate_limit");
+                          setProviderError(isProviderAuth ? "provider_auth" : isProviderBilling ? "provider_billing" : "provider_rate_limit");
                           setShowApiKeyGate(true);
+                          if (!isServerKey) {
+                            setByokError(isProviderAuth
+                              ? "Your API key failed authentication. Please check the key and try again."
+                              : isProviderBilling
+                                ? "Your API key has insufficient credits."
+                                : "Rate limit hit on your API key.");
+                          }
                         }
                       }
                       if (msg.startsWith("openrouter_billing|")) {
@@ -1381,7 +1429,9 @@ export default function Home() {
                       } else if (isProviderRateLimit) {
                         errorContent = allowUserApiKeys ? "**Shared key limit hit** -- Switch to BYOK (Bring Your Own Key) to continue." : "**API rate limit hit** -- Please try again later.";
                       } else if (isProviderAuth) {
-                        errorContent = "**API key error** -- Check your API key in Settings.";
+                        errorContent = "**API key error** -- Your API key failed authentication. Please check or replace your key.";
+                      } else if (isProviderBilling) {
+                        errorContent = "**Insufficient credits** -- Your API key does not have enough credits. Add funds or use a different key.";
                       }
                       setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: errorContent, timestamp: new Date().toISOString() }]);
                       setIsLoading(false);
@@ -1549,20 +1599,57 @@ export default function Home() {
             setShowApiKeyGate(true);
             setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: data.message || "Daily limit reached. Switch to BYOK (Bring Your Own Key) to continue.", timestamp: new Date().toISOString() }]);
           } else if (data.error === "anthropic_rate_limit" || data.code === "provider_rate_limit" || data.code === "provider_billing" || data.code === "provider_auth") {
-            const isServerKey = data.usedServerKey !== false;
-            if (allowUserApiKeys && isServerKey) { setPendingRetry({ text, images, files }); setProviderError(data.code || data.error); setShowApiKeyGate(true); }
-            setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: (allowUserApiKeys && isServerKey)
+            const hasUserKey = aiProvider === "openrouter" ? !!credentials.openRouterApiKey : !!credentials.claudeApiKey;
+            const isServerKey = !hasUserKey;
+            if (allowUserApiKeys) {
+              setPendingRetry({ text, images, files });
+              setProviderError(data.code || data.error);
+              setShowApiKeyGate(true);
+              if (!isServerKey) {
+                setByokError(data.code === "provider_auth"
+                  ? "Your API key failed authentication. Please check the key and try again."
+                  : data.code === "provider_billing"
+                    ? "Your API key has insufficient credits."
+                    : "Rate limit hit on your API key.");
+              }
+            }
+            const errorMsg = isServerKey
               ? "**Shared key limit hit** -- Switch to BYOK (Bring Your Own Key) to continue."
               : data.code === "provider_auth"
-                ? "**API key error** -- Check your API key in Settings."
-                : "**API rate limit hit** -- Please try again later.", timestamp: new Date().toISOString() }]);
+                ? "**API key error** -- Your API key failed authentication. Please check or replace your key."
+                : data.code === "provider_billing"
+                  ? "**Insufficient credits** -- Your API key does not have enough credits."
+                  : "**API rate limit hit** -- Please try again later.";
+            setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: errorMsg, timestamp: new Date().toISOString() }]);
           } else {
             setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: data.message || "Rate limit reached. Please try again later.", timestamp: new Date().toISOString() }]);
           }
+        } else if (res.status === 401 || res.status === 402 || data.code === "provider_auth" || data.code === "provider_billing") {
+          const hasUserKey3 = aiProvider === "openrouter" ? !!credentials.openRouterApiKey : !!credentials.claudeApiKey;
+          const isServerKey3 = !hasUserKey3;
+          const isAuth = res.status === 401 || data.code === "provider_auth";
+          if (allowUserApiKeys) {
+            setPendingRetry({ text, images, files });
+            setProviderError(isAuth ? "provider_auth" : "provider_billing");
+            setShowApiKeyGate(true);
+            if (!isServerKey3) {
+              setByokError(isAuth
+                ? "Your API key failed authentication. Please check the key and try again."
+                : "Your API key has insufficient credits.");
+            }
+          }
+          const errMsg3 = isServerKey3
+            ? isAuth
+              ? "**Server API key error** -- The server key failed authentication. Switch to BYOK to continue."
+              : "**Server key credits exhausted** -- Switch to BYOK to continue."
+            : isAuth
+              ? "**API key error** -- Your API key failed authentication. Please check or replace your key."
+              : "**Insufficient credits** -- Your API key does not have enough credits.";
+          setMessages((prev) => [...prev, { id: genMsgId(), role: "system", type: "error", content: errMsg3, timestamp: new Date().toISOString() }]);
         } else {
           setMessages((prev) => [
             ...prev,
-            { id: genMsgId(), role: "system", type: "error", content: `Error: ${data.error}`, timestamp: new Date().toISOString() },
+            { id: genMsgId(), role: "system", type: "error", content: `Error: ${data.error || data.message || "Unknown error"}`, timestamp: new Date().toISOString() },
           ]);
         }
       } catch (err) {
@@ -1723,6 +1810,9 @@ export default function Home() {
     setPendingRetry(null);
     setProviderError(null);
     setShowApiKeyGate(false);
+    setByokError(null);
+    setConnectingError(null);
+    setConnectionError(null);
     setActivityLog([]);
     setTaskPlan(null);
     // Clear persisted session state
@@ -1896,6 +1986,7 @@ export default function Home() {
     },
     aiProvider, setAiProvider, selectedModel, setSelectedModel,
     modelOptions: openRouterModels, modelsLoading, modelLocked, allowUserApiKeys,
+    byokError,
   };
 
   return (
@@ -2513,10 +2604,11 @@ export default function Home() {
       />
       <APIKeyGateModal
         open={showApiKeyGate}
-        onClose={() => { setShowApiKeyGate(false); setProviderError(null); }}
+        onClose={() => { setShowApiKeyGate(false); setProviderError(null); setByokError(null); }}
         onKeyProvided={(provider, key) => {
           setShowApiKeyGate(false);
           setProviderError(null);
+          setByokError(null);
           if (provider === "anthropic") {
             setCredentials((prev) => ({ ...prev, claudeApiKey: key }));
           } else {
@@ -2536,39 +2628,79 @@ export default function Home() {
         providerError={providerError}
       />
 
-      {/* ═══ Centered Connection Modal — full-screen overlay while connecting ═══ */}
-      {isConnecting && (
+      {/* ═══ Centered Connection Modal — full-screen overlay while connecting or on error ═══ */}
+      {(isConnecting || connectingError) && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div
             className="rounded-xl shadow-2xl px-8 py-7 flex flex-col items-center gap-4 max-w-sm w-full mx-4"
-            style={{ background: "var(--surface-primary)", border: "1px solid var(--border-emphasis)" }}
+            style={{ background: "var(--surface-primary)", border: `1px solid ${connectingError ? "rgba(249,115,115,0.4)" : "var(--border-emphasis)"}` }}
           >
-            {/* Spinner */}
-            <div className="relative w-12 h-12">
-              <svg className="w-12 h-12 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-20" cx="12" cy="12" r="10" stroke="var(--color-primary)" strokeWidth="3" />
-                <path className="opacity-90" fill="var(--color-primary)" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-            </div>
+            {isConnecting ? (
+              <>
+                {/* Spinner */}
+                <div className="relative w-12 h-12">
+                  <svg className="w-12 h-12 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-20" cx="12" cy="12" r="10" stroke="var(--color-primary)" strokeWidth="3" />
+                    <path className="opacity-90" fill="var(--color-primary)" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                </div>
 
-            {/* Stage label */}
-            <div className="text-center">
-              <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                {connectingLabel || "Connecting..."}
-              </p>
-              <p className="text-xs mt-1.5" style={{ color: "var(--text-disabled)" }}>
-                {credentials.instanceUrl
-                  ? credentials.instanceUrl.replace(/https?:\/\//, "").replace(/\/$/, "")
-                  : "ServiceNow instance"}
-              </p>
-            </div>
+                {/* Stage label */}
+                <div className="text-center">
+                  <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                    {connectingLabel || "Connecting..."}
+                  </p>
+                  <p className="text-xs mt-1.5" style={{ color: "var(--text-disabled)" }}>
+                    {credentials.instanceUrl
+                      ? credentials.instanceUrl.replace(/https?:\/\//, "").replace(/\/$/, "")
+                      : "ServiceNow instance"}
+                  </p>
+                </div>
 
-            {/* Subtle progress dots animation */}
-            <div className="flex items-center gap-1.5 mt-1">
-              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "var(--color-primary)", animationDelay: "0ms" }} />
-              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "var(--color-primary)", animationDelay: "300ms" }} />
-              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "var(--color-primary)", animationDelay: "600ms" }} />
-            </div>
+                {/* Subtle progress dots animation */}
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "var(--color-primary)", animationDelay: "0ms" }} />
+                  <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "var(--color-primary)", animationDelay: "300ms" }} />
+                  <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "var(--color-primary)", animationDelay: "600ms" }} />
+                </div>
+              </>
+            ) : connectingError ? (
+              <>
+                {/* Error icon */}
+                <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: "rgba(249,115,115,0.1)" }}>
+                  <svg className="w-6 h-6" fill="none" stroke="var(--color-danger)" viewBox="0 0 24 24" strokeWidth={2}>
+                    <circle cx="12" cy="12" r="10" />
+                    <path strokeLinecap="round" d="M12 8v4m0 4h.01" />
+                  </svg>
+                </div>
+
+                {/* Error message */}
+                <div className="text-center">
+                  <p className="text-sm font-semibold" style={{ color: "var(--color-danger)" }}>
+                    Connection Failed
+                  </p>
+                  <p className="text-xs mt-2 leading-relaxed whitespace-pre-line" style={{ color: "var(--text-secondary)" }}>
+                    {connectingError}
+                  </p>
+                  <p className="text-[10px] mt-2" style={{ color: "var(--text-disabled)" }}>
+                    {credentials.instanceUrl
+                      ? credentials.instanceUrl.replace(/https?:\/\//, "").replace(/\/$/, "")
+                      : "ServiceNow instance"}
+                  </p>
+                </div>
+
+                {/* Dismiss button */}
+                <button
+                  onClick={() => setConnectingError(null)}
+                  className="w-full py-2.5 px-4 text-sm font-medium rounded-md transition-colors"
+                  style={{ background: "var(--surface-secondary)", color: "var(--text-primary)", border: "1px solid var(--border-emphasis)" }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-elevated)")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "var(--surface-secondary)")}
+                >
+                  Dismiss
+                </button>
+              </>
+            ) : null}
           </div>
         </div>
       )}
