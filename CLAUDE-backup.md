@@ -161,7 +161,9 @@ SN-AI-Dev-Agent/
 │       └── system-prompt.ts     # SDLC system prompt
 │
 └── docs/                        # 📚 DOCUMENTATION
-    └── BROWNFIELD-ENHANCEMENT-PLAN.md
+    ├── architecture/            # Core platform docs
+    ├── planning/                # e.g. BROWNFIELD-ENHANCEMENT-PLAN.md
+    └── …                        # design/, security/, servicenow/, etc.
 ```
 
 ---

@@ -116,6 +116,193 @@ export const TOOLS: ToolDefinition[] = [
       required: ['table', 'sys_id', 'data']
     }
   },
+  // Data Import tools
+  {
+    name: 'sn_list_data_sources',
+    description: 'List import data sources',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Optional encoded query' },
+        activeOnly: { type: 'boolean', default: true },
+        limit: { type: 'number', default: 20 }
+      }
+    }
+  },
+  {
+    name: 'sn_get_data_source',
+    description: 'Get a data source by sys_id',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sys_id: { type: 'string' }
+      },
+      required: ['sys_id']
+    }
+  },
+  {
+    name: 'sn_create_data_source',
+    description: 'Create a data source for import jobs',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        importSetTable: { type: 'string', description: 'Import set table name or sys_db_object sys_id' },
+        format: { type: 'string', default: 'CSV' },
+        retrievalMethod: { type: 'string', default: 'Attachment' },
+        data: { type: 'object', description: 'Additional ServiceNow data source fields' }
+      },
+      required: ['name', 'importSetTable']
+    }
+  },
+  {
+    name: 'sn_list_import_sets',
+    description: 'List import sets and their status',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string' },
+        limit: { type: 'number', default: 20 }
+      }
+    }
+  },
+  {
+    name: 'sn_get_import_set_rows',
+    description: 'Get rows loaded into an import set',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        importSetSysId: { type: 'string' },
+        limit: { type: 'number', default: 50 }
+      },
+      required: ['importSetSysId']
+    }
+  },
+  {
+    name: 'sn_list_transform_maps',
+    description: 'List transform maps',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string' },
+        activeOnly: { type: 'boolean', default: true },
+        limit: { type: 'number', default: 20 }
+      }
+    }
+  },
+  {
+    name: 'sn_get_transform_map',
+    description: 'Get a transform map by sys_id',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sys_id: { type: 'string' }
+      },
+      required: ['sys_id']
+    }
+  },
+  {
+    name: 'sn_create_transform_map',
+    description: 'Create a transform map',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        sourceTable: { type: 'string' },
+        targetTable: { type: 'string' },
+        order: { type: 'number', default: 100 },
+        active: { type: 'boolean', default: true },
+        runBusinessRules: { type: 'boolean', default: false },
+        copyEmptyFields: { type: 'boolean', default: false },
+        enforceMandatoryFields: { type: 'boolean', default: false },
+        data: { type: 'object', description: 'Additional transform map fields' }
+      },
+      required: ['name', 'sourceTable', 'targetTable']
+    }
+  },
+  {
+    name: 'sn_list_transform_entries',
+    description: 'List transform field maps',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        transformMapSysId: { type: 'string' },
+        limit: { type: 'number', default: 50 }
+      },
+      required: ['transformMapSysId']
+    }
+  },
+  {
+    name: 'sn_create_transform_entry',
+    description: 'Create a transform field map entry',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        transformMapSysId: { type: 'string' },
+        sourceField: { type: 'string' },
+        targetField: { type: 'string' },
+        coalesce: { type: 'boolean', default: false },
+        useSourceScript: { type: 'boolean', default: false },
+        sourceScript: { type: 'string' },
+        choiceAction: { type: 'string', default: 'ignore' },
+        data: { type: 'object', description: 'Additional transform entry fields' }
+      },
+      required: ['transformMapSysId', 'sourceField', 'targetField']
+    }
+  },
+  {
+    name: 'sn_list_transform_scripts',
+    description: 'List transform scripts for a transform map',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        transformMapSysId: { type: 'string' },
+        when: { type: 'string' },
+        limit: { type: 'number', default: 20 }
+      },
+      required: ['transformMapSysId']
+    }
+  },
+  {
+    name: 'sn_create_transform_script',
+    description: 'Create a transform script',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        transformMapSysId: { type: 'string' },
+        name: { type: 'string' },
+        when: { type: 'string', default: 'onBefore' },
+        order: { type: 'number', default: 100 },
+        script: { type: 'string' },
+        data: { type: 'object', description: 'Additional transform script fields' }
+      },
+      required: ['transformMapSysId', 'name', 'script']
+    }
+  },
+  {
+    name: 'sn_execute_transform_map',
+    description: 'Execute a transform map against an import set',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        transformMapSysId: { type: 'string' },
+        importSetSysId: { type: 'string' }
+      },
+      required: ['transformMapSysId', 'importSetSysId']
+    }
+  },
+  {
+    name: 'sn_get_transform_run_history',
+    description: 'Get import transform run history',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        transformMapSysId: { type: 'string' },
+        importSetSysId: { type: 'string' },
+        limit: { type: 'number', default: 20 }
+      }
+    }
+  },
   // Business Rule tools
   {
     name: 'sn_get_business_rules',
@@ -2204,7 +2391,7 @@ export function getAnthropicToolDefinitions() {
 // When a phase is active, only core + that phase's tools are sent to the LLM,
 // dramatically reducing the tool-definition token footprint.
 
-export type SDLCToolPhase = 'spec' | 'design' | 'scope_selection' | 'implementation' | 'testing' | 'deployment';
+export type SDLCToolPhase = 'spec' | 'design' | 'scope_selection' | 'implementation' | 'testing' | 'deployment' | 'quick_query';
 
 /** Per-phase round limits — lightweight phases get fewer rounds to prevent loops */
 export const PHASE_ROUND_LIMITS: Record<SDLCToolPhase, number> = {
@@ -2214,6 +2401,7 @@ export const PHASE_ROUND_LIMITS: Record<SDLCToolPhase, number> = {
   implementation: 40,
   testing: 40,
   deployment: 15,
+  quick_query: 10,      // Quick read-only queries — lightweight exploration mode
 };
 
 /** Default round limit when no phase is set */
@@ -2255,6 +2443,9 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
     'sn_get_catalog_items', 'sn_get_catalog_item', 'sn_get_catalog_variables', 'sn_get_requests',
     'sn_get_catalog_categories',
     'sn_get_scheduled_jobs', 'sn_get_fix_scripts',
+    // Data import discovery
+    'sn_list_data_sources', 'sn_list_import_sets', 'sn_list_transform_maps',
+    'sn_list_transform_entries', 'sn_list_transform_scripts', 'sn_get_transform_run_history',
     // Instance analysis & brownfield discovery
     'sn_analyze_instance', 'sn_detect_ootb_overrides', 'sn_get_dependency_graph',
     'sn_find_anti_patterns', 'sn_code_quality_score', 'sn_find_dead_code',
@@ -2291,6 +2482,9 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
     'sn_get_catalog_items', 'sn_get_catalog_item', 'sn_get_catalog_variables', 'sn_get_requests',
     'sn_get_catalog_categories',
     'sn_get_scheduled_jobs', 'sn_get_fix_scripts',
+    'sn_list_data_sources', 'sn_get_data_source', 'sn_list_import_sets', 'sn_get_import_set_rows',
+    'sn_list_transform_maps', 'sn_get_transform_map', 'sn_list_transform_entries',
+    'sn_list_transform_scripts', 'sn_get_transform_run_history',
     'sn_analyze_instance', 'sn_detect_ootb_overrides', 'sn_get_dependency_graph',
     'sn_find_anti_patterns', 'sn_code_quality_score', 'sn_find_dead_code',
     'sn_compare_to_ootb', 'sn_assess_upgrade_readiness',
@@ -2317,6 +2511,13 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
     'sn_get_catalog_items', 'sn_get_catalog_item', 'sn_get_catalog_variables',
     'sn_get_catalog_categories',
     'sn_get_scheduled_jobs', 'sn_get_fix_scripts',
+    // Data import reads + writes
+    'sn_list_data_sources', 'sn_get_data_source', 'sn_create_data_source',
+    'sn_list_import_sets', 'sn_get_import_set_rows',
+    'sn_list_transform_maps', 'sn_get_transform_map', 'sn_create_transform_map',
+    'sn_list_transform_entries', 'sn_create_transform_entry',
+    'sn_list_transform_scripts', 'sn_create_transform_script',
+    'sn_execute_transform_map', 'sn_get_transform_run_history',
     // Generic create/update
     'sn_create_record', 'sn_update_record',
     // Catalog creation & management
@@ -2368,6 +2569,11 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
     'sn_get_acls',
     'sn_get_catalog_items', 'sn_get_catalog_item', 'sn_get_catalog_variables',
     'sn_get_catalog_categories',
+    // Import/transform verification
+    'sn_list_import_sets', 'sn_get_import_set_rows',
+    'sn_list_transform_maps', 'sn_get_transform_map',
+    'sn_list_transform_entries', 'sn_list_transform_scripts',
+    'sn_get_transform_run_history',
     // Service Portal read (verification)
     'sn_get_sp_widgets', 'sn_get_sp_pages', 'sn_get_sp_portals', 'sn_get_sp_themes',
     'sn_get_sp_css', 'sn_get_sp_angular_providers', 'sn_get_sp_header_footers',
@@ -2405,6 +2611,28 @@ const PHASE_TOOL_NAMES: Record<SDLCToolPhase, Set<string>> = {
     'sn_rollback_promotion', 'sn_list_promotion_history', 'sn_list_promotion_packages',
     // Reports
     'sn_generate_report', 'sn_get_dashboard_data',
+  ]),
+
+  quick_query: new Set([
+    // Read-only exploration tools for lightweight query agent
+    'sn_test_connection',
+    'sn_get_record',
+    'sn_query_records',
+    'sn_get_tables',
+    'sn_get_table_schema',
+    'sn_get_business_rules',
+    'sn_get_script_includes',
+    'sn_get_client_scripts',
+    'sn_get_ui_policies',
+    'sn_get_notifications',
+    'sn_get_instance_info',
+    'sn_list_update_sets',
+    'sn_list_import_sets',
+    'sn_list_transform_maps',
+    'sn_get_transform_map',
+    'sn_get_transform_run_history',
+    'sn_get_dashboard_data',
+    'sn_generate_report',
   ]),
 };
 

@@ -117,12 +117,10 @@ services:
       - key: SUPABASE_SERVICE_KEY
         sync: false
 
-      # Admin credentials
+      # Admin identity + break-glass recovery
       - key: ADMIN_EMAIL
         sync: false
-      - key: ADMIN_NAME
-        sync: false
-      - key: ADMIN_PASSWORD_HASH
+      - key: ADMIN_EMERGENCY_TOKEN
         sync: false
 
       # Auth behavior

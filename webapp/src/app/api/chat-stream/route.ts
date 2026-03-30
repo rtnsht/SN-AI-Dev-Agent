@@ -8,7 +8,8 @@ import { normalizeServiceNowAuthMethod, validateServiceNowCredentials } from "@/
 import { requireAdmin } from "@/lib/admin-auth";
 import { getClientIp } from "@/lib/client-ip";
 import { parseChatBody } from "@/lib/request-validation";
-import { resolveLlmApiKey } from "@/lib/key-resolver";
+import { incrementModelAccessUsage, resolveModelExecution } from "@/lib/model-platform";
+import { touchUserApiKey } from "@/lib/user-api-keys";
 
 export const maxDuration = 300;
 
@@ -34,6 +35,7 @@ export async function POST(request: NextRequest) {
       sessionId: clientSessionId,
       phase,
       sddMode: clientSddMode,
+      toolSelection,
     } = parsed.data;
 
     // Reject invalid phase before policy resolution
@@ -102,34 +104,52 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Resolve API key via pool + BYOK + env fallback
+    const userId = request.headers.get("x-user-id") || undefined;
+    const selectedModel = model || "claude-sonnet-4-6";
+
+    // Resolve the selected model against the transport-aware catalog.
     const allowUserKeys = process.env.ALLOW_USER_API_KEYS !== "false";
-    const provider = credentials.aiProvider === "openrouter" ? "openrouter" as const : "anthropic" as const;
-    const userKey = provider === "openrouter"
+    const inlineUserKey = credentials.aiProvider === "openrouter"
       ? (allowUserKeys ? credentials.openRouterApiKey || "" : "")
       : (allowUserKeys ? credentials.claudeApiKey || "" : "");
 
-    const resolved = resolveLlmApiKey(sessionId, provider, userKey, allowUserKeys);
-    if (!resolved) {
-      const label = provider === "openrouter" ? "OpenRouter" : "Claude";
-      logger.error(sessionId, "validation", `No ${label} API key available`, { provider, allowUserKeys });
+    const modelResolution = await resolveModelExecution({
+      userId,
+      sessionId,
+      modelIdentifier: selectedModel,
+      inlineUserKey,
+      allowUserKeys,
+    });
+
+    if (!modelResolution.allowed || !modelResolution.model || !modelResolution.apiKey) {
+      logger.error(sessionId, "validation", "Model execution access denied", {
+        model: selectedModel,
+        allowUserKeys,
+        reason: modelResolution.error,
+      });
       return new Response(
-        JSON.stringify({ error: `No ${label} API key available. Provide one in settings or ask admin to configure it.` }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({
+          error: modelResolution.error || "The selected model is unavailable.",
+          code: "model_access",
+          allowUserApiKeys: allowUserKeys,
+          remainingQuota: modelResolution.remainingQuota ?? null,
+        }),
+        { status: modelResolution.status, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    if (provider === "openrouter") {
-      credentials.openRouterApiKey = resolved.apiKey;
+    credentials.aiProvider = modelResolution.model.transport;
+
+    if (modelResolution.model.transport === "openrouter") {
+      credentials.openRouterApiKey = modelResolution.apiKey;
     } else {
-      credentials.claudeApiKey = resolved.apiKey;
+      credentials.claudeApiKey = modelResolution.apiKey;
     }
-    userSuppliedKey = resolved.userSuppliedKey;
+    userSuppliedKey = modelResolution.userSuppliedKey;
 
     // 3-tier access check: anonymous (IP) → authenticated (user) → BYOK (unlimited)
-    const userId = request.headers.get("x-user-id");
     try {
-      const access = await checkAccess(ip, userId, userSuppliedKey, credentials.instanceUrl);
+      const access = await checkAccess(ip, userId ?? null, userSuppliedKey, credentials.instanceUrl);
       if (!access.allowed) {
         logger.warn(sessionId, "access_tier", `Access denied: ${access.gate}`, {
           tier: access.tier,
@@ -179,25 +199,18 @@ export async function POST(request: NextRequest) {
       ...(m.timestamp ? { timestamp: m.timestamp } : {}),
     }));
 
-    const selectedModel = model || "claude-sonnet-4-6";
+    const executableModel = modelResolution.model.apiModelId || modelResolution.model.modelId;
 
-    // Prevent Cost Exhaustion: Whitelist models when using the server's OpenRouter key
-    if (credentials.aiProvider === "openrouter" && !userSuppliedKey) {
-      const allowedServerModels = [
-        "anthropic/claude-3.5-sonnet",
-        "anthropic/claude-3-haiku",
-        "google/gemini-1.5-flash",
-        "google/gemini-2.0-flash-001",
-        "meta-llama/llama-3.1-8b-instruct",
-        "meta-llama/llama-3.1-70b-instruct"
-      ];
-      if (!allowedServerModels.includes(selectedModel)) {
-        logger.error(sessionId, "validation", "Unauthorized model requested with server key", { model: selectedModel });
-        return new Response(
-          JSON.stringify({ error: "The requested model is not allowed when using the server's API key. Switch to BYOK and provide your own OpenRouter key for this model." }),
-          { status: 403, headers: { "Content-Type": "application/json" } }
-        );
-      }
+    if (modelResolution.accessSource === "free_rule" && userId && modelResolution.ruleId) {
+      await incrementModelAccessUsage({
+        ruleId: modelResolution.ruleId,
+        userId,
+        modelConfigId: modelResolution.model.modelConfigId,
+      });
+    }
+
+    if (modelResolution.storedKeyId) {
+      await touchUserApiKey(modelResolution.storedKeyId);
     }
 
     // Update session_logs.model to reflect the actual model used in this chat
@@ -205,7 +218,7 @@ export async function POST(request: NextRequest) {
     if (sessionId && sessionId !== "unknown") {
       try {
         const query = getSupabase().from("session_logs")
-          .update({ model: selectedModel, updated_at: new Date().toISOString() })
+          .update({ model: executableModel, updated_at: new Date().toISOString() })
           .eq("session_id", sessionId);
         
         // Prevent IDOR: ensure we only update if the session belongs to the caller
@@ -242,7 +255,7 @@ export async function POST(request: NextRequest) {
       messageCount: chatMessages.length,
       imageCount,
       keyType: userSuppliedKey ? "user" : "server",
-      model: selectedModel,
+      model: executableModel,
       messageTimestamps,
     });
 
@@ -286,7 +299,17 @@ export async function POST(request: NextRequest) {
         }, HEARTBEAT_INTERVAL_MS);
 
         try {
-          for await (const event of chatStream(credentials, chatMessages, selectedModel, 30, sessionId, effectivePhase, abortController.signal, sddPolicy.sddActive)) {
+          for await (const event of chatStream(
+            credentials,
+            chatMessages,
+            executableModel,
+            30,
+            sessionId,
+            effectivePhase,
+            abortController.signal,
+            sddPolicy.sddActive,
+            toolSelection
+          )) {
             if (event.type === "tool_end") toolCount++;
             const data = `data: ${JSON.stringify(event)}\n\n`;
             safeEnqueue(encoder.encode(data));

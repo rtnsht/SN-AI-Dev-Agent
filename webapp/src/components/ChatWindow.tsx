@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, type RefObject } from "react";
+import { useState, useRef, useEffect, useCallback, type ReactNode, type RefObject } from "react";
 import { useRotatingText } from "@/hooks/useRotatingText";
 import type { ChatMessage, SDLCPhase, LiveStatus, FileAttachment, CategorizedPrompts, ExamplePrompt, UpdateSetSummary } from "@/lib/types";
 import { SDLC_PHASES } from "@/lib/types";
@@ -165,13 +165,25 @@ export interface TaskPlanDisplay {
   tasks: { id: number; name: string; type: string; tools: { name: string; args: Record<string, unknown> }[] }[];
 }
 
+/** Tool execution state for label variants */
+type ToolState = 'starting' | 'executing' | 'completed';
+
+/** Apply state suffix to base label */
+function applyState(baseLabel: string, state: ToolState): string {
+  if (state === 'executing') return `Running ${baseLabel.toLowerCase()}...`;
+  if (state === 'starting') return `Starting ${baseLabel.toLowerCase()}...`;
+  return baseLabel;
+}
+
 /** Convert raw tool name + input into a friendly conversational label */
-function friendlyToolLabel(toolName: string, input?: Record<string, unknown>): string {
+function friendlyToolLabel(toolName: string, input?: Record<string, unknown>, state: ToolState = 'completed'): string {
   const table = input?.table as string | undefined;
+  const tableName = input?.table_name as string | undefined;
   const name = input?.name as string | undefined;
   const query = input?.query as string | undefined;
   const dataName = (input?.data as Record<string, unknown>)?.name as string | undefined;
   const effectiveName = name || dataName;
+  const effectiveTable = table || tableName;
 
   // Explicit friendly labels for known tools
   const explicitMap: Record<string, string> = {
@@ -180,20 +192,20 @@ function friendlyToolLabel(toolName: string, input?: Record<string, unknown>): s
     sn_test_connection: "Testing connection",
     sn_initialize_instance: "Initializing instance",
     sn_get_tables: "Listing available tables",
-    sn_get_table_schema: table ? `Reading ${table} table schema` : "Reading table schema",
+    sn_get_table_schema: effectiveTable ? `Reading ${effectiveTable} table schema` : "Reading table schema",
     sn_analyze_instance: "Analyzing instance",
     // Discovery — artifact reads
-    sn_get_business_rules: table ? `Business rules on ${table}` : "Business rules",
-    sn_get_client_scripts: table ? `Client scripts on ${table}` : "Client scripts",
-    sn_get_ui_policies: table ? `UI policies on ${table}` : "UI policies",
-    sn_get_ui_actions: table ? `UI actions on ${table}` : "UI actions",
+    sn_get_business_rules: effectiveTable ? `Business rules on ${effectiveTable}` : "Business rules",
+    sn_get_client_scripts: effectiveTable ? `Client scripts on ${effectiveTable}` : "Client scripts",
+    sn_get_ui_policies: effectiveTable ? `UI policies on ${effectiveTable}` : "UI policies",
+    sn_get_ui_actions: effectiveTable ? `UI actions on ${effectiveTable}` : "UI actions",
     sn_get_ui_policy_actions: "UI policy actions",
     sn_get_script_includes: query ? `Script includes matching ${query}` : "Script includes",
-    sn_get_acls: table ? `ACLs on ${table}` : "ACLs",
-    sn_get_notifications: table ? `Notifications for ${table}` : "Notifications",
+    sn_get_acls: effectiveTable ? `ACLs on ${effectiveTable}` : "ACLs",
+    sn_get_notifications: effectiveTable ? `Notifications for ${effectiveTable}` : "Notifications",
     sn_get_scheduled_jobs: "Scheduled jobs",
     sn_get_fix_scripts: "Fix scripts",
-    sn_get_events: table ? `Events on ${table}` : "Reading events",
+    sn_get_events: effectiveTable ? `Events on ${effectiveTable}` : "Reading events",
     sn_get_roles: "Checking roles",
     sn_get_requests: "Reading service requests",
     // Catalog
@@ -216,7 +228,7 @@ function friendlyToolLabel(toolName: string, input?: Record<string, unknown>): s
     sn_get_update_set_contents: "Update set contents",
     sn_set_current_update_set: "Setting active update set",
     sn_complete_update_set: "Completing update set",
-    sn_move_to_update_set: table ? `Moving ${table} to update set` : "Moving artifact to update set",
+    sn_move_to_update_set: effectiveTable ? `Moving ${effectiveTable} to update set` : "Moving artifact to update set",
     sn_verify_update_set_capture: "Verifying update set capture",
     // Analysis & quality
     sn_detect_ootb_overrides: "Checking for OOTB overrides",
@@ -225,13 +237,13 @@ function friendlyToolLabel(toolName: string, input?: Record<string, unknown>): s
     sn_code_quality_score: "Evaluating code quality",
     sn_find_dead_code: "Scanning for unused code",
     sn_preview_change_impact: "Previewing change impact",
-    sn_detect_conflicts: table ? `Checking conflicts on ${table}` : "Checking for conflicts",
+    sn_detect_conflicts: effectiveTable ? `Checking conflicts on ${effectiveTable}` : "Checking for conflicts",
     sn_validate_change: "Validating changes",
     sn_check_breaking_changes: "Checking for breaking changes",
     sn_diff_artifact: "Comparing artifact versions",
     // Audit & change tracking
     sn_log_change: "Logging change",
-    sn_get_audit_history: table ? `Audit history for ${table}` : "Reading audit history",
+    sn_get_audit_history: effectiveTable ? `Audit history for ${effectiveTable}` : "Reading audit history",
     // Approvals
     sn_request_approval: "Requesting approval",
     sn_process_approval: "Processing approval",
@@ -280,28 +292,33 @@ function friendlyToolLabel(toolName: string, input?: Record<string, unknown>): s
   // sn_query_records
   if (toolName === "sn_query_records") {
     const filter = (input?.encoded_query as string | undefined) || query;
-    if (table && filter) {
+    if (effectiveTable && filter) {
       const short = filter.length > 40 ? filter.slice(0, 40) + "..." : filter;
-      return `Querying ${table}: ${short}`;
+      return `Querying ${effectiveTable}: ${short}`;
     }
-    return table ? `Querying ${table}` : "Querying records";
+    return effectiveTable ? `Querying ${effectiveTable}` : "Querying records";
   }
-  if (toolName === "sn_read_record" || toolName === "sn_get_record") return table ? `Reading ${table} record` : "Reading record";
+  if (toolName === "sn_read_record" || toolName === "sn_get_record") {
+    const baseLabel = effectiveTable ? `Reading ${effectiveTable} record` : "Reading record";
+    return applyState(baseLabel, state);
+  }
 
   // sn_create_* tools
   if (toolName.startsWith("sn_create_")) {
     const entity = toolName.replace("sn_create_", "").replace(/_/g, " ");
-    return effectiveName
-      ? `Creating ${entity}: ${effectiveName}${table ? ` on ${table}` : ""}`
-      : `Creating ${entity}${table ? ` on ${table}` : ""}`;
+    const baseLabel = effectiveName
+      ? `Creating ${entity}: ${effectiveName}${effectiveTable ? ` on ${effectiveTable}` : ""}`
+      : `Creating ${entity}${effectiveTable ? ` on ${effectiveTable}` : ""}`;
+    return applyState(baseLabel, state);
   }
 
   // sn_update_* tools
   if (toolName.startsWith("sn_update_")) {
     const entity = toolName.replace("sn_update_", "").replace(/_/g, " ");
-    return effectiveName
+    const baseLabel = effectiveName
       ? `Updating ${entity}: ${effectiveName}`
       : `Updating ${entity}`;
+    return applyState(baseLabel, state);
   }
 
   // sn_list_* tools
@@ -402,6 +419,12 @@ interface Props {
   onDequeue?: (id: string) => void;
   /** Clear all queued messages */
   onClearQueue?: () => void;
+  /** Layout variant for shell integrations such as FDE */
+  variant?: "default" | "fde";
+  /** Optional content rendered directly above the composer */
+  composerTopContent?: ReactNode;
+  /** Optional content rendered directly below the composer */
+  composerBottomContent?: ReactNode;
 }
 
 /** Deduplicate and clean activity log for display — merge status noise, keep tool entries */
@@ -727,7 +750,37 @@ function InlineAgentActivity({ activityLog, liveStatus, onCancel }: { activityLo
   );
 }
 
-export default function ChatWindow({ messages, isLoading, onSend, onCancel, onApprove, onChoiceSelect, connected, inputRef, showToolDetails = true, liveStatus, userName, categorizedPrompts, activityLog = [], taskPlan, onGetStarted, pendingPrompt, onPendingPromptConsumed, sddMode = false, currentPhase = null, onSddModeChange, activeReqId, clientSessionId = "", completedPhases, queueLength = 0, onDequeue, onClearQueue }: Props) {
+export default function ChatWindow({
+  messages,
+  isLoading,
+  onSend,
+  onCancel,
+  onApprove,
+  onChoiceSelect,
+  connected,
+  inputRef,
+  showToolDetails = true,
+  liveStatus,
+  userName,
+  categorizedPrompts,
+  activityLog = [],
+  taskPlan,
+  onGetStarted,
+  pendingPrompt,
+  onPendingPromptConsumed,
+  sddMode = false,
+  currentPhase = null,
+  onSddModeChange,
+  activeReqId,
+  clientSessionId = "",
+  completedPhases,
+  queueLength = 0,
+  onDequeue,
+  onClearQueue,
+  variant = "default",
+  composerTopContent,
+  composerBottomContent,
+}: Props) {
   const [input, setInput] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [files, setFiles] = useState<FileAttachment[]>([]);
@@ -1307,7 +1360,7 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
     setFiles((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const showEmptyState = messages.every((m) => m.role === "system");
+  const showEmptyState = variant === "fde" ? false : messages.every((m) => m.role === "system");
 
   /* ── Resolve which suggestions to show based on active tab ── */
   const isUpdatesTab = activeTab === "updates";
@@ -1696,7 +1749,11 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
                 />
 
                 {/* Input bar (disabled — hidden on mobile pre-connect) */}
-                <div className="hidden sm:block w-full">{renderInputBar(true)}</div>
+                <div className="hidden sm:block w-full">
+                  {composerTopContent}
+                  {renderInputBar(true)}
+                  {composerBottomContent}
+                </div>
 
                 {/* Mobile: Get Started CTA button */}
                 {onGetStarted && (
@@ -1761,7 +1818,9 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
 
                 {/* Glowing input bar */}
                 <div className="hero-input-glow w-full">
+                  {composerTopContent}
                   {renderInputBar(true)}
+                  {composerBottomContent}
                 </div>
                 <p className="text-center text-[11px] mt-2 select-none" style={{ color: "var(--text-disabled)" }}>
                   This is Agentic AI and can make mistakes. Please double-check responses.
@@ -2017,7 +2076,9 @@ export default function ChatWindow({ messages, isLoading, onSend, onCancel, onAp
                   </div>
                 );
               })()}
+              {composerTopContent}
               {renderInputBar(false)}
+              {composerBottomContent}
               <p className="text-center text-[11px] mt-1.5 select-none" style={{ color: "var(--text-disabled)" }}>
                 This is Agentic AI and can make mistakes. Please double-check responses.
               </p>

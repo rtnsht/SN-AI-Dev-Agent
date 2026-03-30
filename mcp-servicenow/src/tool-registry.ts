@@ -40,6 +40,7 @@ import * as flowDesigner from './tools/flow-designer.js';
 import * as scopedApps from './tools/scoped-apps.js';
 import * as servicePortal from './tools/service-portal.js';
 import * as atf from './tools/atf.js';
+import * as dataImport from './tools/data-import.js';
 
 /**
  * Tool handler mapping: tool name -> async function(snClient, args) => result
@@ -58,6 +59,22 @@ const TOOL_HANDLERS: Record<string, (snClient: ServiceNowClient, args: unknown) 
   sn_get_record: async (c, a) => records.getRecord(c, records.getRecordSchema.parse(a)),
   sn_create_record: async (c, a) => records.createRecord(c, records.createRecordSchema.parse(a)),
   sn_update_record: async (c, a) => records.updateRecord(c, records.updateRecordSchema.parse(a)),
+
+  // Data Import & Transform Maps
+  sn_list_data_sources: async (c, a) => dataImport.listDataSources(c, dataImport.listDataSourcesSchema.parse(a)),
+  sn_get_data_source: async (c, a) => dataImport.getDataSource(c, dataImport.getDataSourceSchema.parse(a)),
+  sn_create_data_source: async (c, a) => dataImport.createDataSource(c, dataImport.createDataSourceSchema.parse(a)),
+  sn_list_import_sets: async (c, a) => dataImport.listImportSets(c, dataImport.listImportSetsSchema.parse(a)),
+  sn_get_import_set_rows: async (c, a) => dataImport.getImportSetRows(c, dataImport.getImportSetRowsSchema.parse(a)),
+  sn_list_transform_maps: async (c, a) => dataImport.listTransformMaps(c, dataImport.listTransformMapsSchema.parse(a)),
+  sn_get_transform_map: async (c, a) => dataImport.getTransformMap(c, dataImport.getTransformMapSchema.parse(a)),
+  sn_create_transform_map: async (c, a) => dataImport.createTransformMap(c, dataImport.createTransformMapSchema.parse(a)),
+  sn_list_transform_entries: async (c, a) => dataImport.listTransformEntries(c, dataImport.listTransformEntriesSchema.parse(a)),
+  sn_create_transform_entry: async (c, a) => dataImport.createTransformEntry(c, dataImport.createTransformEntrySchema.parse(a)),
+  sn_list_transform_scripts: async (c, a) => dataImport.listTransformScripts(c, dataImport.listTransformScriptsSchema.parse(a)),
+  sn_create_transform_script: async (c, a) => dataImport.createTransformScript(c, dataImport.createTransformScriptSchema.parse(a)),
+  sn_execute_transform_map: async (c, a) => dataImport.executeTransformMap(c, dataImport.executeTransformMapSchema.parse(a)),
+  sn_get_transform_run_history: async (c, a) => dataImport.getTransformRunHistory(c, dataImport.getTransformRunHistorySchema.parse(a)),
 
   // Business Rules
   sn_get_business_rules: async (c, a) => scripts.getBusinessRules(c, scripts.getBusinessRulesSchema.parse(a)),

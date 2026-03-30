@@ -1,0 +1,276 @@
+/**
+ * FDE Design Tokens — Palantir FDE + Blueprint Design System
+ * 
+ * Source: docs/platform-redesign/CHATBOX-FDE-INSPIRED.md
+ * 
+ * Surface hierarchy (4% steps, blue undertone):
+ * - App background:   #0B0D12  (Blueprint: $dark-gray1)
+ * - Card background:  #161A22  (Blueprint: $dark-gray2)
+ * - Elevated:         #1C2029  (Blueprint: $dark-gray3)
+ * - Hover:            #232833  (Blueprint: $dark-gray4)
+ */
+
+:root {
+  /* Surface hierarchy */
+  --fde-surface-1: #0B0D12;
+  --fde-surface-2: #161A22;
+  --fde-surface-3: #1C2029;
+  --fde-surface-4: #232833;
+
+  /* Borders */
+  --fde-border-default: rgba(255, 255, 255, 0.08);
+  --fde-border-emphasis: rgba(255, 255, 255, 0.15);
+
+  /* Text */
+  --fde-text-primary: #E6EDF3;
+  --fde-text-secondary: #8B949E;
+  --fde-text-disabled: #848D97;
+
+  /* Mode accents */
+  --fde-accent-explore: #4C7DFF;
+  --fde-accent-build: #38C976;
+  --fde-accent-sdd: #A78BFA;
+  --fde-accent-analyze: #F5C451;
+  --fde-accent-operate: #F97373;
+  --fde-accent-flow: #45B7D1;
+
+  /* Status colors */
+  --fde-success: #38C976;
+  --fde-warning: #F5C451;
+  --fde-error: #F97373;
+  --fde-info: #4C7DFF;
+
+  /* Blueprint design tokens */
+  --fde-radius: 2px;
+  --fde-radius-lg: 4px;
+  --fde-spacing: 4px;
+  --fde-card-padding: 12px;
+  --fde-button-height: 32px;
+
+  /* Shadows */
+  --fde-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --fde-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --fde-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+
+  /* Transitions */
+  --fde-transition-fast: 150ms ease;
+  --fde-transition-normal: 250ms ease;
+}
+
+/* FDE Component Base Styles */
+.fde-card {
+  background: var(--fde-surface-2);
+  border: 1px solid var(--fde-border-default);
+  border-radius: var(--fde-radius);
+  padding: var(--fde-card-padding);
+}
+
+.fde-chip {
+  height: 24px;
+  border-radius: var(--fde-radius);
+  padding: 0 8px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fde-chip-explore {
+  background: rgba(76, 125, 255, 0.12);
+  border: 1px solid rgba(76, 125, 255, 0.3);
+  color: var(--fde-accent-explore);
+}
+
+.fde-chip-build {
+  background: rgba(56, 201, 118, 0.12);
+  border: 1px solid rgba(56, 201, 118, 0.3);
+  color: var(--fde-accent-build);
+}
+
+.fde-chip-sdd {
+  background: rgba(167, 139, 250, 0.12);
+  border: 1px solid rgba(167, 139, 250, 0.3);
+  color: var(--fde-accent-sdd);
+}
+
+.fde-chip-analyze {
+  background: rgba(245, 196, 81, 0.12);
+  border: 1px solid rgba(245, 196, 81, 0.3);
+  color: var(--fde-accent-analyze);
+}
+
+.fde-chip-operate {
+  background: rgba(249, 115, 115, 0.12);
+  border: 1px solid rgba(249, 115, 115, 0.3);
+  color: var(--fde-accent-operate);
+}
+
+.fde-chip-flow {
+  background: rgba(69, 183, 209, 0.12);
+  border: 1px solid rgba(69, 183, 209, 0.3);
+  color: var(--fde-accent-flow);
+}
+
+/* Mode pill styles */
+.fde-mode-pill {
+  background: transparent;
+  border: 1px solid var(--fde-border-default);
+  border-radius: var(--fde-radius);
+  color: var(--fde-text-secondary);
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all var(--fde-transition-fast);
+}
+
+.fde-mode-pill:hover {
+  background: var(--fde-surface-3);
+}
+
+.fde-mode-pill-selected {
+  background: rgba(167, 139, 250, 0.15);
+  border-color: rgba(167, 139, 250, 0.3);
+  color: var(--fde-text-primary);
+  font-weight: 500;
+}
+
+/* Tool execution row */
+.fde-tool-row {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+  font-size: 12px;
+  color: var(--fde-text-secondary);
+  padding: 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fde-tool-row-success {
+  color: var(--fde-success);
+}
+
+.fde-tool-row-active {
+  color: var(--fde-accent-build);
+}
+
+/* Button styles */
+.fde-button {
+  height: var(--fde-button-height);
+  border-radius: var(--fde-radius);
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--fde-transition-fast);
+  border: 1px solid transparent;
+}
+
+.fde-button-primary {
+  background: var(--fde-accent-build);
+  color: white;
+}
+
+.fde-button-primary:hover {
+  filter: brightness(1.1);
+}
+
+.fde-button-secondary {
+  background: var(--fde-surface-3);
+  border-color: var(--fde-border-default);
+  color: var(--fde-text-primary);
+}
+
+.fde-button-secondary:hover {
+  background: var(--fde-surface-4);
+}
+
+.fde-button-danger {
+  background: var(--fde-error);
+  color: white;
+}
+
+/* Input styles */
+.fde-input {
+  background: var(--fde-surface-1);
+  border: 1px solid var(--fde-border-default);
+  border-radius: var(--fde-radius);
+  color: var(--fde-text-primary);
+  font-size: 14px;
+  padding: 8px 12px;
+  transition: border-color var(--fde-transition-fast);
+}
+
+.fde-input:focus {
+  outline: none;
+  border-color: var(--fde-accent-build);
+}
+
+.fde-input::placeholder {
+  color: var(--fde-text-disabled);
+}
+
+/* Animation utilities */
+@keyframes fde-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fde-fade-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* Pulse dot animation for activity indicators */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+.fde-animate-fade-in {
+  animation: fde-fade-in 150ms ease forwards;
+}
+
+.fde-animate-fade-out {
+  animation: fde-fade-out 150ms ease forwards;
+}
+
+/* Focus ring */
+.fde-focus-ring:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(56, 201, 118, 0.4);
+}
+
+/* Scrollbar styling */
+.fde-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.fde-scroll::-webkit-scrollbar-track {
+  background: var(--fde-surface-1);
+}
+
+.fde-scroll::-webkit-scrollbar-thumb {
+  background: var(--fde-surface-4);
+  border-radius: 3px;
+}
+
+.fde-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--fde-text-disabled);
+}

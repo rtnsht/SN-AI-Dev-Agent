@@ -109,7 +109,7 @@ SN-AI-Dev-Agent/
 │
 ├── templates/                 # Document & code templates
 ├── scripts/                   # Validation & utility scripts
-└── docs/                      # Architecture documentation
+└── docs/                      # Documentation (architecture/, design/, planning/, security/, …)
 ```
 
 ---

@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import DOMPurify from "isomorphic-dompurify";
 
-type Tab = "requests" | "users" | "invites" | "banners" | "trials" | "access-tiers" | "session-logs" | "engine";
+type Tab = "requests" | "users" | "invites" | "banners" | "trials" | "models" | "access-tiers" | "session-logs" | "engine" | "landing-cms";
 
 interface AccessRequest {
   id: string;
@@ -74,6 +75,38 @@ interface TrialUsageStat {
   daysRemaining: number;
   todayUsed: number;
   totalUsed: number;
+}
+
+interface AdminModelConfig {
+  id: string;
+  label: string;
+  model_key: string;
+  display_provider: string | null;
+  transport: string | null;
+  enabled: boolean | null;
+  is_default: boolean | null;
+  is_server_free: boolean | null;
+  is_free: boolean | null;
+  context_window: number | null;
+  input_cost_per_1m: number | null;
+  output_cost_per_1m: number | null;
+  model_class: string | null;
+  speed_tier: string | null;
+  cost_tier: string | null;
+  thinking_mode_supported: boolean | null;
+}
+
+interface AdminModelRule {
+  id: string;
+  model_config_id: string;
+  model_label: string;
+  model_key: string;
+  scope: "all_users" | "specific_users";
+  daily_request_limit: number | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  assigned_users: Array<{ id: string; email: string; name: string }>;
 }
 
 const PAGE_OPTIONS = [
@@ -173,6 +206,15 @@ export default function AdminPage() {
   const [engineSaved, setEngineSaved] = useState<Record<string, unknown> | null>(null);
   const [engineDirty, setEngineDirty] = useState(false);
 
+  // Model platform state
+  const [catalogModels, setCatalogModels] = useState<AdminModelConfig[]>([]);
+  const [modelRules, setModelRules] = useState<AdminModelRule[]>([]);
+  const [ruleModelId, setRuleModelId] = useState("");
+  const [ruleScope, setRuleScope] = useState<"all_users" | "specific_users">("all_users");
+  const [ruleDailyLimit, setRuleDailyLimit] = useState("50");
+  const [ruleActive, setRuleActive] = useState(true);
+  const [ruleUserIds, setRuleUserIds] = useState<string[]>([]);
+
   const pendingCount = requests.filter((r) => canModerateRequest(r.status)).length;
 
   const fetchData = useCallback(async () => {
@@ -219,6 +261,14 @@ export default function AdminPage() {
           const iData = await instancesRes.json();
           setAllInstances(iData.instances || []);
         }
+      } else if (tab === "models") {
+        const res = await fetch("/api/admin/model-platform");
+        if (res.status === 401 || res.status === 403) { router.push("/login"); return; }
+        const data = await res.json();
+        setCatalogModels(data.models || []);
+        setModelRules(data.rules || []);
+        setAllUsers(data.availableUsers || []);
+        setRuleModelId((current) => current || data.models?.[0]?.id || "");
       } else if (tab === "access-tiers") {
         const res = await fetch("/api/admin/access-tiers");
         if (res.status === 401 || res.status === 403) { router.push("/login"); return; }
@@ -598,13 +648,122 @@ export default function AdminPage() {
     setActionLoading(null);
   }
 
+  async function handleModelSetting(
+    modelId: string,
+    updates: { enabled?: boolean; isServerFree?: boolean; isDefault?: boolean }
+  ) {
+    setActionLoading(modelId);
+    setMessage("");
+    try {
+      const res = await fetch("/api/admin/model-platform", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update_model",
+          modelId,
+          ...updates,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage("Model settings updated");
+        fetchData();
+      } else {
+        setMessage(data.error || "Failed to update model");
+      }
+    } catch {
+      setMessage("Failed to update model");
+    }
+    setActionLoading(null);
+  }
+
+  async function handleCreateModelRule(e: React.FormEvent) {
+    e.preventDefault();
+    setActionLoading("create-model-rule");
+    setMessage("");
+    try {
+      const res = await fetch("/api/admin/model-platform", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create_rule",
+          modelConfigId: ruleModelId,
+          scope: ruleScope,
+          dailyRequestLimit: ruleDailyLimit === "" ? null : Number.parseInt(ruleDailyLimit, 10),
+          isActive: ruleActive,
+          userIds: ruleScope === "specific_users" ? ruleUserIds : [],
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage("Free model rule created");
+        setRuleScope("all_users");
+        setRuleDailyLimit("50");
+        setRuleActive(true);
+        setRuleUserIds([]);
+        fetchData();
+      } else {
+        setMessage(data.error || "Failed to create rule");
+      }
+    } catch {
+      setMessage("Failed to create rule");
+    }
+    setActionLoading(null);
+  }
+
+  async function handleRuleStatus(ruleId: string, isActive: boolean) {
+    setActionLoading(ruleId);
+    setMessage("");
+    try {
+      const res = await fetch("/api/admin/model-platform", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update_rule",
+          ruleId,
+          isActive,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage("Rule updated");
+        fetchData();
+      } else {
+        setMessage(data.error || "Failed to update rule");
+      }
+    } catch {
+      setMessage("Failed to update rule");
+    }
+    setActionLoading(null);
+  }
+
+  async function handleDeleteRule(ruleId: string) {
+    setActionLoading(ruleId);
+    setMessage("");
+    try {
+      const res = await fetch(`/api/admin/model-platform?ruleId=${encodeURIComponent(ruleId)}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage("Rule deleted");
+        fetchData();
+      } else {
+        setMessage(data.error || "Failed to delete rule");
+      }
+    } catch {
+      setMessage("Failed to delete rule");
+    }
+    setActionLoading(null);
+  }
+
   const fmt = (d: string | null) => d ? new Date(d).toLocaleDateString() : "—";
 
   return (
     <div className="admin-page">
       <div className="admin-header">
         <h1 className="admin-title">Admin Dashboard</h1>
-        <a href="/" className="auth-link">&larr; Back to app</a>
+        <Link href="/" className="auth-link">&larr; Back to app</Link>
       </div>
 
       {message && <div className="auth-success" style={{ marginBottom: "1rem" }}>{message}</div>}
@@ -617,9 +776,11 @@ export default function AdminPage() {
         <button className={`admin-tab ${tab === "invites" ? "active" : ""}`} onClick={() => setTab("invites")}>Invite Codes</button>
         <button className={`admin-tab ${tab === "banners" ? "active" : ""}`} onClick={() => setTab("banners")}>Banners</button>
         <button className={`admin-tab ${tab === "trials" ? "active" : ""}`} onClick={() => setTab("trials")}>Trials</button>
+        <button className={`admin-tab ${tab === "models" ? "active" : ""}`} onClick={() => setTab("models")}>Models</button>
         <button className={`admin-tab ${tab === "access-tiers" ? "active" : ""}`} onClick={() => setTab("access-tiers")}>Access Tiers</button>
         <button className={`admin-tab ${tab === "session-logs" ? "active" : ""}`} onClick={() => setTab("session-logs")}>Session Logs</button>
         <button className={`admin-tab ${tab === "engine" ? "active" : ""}`} onClick={() => setTab("engine")}>Engine</button>
+        <button className={`admin-tab ${tab === "landing-cms" ? "active" : ""}`} onClick={() => setTab("landing-cms")}>Landing Page CMS</button>
       </div>
 
       {loading && <p className="admin-loading">Loading...</p>}
@@ -1353,6 +1514,269 @@ export default function AdminPage() {
         </>
       )}
 
+      {/* ─── Models Tab ─── */}
+      {tab === "models" && !loading && (
+        <>
+          <div style={{
+            background: "var(--surface-secondary)",
+            border: "1px solid var(--border-default)",
+            borderRadius: "12px",
+            padding: "20px",
+            marginBottom: "1.5rem",
+          }}>
+            <h3 style={{ color: "var(--text-primary)", fontSize: "15px", fontWeight: 600, margin: "0 0 8px" }}>
+              Model Catalog Controls
+            </h3>
+            <p style={{ color: "var(--text-secondary)", fontSize: "12px", margin: "0 0 16px" }}>
+              Manage which models appear in the catalog, which ones can use shared system capacity, and which model is offered as the default.
+            </p>
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Model</th>
+                    <th>Provider</th>
+                    <th>Transport</th>
+                    <th>Profile</th>
+                    <th>Shared</th>
+                    <th>Default</th>
+                    <th>Visibility</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {catalogModels.map((model) => (
+                    <tr key={model.id}>
+                      <td>
+                        <div style={{ fontWeight: 600 }}>{model.label}</div>
+                        <div style={{ fontSize: "11px", color: "var(--text-secondary)" }}>{model.model_key}</div>
+                      </td>
+                      <td>{model.display_provider || "—"}</td>
+                      <td>{model.transport || "—"}</td>
+                      <td>
+                        <div style={{ fontSize: "12px" }}>
+                          {Math.round((model.context_window || 0) / 1000)}K ctx
+                        </div>
+                        <div style={{ fontSize: "11px", color: "var(--text-secondary)" }}>
+                          {model.model_class || "standard"} / {model.speed_tier || "medium"} / {model.cost_tier || "medium"}
+                        </div>
+                      </td>
+                      <td>
+                        <button
+                          className={`admin-btn ${model.is_server_free ? "admin-btn-approve" : "admin-btn-secondary"}`}
+                          disabled={actionLoading === model.id}
+                          onClick={() => handleModelSetting(model.id, { isServerFree: !model.is_server_free })}
+                        >
+                          {model.is_server_free ? "Shared" : "Private"}
+                        </button>
+                      </td>
+                      <td>
+                        <button
+                          className={`admin-btn ${model.is_default ? "admin-btn-approve" : "admin-btn-secondary"}`}
+                          disabled={actionLoading === model.id || Boolean(model.is_default)}
+                          onClick={() => handleModelSetting(model.id, { isDefault: true })}
+                        >
+                          {model.is_default ? "Default" : "Make Default"}
+                        </button>
+                      </td>
+                      <td>
+                        <button
+                          className={`admin-btn ${model.enabled ? "admin-btn-secondary" : "admin-btn-reject"}`}
+                          disabled={actionLoading === model.id}
+                          onClick={() => handleModelSetting(model.id, { enabled: !model.enabled })}
+                        >
+                          {model.enabled ? "Visible" : "Hidden"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {catalogModels.length === 0 && <tr><td colSpan={7} className="admin-empty">No models found</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <form onSubmit={handleCreateModelRule} style={{
+            background: "var(--surface-secondary)",
+            border: "1px solid var(--border-default)",
+            borderRadius: "12px",
+            padding: "20px",
+            marginBottom: "1.5rem",
+          }}>
+            <h3 style={{ color: "var(--text-primary)", fontSize: "15px", fontWeight: 600, margin: "0 0 8px" }}>
+              Create Free Access Rule
+            </h3>
+            <p style={{ color: "var(--text-secondary)", fontSize: "12px", margin: "0 0 16px" }}>
+              Grant daily shared-capacity access to all users or only to a specific allowlist. Multiple rules can coexist across models.
+            </p>
+            <div style={{ display: "grid", gap: "12px", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", marginBottom: "16px" }}>
+              <div>
+                <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}>
+                  Model
+                </label>
+                <select
+                  className="auth-input"
+                  value={ruleModelId}
+                  onChange={(e) => setRuleModelId(e.target.value)}
+                  style={{ fontSize: "13px" }}
+                >
+                  {catalogModels.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.label} ({model.display_provider || model.transport})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}>
+                  Scope
+                </label>
+                <select
+                  className="auth-input"
+                  value={ruleScope}
+                  onChange={(e) => setRuleScope(e.target.value as "all_users" | "specific_users")}
+                  style={{ fontSize: "13px" }}
+                >
+                  <option value="all_users">All users</option>
+                  <option value="specific_users">Specific users</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}>
+                  Daily request limit
+                </label>
+                <input
+                  className="auth-input"
+                  type="number"
+                  min="0"
+                  value={ruleDailyLimit}
+                  onChange={(e) => setRuleDailyLimit(e.target.value)}
+                  style={{ fontSize: "13px" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 500, marginBottom: "4px" }}>
+                  Active
+                </label>
+                <button
+                  type="button"
+                  className={`admin-btn ${ruleActive ? "admin-btn-approve" : "admin-btn-secondary"}`}
+                  onClick={() => setRuleActive((value) => !value)}
+                >
+                  {ruleActive ? "Enabled" : "Disabled"}
+                </button>
+              </div>
+            </div>
+
+            {ruleScope === "specific_users" && (
+              <div style={{ marginBottom: "16px" }}>
+                <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "12px", fontWeight: 500, marginBottom: "8px" }}>
+                  Assign users
+                </label>
+                <div style={{
+                  maxHeight: "220px",
+                  overflowY: "auto",
+                  border: "1px solid var(--border-default)",
+                  borderRadius: "10px",
+                  padding: "12px",
+                  background: "var(--surface-primary)",
+                }}>
+                  {allUsers.map((user) => (
+                    <label key={user.id} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", fontSize: "12px", color: "var(--text-primary)" }}>
+                      <input
+                        type="checkbox"
+                        checked={ruleUserIds.includes(user.id)}
+                        onChange={() => setRuleUserIds((current) =>
+                          current.includes(user.id)
+                            ? current.filter((id) => id !== user.id)
+                            : [...current, user.id]
+                        )}
+                      />
+                      <span>{user.name}</span>
+                      <span style={{ color: "var(--text-secondary)" }}>{user.email}</span>
+                    </label>
+                  ))}
+                  {allUsers.length === 0 && (
+                    <div style={{ color: "var(--text-secondary)", fontSize: "12px" }}>
+                      No active users available for assignment.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <button className="admin-btn admin-btn-approve" type="submit" disabled={actionLoading === "create-model-rule" || !ruleModelId}>
+              {actionLoading === "create-model-rule" ? "Creating..." : "Create Rule"}
+            </button>
+          </form>
+
+          <div style={{
+            background: "var(--surface-secondary)",
+            border: "1px solid var(--border-default)",
+            borderRadius: "12px",
+            padding: "20px",
+          }}>
+            <h3 style={{ color: "var(--text-primary)", fontSize: "15px", fontWeight: 600, margin: "0 0 12px" }}>
+              Active Free Access Rules
+            </h3>
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Model</th>
+                    <th>Scope</th>
+                    <th>Daily Limit</th>
+                    <th>Assigned Users</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {modelRules.map((rule) => (
+                    <tr key={rule.id}>
+                      <td>
+                        <div style={{ fontWeight: 600 }}>{rule.model_label}</div>
+                        <div style={{ fontSize: "11px", color: "var(--text-secondary)" }}>{rule.model_key}</div>
+                      </td>
+                      <td>{rule.scope === "all_users" ? "All users" : "Specific users"}</td>
+                      <td>{rule.daily_request_limit ?? "Unlimited"}</td>
+                      <td>
+                        {rule.scope === "all_users"
+                          ? "All active users"
+                          : rule.assigned_users.length > 0
+                            ? rule.assigned_users.map((user) => user.name || user.email).join(", ")
+                            : "No users assigned"}
+                      </td>
+                      <td>{rule.is_active ? "Active" : "Paused"}</td>
+                      <td>{fmt(rule.created_at)}</td>
+                      <td>
+                        <div className="admin-actions">
+                          <button
+                            className={`admin-btn ${rule.is_active ? "admin-btn-secondary" : "admin-btn-approve"}`}
+                            disabled={actionLoading === rule.id}
+                            onClick={() => handleRuleStatus(rule.id, !rule.is_active)}
+                          >
+                            {rule.is_active ? "Pause" : "Activate"}
+                          </button>
+                          <button
+                            className="admin-btn admin-btn-reject"
+                            disabled={actionLoading === rule.id}
+                            onClick={() => handleDeleteRule(rule.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {modelRules.length === 0 && <tr><td colSpan={7} className="admin-empty">No free access rules configured</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* ─── Access Tiers Tab ─── */}
       {tab === "access-tiers" && !loading && (
         <>
@@ -1812,6 +2236,25 @@ export default function AdminPage() {
             </button>
           </div>
         </>
+      )}
+
+      {/* ─── Landing Page CMS Tab ─── */}
+      {tab === "landing-cms" && !loading && (
+        <div className="flex flex-col items-center justify-center py-12">
+          <div className="text-center mb-6">
+            <h3 className="text-xl font-semibold text-white mb-2">Landing Page CMS</h3>
+            <p className="text-zinc-400">Manage all landing page content in a dedicated interface</p>
+          </div>
+          <a
+            href="/admin/landing-cms"
+            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+          >
+            Open Landing Page CMS
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
+        </div>
       )}
     </div>
   );

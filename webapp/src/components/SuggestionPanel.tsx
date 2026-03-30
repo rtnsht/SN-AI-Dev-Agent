@@ -18,6 +18,7 @@ interface Props {
   prompts: CategorizedPrompts | null;
   onSuggestionClick: (text: string) => void;
   onRefresh: () => void;
+  onShuffle?: () => void;
   isRefreshing?: boolean;
   lastRefreshed?: number | null;
 }
@@ -120,12 +121,40 @@ function UpdateSetRow({ us, onSuggestionClick }: { us: UpdateSetSummary; onSugge
   );
 }
 
-export default function SuggestionPanel({ prompts, onSuggestionClick, onRefresh, isRefreshing, lastRefreshed }: Props) {
+export default function SuggestionPanel({ prompts, onSuggestionClick, onRefresh, onShuffle, isRefreshing, lastRefreshed }: Props) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("foryou");
   const [displayedTime, setDisplayedTime] = useState("");
   const [fadeKey, setFadeKey] = useState(0);
+  const [localPrompts, setLocalPrompts] = useState<CategorizedPrompts | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevPromptsRef = useRef(prompts);
+
+  useEffect(() => {
+    if (prompts !== prevPromptsRef.current) {
+      setFadeKey((k) => k + 1);
+      setLocalPrompts(prompts);
+      prevPromptsRef.current = prompts;
+    }
+  }, [prompts]);
+
+  const handleShuffle = () => {
+    if (!localPrompts) return;
+    const tabKeys: PromptTabKey[] = ['foryou', 'build', 'explore', 'quick'];
+    const shuffled = { ...localPrompts };
+    tabKeys.forEach(key => {
+      if (shuffled[key] && shuffled[key]!.length > 0) {
+        const arr = [...shuffled[key]!];
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        shuffled[key] = arr;
+      }
+    });
+    setLocalPrompts(shuffled);
+    setFadeKey((k) => k + 1);
+    onShuffle?.();
+  };
 
   useEffect(() => {
     if (!lastRefreshed) return;
@@ -135,18 +164,11 @@ export default function SuggestionPanel({ prompts, onSuggestionClick, onRefresh,
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [lastRefreshed]);
 
-  useEffect(() => {
-    if (prompts !== prevPromptsRef.current) {
-      setFadeKey((k) => k + 1);
-      prevPromptsRef.current = prompts;
-    }
-  }, [prompts]);
-
   const isUpdatesTab = activeTab === "updates";
-  const dynamicList: ExamplePrompt[] = !isUpdatesTab ? (prompts?.[activeTab] ?? []) : [];
+  const dynamicList: ExamplePrompt[] = !isUpdatesTab ? (localPrompts?.[activeTab] ?? prompts?.[activeTab] ?? []) : [];
   const fallbackList: ExamplePrompt[] = !isUpdatesTab ? (SUGGESTION_FALLBACK[activeTab] ?? []) : [];
   const currentList = dynamicList.length > 0 ? dynamicList : fallbackList;
-  const updatesList: UpdateSetSummary[] = prompts?.updates ?? [];
+  const updatesList: UpdateSetSummary[] = localPrompts?.updates ?? prompts?.updates ?? [];
   const hasData = isUpdatesTab ? updatesList.length > 0 : currentList.length > 0;
 
   return (
@@ -155,6 +177,20 @@ export default function SuggestionPanel({ prompts, onSuggestionClick, onRefresh,
       <div className="sp-header">
         <span className="sp-title">Suggestions</span>
         <div className="flex items-center gap-0.5">
+          <button
+            onClick={handleShuffle}
+            className="sp-refresh-btn"
+            title="Shuffle suggestions"
+          >
+            <svg
+              className="w-3.5 h-3.5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+          </button>
           <button
             onClick={onRefresh}
             disabled={isRefreshing}

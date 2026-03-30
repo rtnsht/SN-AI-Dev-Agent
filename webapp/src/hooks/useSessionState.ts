@@ -22,6 +22,14 @@ export const SK = {
 
 export const ALL_SESSION_KEYS = Object.values(SK);
 
+function genSessionId(): string {
+  return `sess_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
+}
+
+function genMessageId(): string {
+  return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 /** Strip heavy base64 data from messages before storing */
 function stripHeavyData(messages: ChatMessage[]): ChatMessage[] {
   return messages.map((m) => ({
@@ -60,6 +68,7 @@ export interface SessionState {
   seenSuggestionHashes: string[];
   setSeenSuggestionHashes: React.Dispatch<React.SetStateAction<string[]>>;
   sessionRestored: boolean;
+  setSessionRestored: React.Dispatch<React.SetStateAction<boolean>>;
   handleNewChat: () => void;
   handleSendRef: React.MutableRefObject<(text: string, images?: string[], files?: FileAttachment[], hidden?: boolean) => void>;
 }
@@ -85,35 +94,117 @@ export interface TaskPlanState {
   }[];
 }
 
+interface InitialSessionSnapshot {
+  messages: ChatMessage[];
+  activeReqId: string | null;
+  currentPhase: SDLCPhase | null;
+  completedPhases: SDLCPhase[];
+  sddMode: boolean;
+  categorizedPrompts: CategorizedPrompts | null;
+  seenSuggestionHashes: string[];
+  sessionRestored: boolean;
+  clientSessionId: string;
+}
+
+let sessionSnapshotCache: InitialSessionSnapshot | null = null;
+
+function readJson<T>(key: string): T | null {
+  if (typeof window === "undefined") return null;
+
+  const raw = window.sessionStorage.getItem(key);
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+function getStoredSessionId() {
+  if (typeof window === "undefined") return genSessionId();
+
+  const saved = window.sessionStorage.getItem(SK.SESSION_ID);
+  if (saved) return saved;
+
+  const id = genSessionId();
+  window.sessionStorage.setItem(SK.SESSION_ID, id);
+  return id;
+}
+
+function getInitialSessionSnapshot(): InitialSessionSnapshot {
+  const clientSessionId = getStoredSessionId();
+
+  if (typeof window === "undefined") {
+    return {
+      messages: [],
+      activeReqId: null,
+      currentPhase: null,
+      completedPhases: [],
+      sddMode: false,
+      categorizedPrompts: null,
+      seenSuggestionHashes: [],
+      sessionRestored: false,
+      clientSessionId,
+    };
+  }
+
+  const parsedMessages = readJson<ChatMessage[]>(SK.MESSAGES);
+  const hasRestoredMessages = Array.isArray(parsedMessages) && parsedMessages.length > 0;
+  const restoredMessages = hasRestoredMessages
+    ? [
+        ...parsedMessages,
+        {
+          id: genMessageId(),
+          role: "system" as const,
+          type: "info" as const,
+          content: "Previous session restored. Please connect to continue.",
+          timestamp: new Date().toISOString(),
+        },
+      ]
+    : [];
+
+  return {
+    messages: restoredMessages,
+    activeReqId: window.sessionStorage.getItem(SK.REQ_ID),
+    currentPhase: (window.sessionStorage.getItem(SK.PHASE) as SDLCPhase | null) || null,
+    completedPhases: readJson<SDLCPhase[]>(SK.COMPLETED_PHASES) ?? [],
+    sddMode: window.sessionStorage.getItem(SK.SDD_MODE) === "true",
+    categorizedPrompts: readJson<CategorizedPrompts>(SK.CATEGORIZED_PROMPTS),
+    seenSuggestionHashes: readJson<string[]>(SK.SEEN_SUGGESTIONS) ?? [],
+    sessionRestored: hasRestoredMessages,
+    clientSessionId,
+  };
+}
+
+function getCachedInitialSessionSnapshot() {
+  if (!sessionSnapshotCache) {
+    sessionSnapshotCache = getInitialSessionSnapshot();
+  }
+
+  return sessionSnapshotCache;
+}
+
 /**
  * Manages all session-level state: messages, phases, SDD mode, session ID,
  * and sessionStorage persistence. Extracted from page.tsx for maintainability.
  */
 export function useSessionState(): SessionState {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const messagesRef = useRef<ChatMessage[]>([]);
-  const [activeReqId, setActiveReqId] = useState<string | null>(null);
-  const [currentPhase, setCurrentPhase] = useState<SDLCPhase | null>(null);
-  const [completedPhases, setCompletedPhases] = useState<SDLCPhase[]>([]);
-  const [sddMode, setSddMode] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => getCachedInitialSessionSnapshot().messages);
+  const messagesRef = useRef<ChatMessage[]>(getCachedInitialSessionSnapshot().messages);
+  const [activeReqId, setActiveReqId] = useState<string | null>(() => getCachedInitialSessionSnapshot().activeReqId);
+  const [currentPhase, setCurrentPhase] = useState<SDLCPhase | null>(() => getCachedInitialSessionSnapshot().currentPhase);
+  const [completedPhases, setCompletedPhases] = useState<SDLCPhase[]>(() => getCachedInitialSessionSnapshot().completedPhases);
+  const [sddMode, setSddMode] = useState(() => getCachedInitialSessionSnapshot().sddMode);
   const [modelLocked, setModelLocked] = useState(false);
   const [pendingRetry, setPendingRetry] = useState<{ text: string; images?: string[]; files?: FileAttachment[] } | null>(null);
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
   const [taskPlan, setTaskPlan] = useState<TaskPlanState | null>(null);
-  const [categorizedPrompts, setCategorizedPrompts] = useState<CategorizedPrompts | null>(null);
-  const [seenSuggestionHashes, setSeenSuggestionHashes] = useState<string[]>([]);
-  const [sessionRestored, setSessionRestored] = useState(false);
+  const [categorizedPrompts, setCategorizedPrompts] = useState<CategorizedPrompts | null>(() => getCachedInitialSessionSnapshot().categorizedPrompts);
+  const [seenSuggestionHashes, setSeenSuggestionHashes] = useState<string[]>(() => getCachedInitialSessionSnapshot().seenSuggestionHashes);
+  const [sessionRestored, setSessionRestored] = useState(() => getCachedInitialSessionSnapshot().sessionRestored);
   const handleSendRef = useRef<(text: string, images?: string[], files?: FileAttachment[], hidden?: boolean) => void>(() => {});
-
-  const [clientSessionId, setClientSessionId] = useState(() => {
-    if (typeof window !== "undefined") {
-      const saved = sessionStorage.getItem(SK.SESSION_ID);
-      if (saved) return saved;
-    }
-    const id = `sess_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
-    if (typeof window !== "undefined") sessionStorage.setItem(SK.SESSION_ID, id);
-    return id;
-  });
+  const [clientSessionId, setClientSessionId] = useState(() => getCachedInitialSessionSnapshot().clientSessionId);
 
   // Keep messagesRef in sync
   useEffect(() => {
@@ -133,53 +224,6 @@ export function useSessionState(): SessionState {
     window.addEventListener("beforeunload", endSession);
     return () => window.removeEventListener("beforeunload", endSession);
   }, [clientSessionId]);
-
-  // Restore session from sessionStorage on mount
-  useEffect(() => {
-    try {
-      const savedMessages = sessionStorage.getItem(SK.MESSAGES);
-      if (!savedMessages) return;
-      const parsed: ChatMessage[] = JSON.parse(savedMessages);
-      if (!Array.isArray(parsed) || parsed.length === 0) return;
-
-      messagesRef.current = parsed;
-      setMessages(parsed);
-
-      const savedReqId = sessionStorage.getItem(SK.REQ_ID);
-      if (savedReqId) setActiveReqId(savedReqId);
-      const savedPhase = sessionStorage.getItem(SK.PHASE);
-      if (savedPhase) setCurrentPhase(savedPhase as SDLCPhase);
-      const savedCompleted = sessionStorage.getItem(SK.COMPLETED_PHASES);
-      if (savedCompleted) setCompletedPhases(JSON.parse(savedCompleted));
-      const savedSddMode = sessionStorage.getItem(SK.SDD_MODE);
-      if (savedSddMode === "true") setSddMode(true);
-      const savedLocked = sessionStorage.getItem(SK.MODEL_LOCKED);
-      if (savedLocked === "true") setModelLocked(true);
-
-      const savedPrompts = sessionStorage.getItem(SK.CATEGORIZED_PROMPTS);
-      if (savedPrompts) {
-        try { setCategorizedPrompts(JSON.parse(savedPrompts)); } catch { /* corrupt */ }
-      }
-      const savedSeen = sessionStorage.getItem(SK.SEEN_SUGGESTIONS);
-      if (savedSeen) {
-        try { setSeenSuggestionHashes(JSON.parse(savedSeen)); } catch { /* corrupt */ }
-      }
-
-      setSessionRestored(true);
-
-      const notice: ChatMessage = {
-        role: "system",
-        type: "info",
-        content: "Previous session restored. Please connect to continue.",
-        timestamp: new Date().toISOString(),
-      };
-      messagesRef.current = [...parsed, notice];
-      setMessages((prev) => [...prev, notice]);
-    } catch {
-      // Corrupt storage — start fresh
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Persist state to sessionStorage on change
   useEffect(() => {
@@ -220,9 +264,13 @@ export function useSessionState(): SessionState {
     setPendingRetry(null);
     setActivityLog([]);
     setTaskPlan(null);
+    setCategorizedPrompts(null);
+    setSeenSuggestionHashes([]);
+    setSessionRestored(false);
     ALL_SESSION_KEYS.forEach((k) => sessionStorage.removeItem(k));
+    sessionSnapshotCache = null;
 
-    const newId = `sess_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
+    const newId = genSessionId();
     setClientSessionId(newId);
     try { sessionStorage.setItem(SK.SESSION_ID, newId); } catch { /* quota */ }
   }, [clientSessionId]);
@@ -241,6 +289,7 @@ export function useSessionState(): SessionState {
     categorizedPrompts, setCategorizedPrompts,
     seenSuggestionHashes, setSeenSuggestionHashes,
     sessionRestored,
+    setSessionRestored,
     handleNewChat,
     handleSendRef,
   };

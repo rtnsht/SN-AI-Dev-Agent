@@ -18,25 +18,183 @@ export const SDLC_PHASES: SDLCPhaseInfo[] = [
   { key: "deployment", label: "Deployment", requiresApproval: true, tooltip: "Final phase — requires user approval to mark complete" },
 ];
 
-/** AI Provider choices */
-export type AIProvider = "anthropic" | "openrouter";
+/** AI Provider groups shown in the model catalog UI */
+export type AIProvider =
+  | "anthropic"
+  | "openrouter"
+  | "openai"
+  | "google"
+  | "minimax"
+  | "mimo"
+  | "glm"
+  | "free";
+
+/** Execution transports currently supported by the backend */
+export type AITransport = "anthropic" | "openrouter";
+
+export type ModelAccessSource =
+  | "session_key"
+  | "saved_key"
+  | "free_rule"
+  | "server_key"
+  | "unavailable";
 
 /** Model choices available to the user (for Anthropic direct) */
 export type ModelChoice = "sonnet-4" | "opus-4" | "haiku-4";
 
+/** Extended ModelOption for multi-provider routing */
 export interface ModelOption {
-  key: string;
+  /** Unique identifier for the model (e.g., "minimax/M2.7") */
+  id: string;
+  /** Human-readable label for display */
   label: string;
-  modelId: string;
-  description: string;
+  /** Provider this model belongs to */
   provider: AIProvider;
+  /** Current executable transport for the model */
+  transport?: AITransport;
+  /** Actual model ID sent to the API */
+  modelId: string;
+  /** Stable catalog key stored in the database */
+  key?: string;
+  /** Actual model identifier sent to the transport */
+  apiModelId?: string;
+  /** Context window size in tokens */
+  contextWindow: number;
+  /** Maximum output tokens */
+  maxOutput: number;
+  /** Input cost per 1M tokens (USD) */
+  inputCostPer1m: number;
+  /** Output cost per 1M tokens (USD) */
+  outputCostPer1m: number;
+  /** Whether this model is free to use */
+  isFree: boolean;
+  /** Whether this is the default model */
+  isDefault?: boolean;
+  /** Whether this model is free via server-side routing */
+  isServerFree?: boolean;
+  /** Access source for the current user */
+  accessSource?: ModelAccessSource;
+  /** Whether the user can select and execute this model right now */
+  available?: boolean;
+  /** Remaining daily quota for free-rule access */
+  remainingQuota?: number | null;
+  /** Daily quota limit for free-rule access */
+  dailyLimit?: number | null;
+  /** Human-readable reason for disabled state */
+  disabledReason?: string | null;
+  /** Catalog metadata used by the FDE detail card */
+  modelClass?: string;
+  speedTier?: string;
+  costTier?: string;
+  trainingData?: string | null;
+  thinkingModeSupported?: boolean;
+  /** Capabilities: chat, streaming, tools, image-generation */
+  capabilities: string[];
+  /** Whether this model is enabled */
+  enabled?: boolean;
+  /** Legacy fields for backward compatibility */
+  description?: string;
+}
+
+export type ProjectDocumentationType =
+  | "guideline"
+  | "guardrail"
+  | "reference"
+  | "eval_criteria"
+  | "runbook";
+
+export interface WorkspaceInfo {
+  id: string;
+  user_id: string;
+  name: string;
+  settings: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SpaceInfo {
+  id: string;
+  workspace_id: string;
+  name: string;
+  settings: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectInfo {
+  id: string;
+  space_id: string;
+  name: string;
+  description: string | null;
+  settings: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectDocumentationEntry {
+  id: string;
+  project_id: string;
+  doc_type: ProjectDocumentationType;
+  title: string;
+  content: string;
+  is_active: boolean;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkspaceContextPayload {
+  workspace: WorkspaceInfo;
+  space: SpaceInfo;
+  project: ProjectInfo;
+  effectiveSettings: Record<string, unknown>;
+}
+
+export interface PersistedChatSummary {
+  id: string;
+  title: string;
+  mode: "agent" | "quick";
+  active_tab_id: string | null;
+  project_id: string | null;
+  connection_id: string | null;
+  settings: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PersistedChatMessageRecord {
+  id: string;
+  role: "user" | "assistant" | "system" | "tool";
+  content: string | null;
+  model_used: string | null;
+  provider: string | null;
+  token_count: number | null;
+  context_items: unknown[];
+  artifacts: unknown[];
+  metadata: Record<string, unknown>;
+  sort_key: number;
+  created_at: string;
+}
+
+export interface SavedSystemConnectionSummary {
+  id: string;
+  system_type: string;
+  label: string;
+  instance_url: string;
+  project_id: string | null;
+  is_default: boolean;
+  is_active: boolean;
+  last_verified_at: string | null;
+  last_used_at: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
 }
 
 /** Anthropic direct models */
 export const ANTHROPIC_MODELS: ModelOption[] = [
-  { key: "opus-4", label: "Claude Opus 4.6", modelId: "claude-opus-4-6", description: "Most intelligent — agents & coding", provider: "anthropic" },
-  { key: "sonnet-4", label: "Claude Sonnet 4.6", modelId: "claude-sonnet-4-6", description: "Best speed + intelligence balance", provider: "anthropic" },
-  { key: "haiku-4", label: "Claude Haiku 4.5", modelId: "claude-haiku-4-5", description: "Fastest — near-frontier intelligence", provider: "anthropic" },
+  { id: "claude-opus-4-6", label: "Claude Opus 4.6", provider: "anthropic", modelId: "claude-opus-4-6", contextWindow: 200000, maxOutput: 8192, inputCostPer1m: 15, outputCostPer1m: 75, isFree: false, capabilities: ["chat", "streaming", "tools"], description: "Most intelligent — agents & coding" },
+  { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", provider: "anthropic", modelId: "claude-sonnet-4-6", contextWindow: 200000, maxOutput: 8192, inputCostPer1m: 3, outputCostPer1m: 15, isFree: false, capabilities: ["chat", "streaming", "tools"], description: "Best speed + intelligence balance", isDefault: true },
+  { id: "claude-haiku-4-5", label: "Claude Haiku 4.5", provider: "anthropic", modelId: "claude-haiku-4-5", contextWindow: 200000, maxOutput: 8192, inputCostPer1m: 0.8, outputCostPer1m: 4, isFree: false, capabilities: ["chat", "streaming", "tools"], description: "Fastest — near-frontier intelligence" },
 ];
 
 /** Legacy MODEL_OPTIONS for backward compatibility */
@@ -64,16 +222,23 @@ export interface OpenRouterModel {
 export function openRouterModelToOption(model: OpenRouterModel): ModelOption {
   const promptCost = parseFloat(model.pricing?.prompt ?? "0") * 1000000; // Cost per 1M tokens
   const completionCost = parseFloat(model.pricing?.completion ?? "0") * 1000000;
-  const priceStr = promptCost > 0 || completionCost > 0
+  const isFree = promptCost === 0 && completionCost === 0;
+  const priceStr = !isFree
     ? `$${promptCost.toFixed(2)}/$${completionCost.toFixed(2)} per 1M tokens`
     : "Free";
 
   return {
-    key: model.id,
+    id: model.id,
     label: model.name,
-    modelId: model.id,
-    description: `${priceStr} • ${Math.round(model.context_length / 1000)}K context`,
     provider: "openrouter",
+    modelId: model.id,
+    contextWindow: model.context_length,
+    maxOutput: 8192,
+    inputCostPer1m: promptCost,
+    outputCostPer1m: completionCost,
+    isFree,
+    capabilities: ["chat", "streaming", "tools"],
+    description: `${priceStr} • ${Math.round(model.context_length / 1000)}K context`,
   };
 }
 

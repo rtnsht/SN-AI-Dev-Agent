@@ -1,7 +1,7 @@
 -- Migration 007: Session Logs Persistence
 -- Stores AI agent session logs in Supabase for persistence across Render deployments.
 -- Designed for 2000+ concurrent users with safeguards against OOM, thundering herd,
--- and JSONB write amplification (see docs/log-persistence-architecture.md).
+-- and JSONB write amplification (see docs/architecture/log-persistence-architecture.md).
 
 CREATE TABLE IF NOT EXISTS session_logs (
   id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),

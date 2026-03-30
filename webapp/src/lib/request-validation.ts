@@ -1,5 +1,6 @@
 import type { Credentials } from "@/lib/types";
 import type { ChatMessage, UserCredentials } from "@/lib/sn-engine";
+import type { ToolSelectionPayload } from "@/lib/tool-categories";
 
 type ValidationOk<T> = { ok: true; data: T };
 type ValidationErr = { ok: false; error: string };
@@ -37,6 +38,21 @@ export interface ParsedChatBody {
   sessionId?: string;
   phase?: string;
   sddMode?: boolean;
+  toolSelection?: ToolSelectionPayload;
+}
+
+function isToolSelectionPayload(value: unknown): value is ToolSelectionPayload {
+  if (!isRecord(value)) return false;
+  if ("mode" in value && value.mode !== undefined && value.mode !== "categories" && value.mode !== "custom" && value.mode !== "all") {
+    return false;
+  }
+  if ("categories" in value && value.categories !== undefined && !isStringArray(value.categories)) {
+    return false;
+  }
+  if ("toolNames" in value && value.toolNames !== undefined && !isStringArray(value.toolNames)) {
+    return false;
+  }
+  return true;
 }
 
 export function parseChatBody(body: unknown): ValidationResult<ParsedChatBody> {
@@ -58,6 +74,9 @@ export function parseChatBody(body: unknown): ValidationResult<ParsedChatBody> {
   if ("sddMode" in body && body.sddMode !== undefined && typeof body.sddMode !== "boolean") {
     return { ok: false, error: "sddMode must be a boolean" };
   }
+  if ("toolSelection" in body && body.toolSelection !== undefined && !isToolSelectionPayload(body.toolSelection)) {
+    return { ok: false, error: "toolSelection must be an object with mode/categories/toolNames" };
+  }
   return {
     ok: true,
     data: {
@@ -68,6 +87,7 @@ export function parseChatBody(body: unknown): ValidationResult<ParsedChatBody> {
       sessionId: body.sessionId as string | undefined,
       phase: body.phase as string | undefined,
       sddMode: body.sddMode as boolean | undefined,
+      toolSelection: body.toolSelection as ToolSelectionPayload | undefined,
     },
   };
 }
@@ -630,4 +650,21 @@ export function parseEngineConfigBody(body: unknown): ValidationResult<ParsedEng
   }
 
   return { ok: true, data: { key, value } };
+}
+
+export interface ParsedSignupBody {
+  name: string;
+  email: string;
+  password: string;
+}
+
+export function parseSignupBody(body: unknown): ValidationResult<ParsedSignupBody> {
+  if (!isRecord(body)) return { ok: false, error: "Invalid request body" };
+  const fields: Array<keyof ParsedSignupBody> = ["name", "email", "password"];
+  for (const field of fields) {
+    if (typeof body[field] !== "string" || (body[field] as string).trim() === "") {
+      return { ok: false, error: "All fields are required" };
+    }
+  }
+  return { ok: true, data: body as unknown as ParsedSignupBody };
 }

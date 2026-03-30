@@ -8,7 +8,7 @@
 
 > Enable any ServiceNow developer to work with the confidence of a senior architect, the precision of a quality engineer, and the foresight of a platform owner — all while respecting the existing landscape.
 
-**Detailed Plan:** [docs/BROWNFIELD-ENHANCEMENT-PLAN.md](docs/BROWNFIELD-ENHANCEMENT-PLAN.md)
+**Detailed Plan:** [docs/planning/BROWNFIELD-ENHANCEMENT-PLAN.md](docs/planning/BROWNFIELD-ENHANCEMENT-PLAN.md)
 
 ---
 
@@ -107,7 +107,7 @@
 - [x] **Shift+Enter to send** — Enter = new line, Shift+Enter = send; keyboard hint bar with indigo theme
 - [x] **Image support** — Paste/drag-drop/upload, base64 multi-modal content blocks, thumbnail previews
 - [x] **Server-side SN credentials** — Env vars with fallback, "Provided by server" badges in UI
-- [x] **Architecture docs updated** — `docs/architecture.md` v1.1 with 8 mermaid diagrams reflecting all features
+- [x] **Architecture docs updated** — `docs/architecture/architecture.md` v1.1 with 8 mermaid diagrams reflecting all features
 - [x] **Blog post** — `blog/building-ai-dev-agent-key-learnings.md` — 8 key patterns and design decisions
 - [x] **Update set artifact capture** — Two-layer defense (session-based + post-creation move) to reliably capture REST API-created artifacts in target update sets; cookie-jar session persistence; auto-move hooks on all create/update tools
 - [x] **Duplicate update set detection** — `sn_create_update_set` checks for existing names; returns `duplicateDetected` with options (force, autoTimestamp, rename); never silently creates duplicates

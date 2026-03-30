@@ -102,6 +102,11 @@ export async function checkForgotPassword(email: string): Promise<RateLimitResul
   return check(`forgot:${email.toLowerCase()}`, 3, 60 * 60 * 1000);
 }
 
+/** Emergency login: 5 per IP per hour */
+export async function checkEmergencyLogin(ip: string): Promise<RateLimitResult> {
+  return check(`emergency:${ip}`, 5, 60 * 60 * 1000);
+}
+
 /** Request access: 10 per IP per hour */
 export async function checkRequestAccess(ip: string): Promise<RateLimitResult> {
   return check(`request:${ip}`, 10, 60 * 60 * 1000);
@@ -150,5 +155,10 @@ export async function checkShareCard(ip: string): Promise<RateLimitResult> {
 /** AI share image generation: 50 requests per IP per hour (Satori rendering is local, no external API cost) */
 export async function checkShareImage(ip: string): Promise<RateLimitResult> {
   return check(`shareimage:${ip}`, 50, 60 * 60 * 1000);
+}
+
+/** Signup: 10 attempts per IP per hour */
+export async function checkSignup(ip: string): Promise<RateLimitResult> {
+  return check(`signup:${ip}`, 10, 60 * 60 * 1000);
 }
 

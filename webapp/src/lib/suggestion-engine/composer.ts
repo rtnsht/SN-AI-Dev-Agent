@@ -68,7 +68,7 @@ export class PromptComposer {
     );
 
     const pools: PromptPoolMap = { foryou: [], build: [], explore: [], quick: [] };
-    let updates: UpdateSetSummary[] = [];
+    const updates: UpdateSetSummary[] = [];
 
     for (const r of results) {
       if (r.status !== "fulfilled") continue;

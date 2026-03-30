@@ -212,8 +212,12 @@ SN-AI-Dev-Agent/
 │   └── utils/
 │
 └── docs/                        # 📚 DOCUMENTATION
-    ├── architecture.md          # Full technical architecture doc
-    └── BROWNFIELD-ENHANCEMENT-PLAN.md
+    ├── architecture/            # Core platform & update-set docs
+    ├── design/                  # UX/UI and feature design specs
+    ├── planning/                # Roadmaps and enhancement plans
+    ├── platform-redesign/       # Multi-agent platform redesign
+    ├── learning/                # Session notes
+    └── …                        # security/, reports/, servicenow/, etc.
 ```
 
 ---
@@ -443,7 +447,7 @@ flowchart TD
     style Manual fill:#f59e0b,color:#fff
 ```
 
-**For complete technical details:** See `docs/custom-scope-capture.md` and `docs/update-sets.md`
+**For complete technical details:** See `docs/architecture/custom-scope-capture.md` and `docs/architecture/update-sets.md`
 
 ### 13.3 Quick Workflow
 
@@ -521,7 +525,7 @@ When creating artifacts in an update set:
 
 ### 13.9 Custom Scope Update Set Capture
 
-> 📖 **For complete technical details, see `docs/custom-scope-capture.md`**
+> 📖 **For complete technical details, see `docs/architecture/custom-scope-capture.md`**
 
 **TL;DR:** Custom scopes require explicit scope switching. The system tries 5 methods automatically. The AI agent must call `sn_set_scope` at the start of each implementation turn when working in a custom scope.
 

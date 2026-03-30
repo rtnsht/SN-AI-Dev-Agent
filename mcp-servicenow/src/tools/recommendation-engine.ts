@@ -716,6 +716,56 @@ else if (gs.hasRole('itil') && current.assignment_group.members.indexOf(gs.getUs
       'Complex scripts that slow queries',
       'Forgetting to test as non-admin user'
     ]
+  },
+
+  transform_map: {
+    artifactType: 'transform_map',
+    overview: 'Transform Maps move data from import sets into target tables and need explicit mapping, safe coalesce behavior, and observable execution.',
+    doList: [
+      'Keep field maps explicit and review every coalesce field',
+      'Prefer simple field maps before scripted transforms',
+      'Validate source values before writing target data',
+      'Track inserted, updated, ignored, and error counts for every run',
+      'Document whether business rules should execute during the transform'
+    ],
+    dontList: [
+      'Do not hide critical mapping logic inside one giant transform script',
+      'Avoid expensive GlideRecord lookups in every row transform',
+      'Do not transform privileged tables without explicit review',
+      'Avoid implicit source-to-target assumptions for mandatory fields'
+    ],
+    securityConsiderations: [
+      'Validate imported data before mapping to security-sensitive fields',
+      'Sanitize secrets or credentials before persisting target records',
+      'Limit who can trigger import and transform execution',
+      'Review update-set capture for import artifacts'
+    ],
+    performanceConsiderations: [
+      'Use coalesce to avoid duplicate target records',
+      'Cache reference lookups when possible',
+      'Keep row scripts short and deterministic',
+      'Prefer direct field mapping over scripted transforms where possible'
+    ],
+    codeTemplate: `(function transformRow(source, target, map, log, isUpdate) {
+    if (!source.u_external_id) {
+        ignore = true;
+        log.info('Skipping row without external id');
+        return;
+    }
+
+    target.u_external_id = source.u_external_id;
+    target.short_description = source.u_short_description || '';
+
+    if (source.u_priority) {
+        target.priority = source.u_priority;
+    }
+})(source, target, map, log, action === 'update');`,
+    commonMistakes: [
+      'Missing coalesce field strategy',
+      'Using scripts when a direct field map would work',
+      'No validation for malformed source rows',
+      'Not verifying inserted vs updated counts after execution'
+    ]
   }
 };
 
@@ -883,6 +933,24 @@ if (!current.{{refField}}.nil()) {
 
 })(current, previous);`,
     variables: ['field', 'helperClass']
+  },
+
+  transform_map_script: {
+    description: 'Transform map row script with validation and update awareness',
+    template: `(function transformRow(source, target, map, log, isUpdate) {
+    if (!source.{{sourceField}}) {
+        ignore = true;
+        log.info('Skipped row: missing {{sourceField}}');
+        return;
+    }
+
+    target.{{targetField}} = source.{{sourceField}};
+
+    if (isUpdate) {
+        target.{{updatedField}} = gs.nowDateTime();
+    }
+})(source, target, map, log, action === 'update');`,
+    variables: ['sourceField', 'targetField', 'updatedField']
   }
 };
 

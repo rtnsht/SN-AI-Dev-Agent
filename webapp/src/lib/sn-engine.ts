@@ -16,7 +16,8 @@ import { createRequire } from "node:module";
 import { processFileAttachments } from "./file-parser";
 import path from "node:path";
 import { buildSystemPrompt, buildDynamicContext, type DynamicContextOptions } from "./system-prompt";
-import { parsePhaseGate, type BrowserSessionCookie, type ServiceNowAuthMethod } from "./types";
+import { buildQuickAgentPrompt, buildQuickAgentDynamicContext } from "./quick-agent-prompt";
+import { parsePhaseGate, type BrowserSessionCookie, type ServiceNowAuthMethod, type AIProvider } from "./types";
 import { isSensitiveLogKey, logger } from "./logger";
 import { chatCompletion, OpenRouterRequest, OpenRouterMessage, OpenRouterContentBlock, OpenRouterTool } from "./openrouter";
 import { getSessionCache, SessionCache } from "./session-cache";
@@ -24,6 +25,11 @@ import { APP_NAME } from "./branding";
 import { shouldPlan, generatePlan, executePlan, formatGatheredData, type PlanStreamEvent, type ExecutionPlan } from "./task-planner";
 import { normalizeServiceNowAuthMethod } from "./servicenow-auth";
 import { getSupabase } from "./supabase";
+import {
+  normalizeToolSelection,
+  resolveToolNamesForSelection,
+  type ToolSelectionPayload,
+} from "./tool-categories";
 
 /* ── Context management constants ─────────────────────────────── */
 
@@ -364,8 +370,8 @@ function trimConversationHistory(messages: Anthropic.MessageParam[], sessionId: 
   });
 
   // Step 1: Compress old tool results (keeps all messages, just shrinks content)
-  let compressed = compressOldToolResults(messages);
-  let compressedTokens = estimateConversationTokens(compressed);
+  const compressed = compressOldToolResults(messages);
+  const compressedTokens = estimateConversationTokens(compressed);
   logger.info(sessionId, "context_mgmt", "After tool-result compression", { tokensAfter: compressedTokens, tokensBefore: estimatedTokens });
 
   if (compressedTokens < CONTEXT_WARNING_TOKENS) {
@@ -548,7 +554,7 @@ export interface UserCredentials {
   /** OpenRouter API key (when using OpenRouter provider) */
   openRouterApiKey?: string;
   /** Which AI provider to use */
-  aiProvider?: "anthropic" | "openrouter";
+  aiProvider?: AIProvider;
 }
 
 /** A non-image file attachment (PDF, Word, Excel) */
@@ -640,6 +646,7 @@ function createSnClient(credentials: UserCredentials, registry: any) {
   if (isBrowserScopeSwitchEnabled()) {
     try {
       // Dynamic import to keep playwright-core optional
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { switchScopeViaBrowser } = require("./browser-scope-switcher");
       client.setEnsureScopeOptions({
         browserFallback: async (scopeId: string, scopeName: string) => {
@@ -669,11 +676,111 @@ function createSnClient(credentials: UserCredentials, registry: any) {
   return client;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getFilteredTools(phase: string | null | undefined, defs: any) {
-  return (phase
+/* ── Multi-Provider Routing Configuration ─────────────────────── */
+
+/** Provider configuration for AI Gateway routing */
+interface ProviderRouteConfig {
+  /** Provider type */
+  provider: AIProvider;
+  /** Whether this provider uses AI Gateway OIDC routing */
+  usesGateway: boolean;
+  /** Whether this provider requires an API key */
+  requiresApiKey: boolean;
+  /** Environment variable for API key */
+  apiKeyEnvVar?: string;
+}
+
+const PROVIDER_ROUTES: Record<AIProvider, ProviderRouteConfig> = {
+  anthropic: { provider: 'anthropic', usesGateway: false, requiresApiKey: true, apiKeyEnvVar: 'ANTHROPIC_API_KEY' },
+  openrouter: { provider: 'openrouter', usesGateway: false, requiresApiKey: true, apiKeyEnvVar: 'OPENROUTER_API_KEY' },
+  openai: { provider: 'openai', usesGateway: true, requiresApiKey: false },
+  google: { provider: 'google', usesGateway: true, requiresApiKey: false },
+  mimo: { provider: 'mimo', usesGateway: true, requiresApiKey: false },
+  minimax: { provider: 'minimax', usesGateway: true, requiresApiKey: false },
+  glm: { provider: 'glm', usesGateway: true, requiresApiKey: false },
+  free: { provider: 'free', usesGateway: true, requiresApiKey: false },
+};
+
+/**
+ * Determines the provider from a model ID string.
+ * Model IDs follow the pattern: "provider/model-name" (e.g., "minimax/M2.7", "google/gemini-3.1-flash")
+ */
+function inferProviderFromModel(modelId: string): AIProvider {
+  if (modelId.startsWith('minimax/') || modelId.startsWith('MiniMax')) return 'minimax';
+  if (modelId.startsWith('google/') || modelId.startsWith('gemini')) return 'google';
+  if (modelId.startsWith('openai/') || modelId.startsWith('gpt')) return 'openai';
+  if (modelId.startsWith('xiaomi/') || modelId.startsWith('mimo')) return 'mimo';
+  if (modelId.startsWith('z-ai/') || modelId.startsWith('glm')) return 'glm';
+  if (modelId.startsWith('openrouter/') || modelId.includes('openrouter')) return 'openrouter';
+  if (modelId.startsWith('claude') || modelId.includes('anthropic')) return 'anthropic';
+  // Check if it's a known free model pattern
+  if (modelId.includes('free') || modelId === 'minimax/M2.7') return 'free';
+  return 'anthropic'; // Default fallback
+}
+
+function normalizeProviderToTransport(provider: AIProvider): AIProvider {
+  return provider === 'anthropic' ? 'anthropic' : 'openrouter';
+}
+
+/**
+ * Gets the effective provider to use based on explicit provider setting or model inference.
+ * Returns the provider config for routing decisions.
+ */
+function getEffectiveProvider(credentials: UserCredentials, model: string): AIProvider {
+  // If provider is explicitly set and not a generic "free", use it
+  if (credentials.aiProvider && credentials.aiProvider !== 'free') {
+    return normalizeProviderToTransport(credentials.aiProvider);
+  }
+  // Otherwise infer from model ID
+  return normalizeProviderToTransport(inferProviderFromModel(model));
+}
+
+/**
+ * Validates that the required API key is available for the given provider.
+ * Returns an error message if validation fails, or null if valid.
+ */
+function validateProviderCredentials(provider: AIProvider, credentials: UserCredentials): string | null {
+  const route = PROVIDER_ROUTES[provider];
+
+  if (!route.requiresApiKey) {
+    return null;
+  }
+
+  if (provider === 'anthropic' && !credentials.claudeApiKey) {
+    return 'Anthropic API key is required. Please set your Claude API key in Settings.';
+  }
+
+  if (provider === 'openrouter' && !credentials.openRouterApiKey) {
+    return 'OpenRouter API key is required. Please set your OpenRouter API key in Settings.';
+  }
+
+  return null;
+}
+
+type ToolDefinitionProvider = {
+  getAnthropicToolDefinitions: () => Anthropic.Tool[];
+  getAnthropicToolDefinitionsForPhase: (phase?: string | null) => Anthropic.Tool[];
+};
+
+function getFilteredTools(
+  phase: string | null | undefined,
+  defs: ToolDefinitionProvider,
+  selection?: ToolSelectionPayload | null
+) {
+  const phaseTools = (phase
     ? defs.getAnthropicToolDefinitionsForPhase(phase)
     : defs.getAnthropicToolDefinitions()) as Anthropic.Tool[];
+  const normalizedSelection = normalizeToolSelection(selection);
+  if (!normalizedSelection) return phaseTools;
+
+  const allowedNames = new Set(resolveToolNamesForSelection(normalizedSelection) || []);
+  if (normalizedSelection.mode !== "all" && allowedNames.size === 0) {
+    return [];
+  }
+
+  return phaseTools.filter(
+    (tool) => normalizedSelection.mode === "all" || allowedNames.has(tool.name)
+  );
 }
 
 /**
@@ -849,17 +956,31 @@ export async function chat(
   messages: ChatMessage[],
   model: string = "claude-sonnet-4-6",
   sessionId: string = "unknown",
-  phase?: string | null
+  phase?: string | null,
+  toolSelection?: ToolSelectionPayload | null
 ): Promise<ChatResponse> {
-  if (credentials.aiProvider === "openrouter" && credentials.openRouterApiKey) {
-    return chatOpenRouter(credentials, messages, model, sessionId, phase);
+  const effectiveProvider = getEffectiveProvider(credentials, model);
+
+  // Validate credentials for the provider
+  const validationError = validateProviderCredentials(effectiveProvider, credentials);
+  if (validationError) {
+    return { reply: validationError, toolExecutions: [] };
+  }
+
+  // Route to OpenRouter for: openrouter, minimax, google, openai, free (AI Gateway)
+  if (
+    credentials.aiProvider === 'openrouter' ||
+    effectiveProvider === 'openrouter' ||
+    PROVIDER_ROUTES[effectiveProvider]?.usesGateway
+  ) {
+    return chatOpenRouter(credentials, messages, model, sessionId, phase, toolSelection);
   }
 
   const engineConfig = await loadEngineConfig();
   const maxToolRounds = getPhaseRoundLimit(phase, engineConfig);
   const registry = getToolRegistry();
   const snClient = createSnClient(credentials, registry);
-  const tools = getFilteredTools(phase, getToolDefs());
+  const tools = getFilteredTools(phase, getToolDefs(), toolSelection);
   const allToolCount = getToolDefs().getAnthropicToolDefinitions().length;
   const anthropic = new Anthropic({ apiKey: credentials.claudeApiKey });
   const processedMessages = await preprocessFileAttachments(messages);
@@ -1004,13 +1125,14 @@ async function chatOpenRouter(
   messages: ChatMessage[],
   model: string,
   sessionId: string,
-  phase?: string | null
+  phase?: string | null,
+  toolSelection?: ToolSelectionPayload | null
 ): Promise<ChatResponse> {
   const engineConfig = await loadEngineConfig();
   const maxToolRounds = getPhaseRoundLimit(phase, engineConfig);
   const registry = getToolRegistry();
   const snClient = createSnClient(credentials, registry);
-  const tools = toOpenRouterTools(getFilteredTools(phase, getToolDefs()));
+  const tools = toOpenRouterTools(getFilteredTools(phase, getToolDefs(), toolSelection));
   const processedMessages = await preprocessFileAttachments(messages);
   const orMessages = toOpenRouterMessages(processedMessages, model);
   const toolExecutions: ToolExecution[] = [];
@@ -1252,18 +1374,44 @@ export async function* chatStream(
   phase?: string | null,
   signal?: AbortSignal,
   sddMode?: boolean,
+  toolSelection?: ToolSelectionPayload | null,
 ): AsyncGenerator<StreamEvent> {
+  const effectiveProvider = getEffectiveProvider(credentials, model);
+
+  // Validate credentials for the provider
+  const validationError = validateProviderCredentials(effectiveProvider, credentials);
+  if (validationError) {
+    yield { type: 'error', message: validationError };
+    return;
+  }
+
   const engineConfig = await loadEngineConfig();
   const effectiveMaxRounds = Math.min(maxToolRounds, getPhaseRoundLimit(phase, engineConfig));
 
-  if (credentials.aiProvider === "openrouter" && credentials.openRouterApiKey) {
-    yield* chatStreamOpenRouter(credentials, messages, model, effectiveMaxRounds, sessionId, phase, signal, sddMode, engineConfig);
+  // Route to OpenRouter for: openrouter, minimax, google, openai, free (AI Gateway)
+  if (
+    credentials.aiProvider === 'openrouter' ||
+    effectiveProvider === 'openrouter' ||
+    PROVIDER_ROUTES[effectiveProvider]?.usesGateway
+  ) {
+    yield* chatStreamOpenRouter(
+      credentials,
+      messages,
+      model,
+      effectiveMaxRounds,
+      sessionId,
+      phase,
+      signal,
+      sddMode,
+      engineConfig,
+      toolSelection
+    );
     return;
   }
 
   const registry = getToolRegistry();
   const snClient = createSnClient(credentials, registry);
-  const tools = getFilteredTools(phase, getToolDefs());
+  const tools = getFilteredTools(phase, getToolDefs(), toolSelection);
   const allToolCount = getToolDefs().getAnthropicToolDefinitions().length;
   const anthropic = new Anthropic({ apiKey: credentials.claudeApiKey });
   const processedMessages = await preprocessFileAttachments(messages);
@@ -1603,10 +1751,11 @@ async function* chatStreamOpenRouter(
   signal?: AbortSignal,
   sddMode?: boolean,
   engineConfig?: EngineConfig,
+  toolSelection?: ToolSelectionPayload | null,
 ): AsyncGenerator<StreamEvent> {
   const registry = getToolRegistry();
   const snClient = createSnClient(credentials, registry);
-  const rawTools = getFilteredTools(phase, getToolDefs());
+  const rawTools = getFilteredTools(phase, getToolDefs(), toolSelection);
   const tools = toOpenRouterTools(rawTools);
   const processedMessages = await preprocessFileAttachments(messages);
   const orMessages = toOpenRouterMessages(processedMessages, model);
@@ -1837,5 +1986,152 @@ async function* chatStreamOpenRouter(
     toolExecutions: toPublicToolExecutions(toolExecutions),
     resumeAfterMs: RESUME_DELAY_MS,
     phase: phase || undefined,
+  };
+}
+
+/**
+ * Quick Agent streaming — lightweight read-only assistant.
+ * Uses only quick_query tools. No SDD phases. 5-round cap.
+ * No task planner, no phase gate parsing, no dedup warnings.
+ */
+export async function* chatStreamQuickAgent(
+  credentials: UserCredentials,
+  messages: ChatMessage[],
+  model: string = "claude-sonnet-4-6",
+  sessionId: string = "unknown",
+  signal?: AbortSignal,
+): AsyncGenerator<StreamEvent> {
+  const registry = getToolRegistry();
+  const snClient = createSnClient(credentials, registry);
+  const tools = getFilteredTools("quick_query", getToolDefs());
+  const anthropic = new Anthropic({ apiKey: credentials.claudeApiKey });
+  const processedMessages = await preprocessFileAttachments(messages);
+  const anthropicMessages = toAnthropicMessages(processedMessages);
+  const toolExecutions: ToolExecution[] = [];
+  const dedup = new ToolCallDeduplicator();
+  const MAX_ROUNDS = 5;
+
+  const userIntent = processedMessages.filter(m => m.role === "user").slice(-1)[0]?.content?.slice(0, 200) || "";
+  logger.info(sessionId, "quick_agent", "Quick agent session initialized", {
+    model,
+    maxRounds: MAX_ROUNDS,
+    toolsAvailable: tools.length,
+    userIntent,
+  });
+
+  let rounds = 0;
+
+  while (rounds < MAX_ROUNDS) {
+    if (signal?.aborted) {
+      logger.info(sessionId, "quick_agent", "Aborted by client signal", { rounds });
+      yield { type: "error", message: "Request aborted by client" };
+      return;
+    }
+
+    rounds++;
+
+    logger.info(sessionId, "quick_agent", `Round ${rounds}/${MAX_ROUNDS}: Calling Anthropic API`, {
+      messageCount: anthropicMessages.length,
+      model,
+    });
+    yield { type: "status", message: `Round ${rounds}: Analyzing...`, phase: "thinking" };
+
+    let response: Anthropic.Message;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        response = await anthropic.messages.create({
+          model,
+          max_tokens: 4096, // Smaller for quick queries
+          system: buildQuickAgentPrompt(credentials.instanceUrl) + "\n" + buildQuickAgentDynamicContext(),
+          tools,
+          messages: anthropicMessages,
+          cache_control: { type: "ephemeral" },
+        });
+        break;
+      } catch (err) {
+        const isRateLimit = err instanceof Anthropic.RateLimitError || (err instanceof Error && err.message.includes("429"));
+        if (isRateLimit && attempt < MAX_RETRIES) {
+          const delay = getRetryDelay(err, attempt);
+          logger.warn(sessionId, "quick_agent", "Rate limit hit, retrying", { attempt: attempt + 1, delayMs: delay });
+          yield { type: "status", message: `Rate limited, retrying in ${(delay / 1000).toFixed(0)}s...`, phase: "thinking" };
+          await sleep(delay);
+          continue;
+        }
+        if (isRateLimit) {
+          logger.error(sessionId, "quick_agent", "Rate limit exceeded after all retries");
+          yield { type: "error", message: "Rate limit exceeded after retries" };
+          return;
+        }
+        const rawError = err instanceof Error ? err.message : String(err);
+        logger.error(sessionId, "quick_agent", "Anthropic API error", { error: rawError });
+        yield { type: "error", message: sanitizeApiError(rawError) };
+        return;
+      }
+    }
+
+    logger.info(sessionId, "quick_agent", `Response received`, {
+      stopReason: response.stop_reason,
+      round: rounds,
+    });
+
+    if (response.stop_reason === "tool_use") {
+      const toolUseBlocks = response.content.filter((b) => b.type === "tool_use");
+      logger.info(sessionId, "quick_agent", `Quick agent requesting ${toolUseBlocks.length} tool call(s)`, {
+        tools: toolUseBlocks.map((b) => b.type === "tool_use" ? b.name : "").filter(Boolean),
+        round: rounds,
+      });
+
+      anthropicMessages.push({ role: "assistant", content: response.content });
+      const toolResults: Anthropic.ToolResultBlockParam[] = [];
+
+      for (const block of response.content) {
+        if (block.type === "tool_use") {
+          const callCount = dedup.record(block.name, block.input);
+          if (callCount >= 2) {
+            logger.warn(sessionId, "quick_agent", `Duplicate tool call: ${block.name}`, { round: rounds });
+          }
+
+          yield { type: "tool_start", toolName: block.name, input: pickDisplayFields(block.input) };
+          yield { type: "status", message: `Executing: ${block.name}`, phase: "tool" };
+
+          const { execution, resultJson, success } = await executeAndLogTool(registry, snClient, block.name, block.input, sessionId);
+          yield { type: "tool_end", toolName: block.name, durationMs: execution.durationMs, success };
+          toolExecutions.push(execution);
+          toolResults.push({ type: "tool_result", tool_use_id: block.id, content: resultJson });
+        }
+      }
+
+      // Inject dedup warning if needed
+      if (dedup.totalDuplicates > 0) {
+        const dupeMsg = `[SYSTEM: You have made ${dedup.totalDuplicates} duplicate tool calls. Use the data you already have and produce your response.]`;
+        (toolResults as Array<Anthropic.ToolResultBlockParam | Anthropic.TextBlockParam>).push({
+          type: "text",
+          text: dupeMsg,
+        });
+      }
+
+      anthropicMessages.push({ role: "user", content: toolResults });
+    } else {
+      yield { type: "status", message: "Generating response...", phase: "responding" };
+      const reply = response.content.filter((b): b is Anthropic.TextBlock => b.type === "text").map((b) => b.text).join("\n");
+
+      logger.info(sessionId, "quick_agent", "Quick agent completed", {
+        toolCount: toolExecutions.length,
+        totalRounds: rounds,
+        stopReason: response.stop_reason,
+      });
+      yield { type: "done", reply, toolExecutions: toPublicToolExecutions(toolExecutions) };
+      return;
+    }
+  }
+
+  // Max rounds reached
+  logger.warn(sessionId, "quick_agent", "Max rounds reached", { rounds: MAX_ROUNDS, toolCount: toolExecutions.length });
+  yield {
+    type: "max_rounds_reached",
+    reply: `[Reached ${MAX_ROUNDS} tool rounds. Please try a more specific request.]`,
+    toolExecutions: toPublicToolExecutions(toolExecutions),
+    resumeAfterMs: 5000,
+    phase: undefined,
   };
 }

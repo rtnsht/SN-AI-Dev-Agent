@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { SESSION_COOKIE_NAME, validateSession } from "@/lib/auth";
 import { fetchOpenRouterModels } from "@/lib/openrouter";
-import { resolveLlmApiKey } from "@/lib/key-resolver";
+import { resolveProviderApiKey } from "@/lib/model-platform";
+import { touchUserApiKey } from "@/lib/user-api-keys";
 
 /**
  * GET /api/openrouter-models — Fetch available models from OpenRouter.
@@ -10,10 +12,30 @@ export async function GET(request: NextRequest) {
   try {
     const allowUserKeys = process.env.ALLOW_USER_API_KEYS !== "false";
     const headerKey = request.headers.get("x-openrouter-key") || "";
-    const resolved = resolveLlmApiKey("openrouter-models", "openrouter", headerKey, allowUserKeys);
+    const sessionToken = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+    let userId: string | undefined;
+
+    if (sessionToken) {
+      const session = await validateSession(sessionToken);
+      if (session && !session.is_temporary) {
+        userId = session.user.id;
+      }
+    }
+
+    const resolved = await resolveProviderApiKey({
+      userId,
+      sessionId: "openrouter-models",
+      transport: "openrouter",
+      inlineUserKey: headerKey,
+      allowUserKeys,
+    });
     const apiKey = resolved?.apiKey || "";
 
     const models = await fetchOpenRouterModels(apiKey || undefined);
+
+    if (resolved?.storedKeyId) {
+      void touchUserApiKey(resolved.storedKeyId);
+    }
 
     // Transform to simplified format for UI with capability badges
     const modelList = models.map((m) => {

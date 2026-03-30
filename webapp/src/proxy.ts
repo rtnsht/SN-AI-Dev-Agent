@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { validateSession, seedAdmin, SESSION_COOKIE_NAME, buildClearCookieHeader } from "@/lib/auth";
+import { validateSession, SESSION_COOKIE_NAME, buildClearCookieHeader } from "@/lib/auth";
 
 export const config = {
   matcher: [
@@ -20,34 +20,36 @@ export const config = {
 
 /** Routes that don't require authentication */
 const PUBLIC_PATHS = [
-  "/app",                 // open to everyone (3-tier rate limiting handles access)
   "/clearcache",          // clear browser storage + redirect (no auth)
   "/login",
+  "/signup",
   "/request-access",
   "/auth/verify",
   "/auth/verify-email",
+  "/auth/emergency-login",
   "/auth/set-password",
-  "/api/auth/",           // includes /api/auth/check-email
+  "/api/auth/",           // covers check-email, login, signup, google, emergency-login
+  "/api/landing-content", // landing page CMS content (public)
   "/api/config",
   "/api/enhance-prompt",
-  "/api/transcribe",      // Whisper transcription fallback (rate-limited server-side)
+  "/api/transcribe",      // Whisper transcription (rate-limited server-side)
   "/api/instance-prompts",
   "/api/openrouter-models",
   "/api/feedback",
   "/api/banners",
   "/api/changelog",
-  "/api/chat",            // open for anonymous access (rate-limited server-side)
-  "/api/chat-stream",     // open for anonymous access (rate-limited server-side)
+  "/api/chat",            // rate-limited server-side; enriched with user headers when authenticated
+  "/api/chat-stream",     // rate-limited server-side; enriched with user headers when authenticated
   "/api/trial-status",    // trial status check (works for anon too)
-  "/api/test-connection",          // SN instance connect (used from public /app page)
-  "/api/browser-session-connect",  // browser-assisted SN sign-in (MFA/SSO, used from public /app page)
-  "/api/sn-oauth/",                // OAuth token exchange (used from public /app page)
-  "/api/session-start",            // session telemetry init (used from public /app page)
-  "/api/session-end",              // session finalization (used from public /app page + sendBeacon)
-  "/api/share-tracking",           // social share prompt analytics (fingerprint only; used from /app)
-  "/api/share-card",               // OG share card PNG (session-bound; used from /app)
-  "/api/share-image",              // AI-generated share image (session-bound; used from /app)
-  "/api/generate-share-tag",       // AI hashtag helper (session-bound; used from /app)
+  "/api/test-connection",          // SN instance connect (used from /app after login)
+  "/api/browser-session-connect",  // browser-assisted SN sign-in (MFA/SSO)
+  "/api/sn-oauth/",                // OAuth token exchange
+  "/api/session-start",            // session telemetry init
+  "/api/session-end",              // session finalization (sendBeacon on unload)
+  "/api/share-tracking",           // social share analytics (fingerprint only)
+  "/api/share-card",               // OG share card PNG (session-bound)
+  "/api/share-image",              // AI-generated share image (session-bound)
+  "/api/generate-share-tag",       // AI hashtag helper (session-bound)
 ];
 const USER_CONTEXT_HEADERS = ["x-user-id", "x-user-email", "x-user-name", "x-user-role"] as const;
 
@@ -124,13 +126,6 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next({
       request: { headers: sanitizeUserHeaders(request.headers) },
     });
-  }
-
-  // Seed admin on first request (idempotent)
-  try {
-    await seedAdmin();
-  } catch {
-    // Non-fatal — don't block requests if seed fails
   }
 
   // Public routes — allow through (but enrich with user headers if authenticated)

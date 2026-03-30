@@ -212,7 +212,7 @@ The send button morphs into a red **■ Stop** button during requests. Clicking 
 
 ## 7. Architecture Diagrams as Living Documentation
 
-We maintain a single `docs/architecture.md` with 8 mermaid diagrams that evolve with the codebase:
+We maintain a single `docs/architecture/architecture.md` with 8 mermaid diagrams that evolve with the codebase:
 
 1. **High-Level System Architecture** — boxes and arrows between browser, Next.js, Anthropic, ServiceNow
 2. **Frontend Component Architecture** — React component tree with state ownership

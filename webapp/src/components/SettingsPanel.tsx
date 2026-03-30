@@ -1,13 +1,33 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Image from "next/image";
-import type { Credentials, ConnectionResult, UsageInfo, TrialStatus, AIProvider, ModelOption } from "@/lib/types";
-import { ANTHROPIC_MODELS } from "@/lib/types";
+import { KeyRound } from "lucide-react";
+import type {
+  Credentials,
+  ConnectionResult,
+  UsageInfo,
+  TrialStatus,
+  AIProvider,
+  AITransport,
+  ModelOption,
+  SavedSystemConnectionSummary,
+} from "@/lib/types";
 import { APP_LOGO } from "@/lib/branding";
+import { ModelSelector } from "@/components/fde/ModelSelector";
 import { hasConnectableServiceNowAuth, normalizeServiceNowAuthMethod } from "@/lib/servicenow-auth";
 
 type KeyMode = "server" | "byok";
+
+interface SavedApiKeySummary {
+  id: string;
+  provider: string;
+  label: string;
+  key_hint: string | null;
+  is_active: boolean;
+  last_used_at: string | null;
+  created_at: string;
+}
 
 interface Props {
   credentials: Credentials;
@@ -46,6 +66,11 @@ interface Props {
   onBack?: () => void;
   /** Error message for the BYOK API key field (e.g., invalid key) */
   byokError?: string | null;
+  projectId?: string | null;
+  isAuthenticated?: boolean;
+  activeConnectionId?: string | null;
+  onUseSavedConnection?: (connectionId: string) => Promise<void>;
+  onConnectionSaved?: (connectionId: string) => void;
 }
 
 const INPUT_CLS = "w-full px-3 py-2.5 rounded-md text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-info)] focus:border-transparent";
@@ -117,10 +142,11 @@ export default function SettingsPanel({
   credentials, setCredentials, connected, connInfo, isConnecting, connectingLabel, connectionError, onConnect, onReconnect,
   serverApiKeyConfigured, serverOpenRouterKeyConfigured, serverSnCredsConfigured,
   usage, rateLimitHit, onApiKeyProvided,
-  aiProvider, setAiProvider, selectedModel, setSelectedModel, modelOptions, modelsLoading = false,
-  modelLocked, allowUserApiKeys = true, trialStatus, onRefreshUsage, onBack, byokError
+  aiProvider, setAiProvider, selectedModel, setSelectedModel,
+  modelLocked, allowUserApiKeys = true, trialStatus, onRefreshUsage, onBack, byokError,
+  projectId = null, isAuthenticated = false, activeConnectionId = null, onUseSavedConnection, onConnectionSaved,
 }: Props) {
-  const update = (field: keyof Credentials, value: string) => {
+  const update = useCallback((field: keyof Credentials, value: string) => {
     const nextCredentials: Credentials = { ...credentials, [field]: value };
 
     if (field === "instanceUrl") {
@@ -135,7 +161,7 @@ export default function SettingsPanel({
     }
 
     setCredentials(nextCredentials);
-  };
+  }, [credentials, setCredentials]);
 
   const snAuthType = normalizeServiceNowAuthMethod(credentials.snAuthType);
   const canConnect = hasConnectableServiceNowAuth(credentials, {
@@ -171,35 +197,257 @@ export default function SettingsPanel({
 
   const serverKeyAvailable = aiProvider === "anthropic" ? serverApiKeyConfigured : serverOpenRouterKeyConfigured;
 
-  // Display models based on provider
-  const displayModels = aiProvider === "openrouter" ? modelOptions : ANTHROPIC_MODELS;
-
   // All inputs disabled when connected or mid-connecting
   const fieldsDisabled = connected || isConnecting;
+  const [savedApiKeys, setSavedApiKeys] = useState<SavedApiKeySummary[]>([]);
+  const [apiKeyNotice, setApiKeyNotice] = useState<string | null>(null);
+  const [apiKeyAction, setApiKeyAction] = useState<"save" | "delete" | null>(null);
+  const [catalogReloadKey, setCatalogReloadKey] = useState(0);
+  const [savedConnections, setSavedConnections] = useState<SavedSystemConnectionSummary[]>([]);
+  const [connectionNotice, setConnectionNotice] = useState<string | null>(null);
+  const [connectionAction, setConnectionAction] = useState<string | null>(null);
 
-  // Searchable model combobox state
-  const [modelSearch, setModelSearch] = useState("");
-  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
-  const modelComboRef = useRef<HTMLDivElement>(null);
+  const transportLabel = aiProvider === "openrouter" ? "OpenRouter" : "Anthropic";
+  const currentKeyField = aiProvider === "openrouter" ? "openRouterApiKey" : "claudeApiKey";
+  const currentKeyValue = aiProvider === "openrouter" ? credentials.openRouterApiKey || "" : credentials.claudeApiKey || "";
+  const savedTransportKey = savedApiKeys.find((apiKey) => apiKey.provider === aiProvider && apiKey.is_active) || null;
+  const automaticKeyAvailable = Boolean(savedTransportKey) || serverKeyAvailable;
+  const canUseSavedConnections = isAuthenticated && Boolean(projectId);
+  const canSaveCurrentConnection = canUseSavedConnections && Boolean(credentials.instanceUrl.trim());
+  const temporaryTransportAccess: Partial<Record<AITransport, boolean>> = {
+    anthropic: Boolean(credentials.claudeApiKey),
+    openrouter: Boolean(credentials.openRouterApiKey),
+  };
 
-  const filteredModels = useMemo(() => {
-    if (!modelSearch.trim()) return displayModels;
-    const q = modelSearch.toLowerCase();
-    return displayModels.filter(
-      (m) => m.label.toLowerCase().includes(q) || m.description.toLowerCase().includes(q)
-    );
-  }, [displayModels, modelSearch]);
+  const refreshSavedApiKeys = useCallback(async () => {
+    if (!allowUserApiKeys) {
+      setSavedApiKeys([]);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/user/api-keys", {
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+
+      if (response.status === 401) {
+        setSavedApiKeys([]);
+        return;
+      }
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error || "Failed to load saved API keys");
+      }
+
+      const payload = (await response.json()) as { apiKeys?: SavedApiKeySummary[] };
+      setSavedApiKeys(payload.apiKeys || []);
+    } catch {
+      setSavedApiKeys([]);
+    }
+  }, [allowUserApiKeys]);
 
   useEffect(() => {
-    if (!modelDropdownOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (modelComboRef.current && !modelComboRef.current.contains(e.target as Node)) {
-        setModelDropdownOpen(false);
+    void refreshSavedApiKeys();
+  }, [refreshSavedApiKeys]);
+
+  const refreshSavedConnections = useCallback(async () => {
+    if (!canUseSavedConnections || !projectId) {
+      setSavedConnections([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/user/connections?projectId=${encodeURIComponent(projectId)}`, {
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+
+      if (response.status === 401) {
+        setSavedConnections([]);
+        return;
       }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [modelDropdownOpen]);
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error || "Failed to load saved instances");
+      }
+
+      const payload = (await response.json()) as { connections?: SavedSystemConnectionSummary[] };
+      setSavedConnections(payload.connections || []);
+    } catch {
+      setSavedConnections([]);
+    }
+  }, [canUseSavedConnections, projectId]);
+
+  useEffect(() => {
+    void refreshSavedConnections();
+  }, [refreshSavedConnections]);
+
+  const handleSaveCurrentKey = useCallback(async () => {
+    const trimmedKey = currentKeyValue.trim();
+    if (!trimmedKey || fieldsDisabled || !allowUserApiKeys) return;
+
+    setApiKeyAction("save");
+    setApiKeyNotice(null);
+
+    try {
+      const response = await fetch("/api/user/api-keys", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          provider: aiProvider,
+          label: `${transportLabel} default`,
+          api_key: trimmedKey,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to save API key");
+      }
+
+      update(currentKeyField, "");
+      setKeyMode("server");
+      setApiKeyNotice(`${transportLabel} key saved to your profile.`);
+      setCatalogReloadKey((value) => value + 1);
+      await refreshSavedApiKeys();
+    } catch (error) {
+      setApiKeyNotice(error instanceof Error ? error.message : "Failed to save API key");
+    } finally {
+      setApiKeyAction(null);
+    }
+  }, [aiProvider, allowUserApiKeys, currentKeyField, currentKeyValue, fieldsDisabled, refreshSavedApiKeys, transportLabel, update]);
+
+  const handleDeleteSavedKey = useCallback(async () => {
+    if (!savedTransportKey || fieldsDisabled) return;
+
+    setApiKeyAction("delete");
+    setApiKeyNotice(null);
+
+    try {
+      const response = await fetch(`/api/user/api-keys/${savedTransportKey.id}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to delete saved API key");
+      }
+
+      setApiKeyNotice(`Removed saved ${transportLabel} key.`);
+      setCatalogReloadKey((value) => value + 1);
+      await refreshSavedApiKeys();
+    } catch (error) {
+      setApiKeyNotice(error instanceof Error ? error.message : "Failed to delete saved API key");
+    } finally {
+      setApiKeyAction(null);
+    }
+  }, [fieldsDisabled, refreshSavedApiKeys, savedTransportKey, transportLabel]);
+
+  const handleSaveCurrentConnection = useCallback(async () => {
+    if (!canUseSavedConnections || !projectId || !credentials.instanceUrl.trim()) return;
+
+    setConnectionAction("save-current");
+    setConnectionNotice(null);
+
+    const instanceLabel = credentials.instanceUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    const label = credentials.username
+      ? `${instanceLabel} (${credentials.username})`
+      : instanceLabel;
+
+    try {
+      const response = await fetch("/api/user/connections", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          system_type: "servicenow",
+          label,
+          instance_url: credentials.instanceUrl,
+          project_id: projectId,
+          is_default: savedConnections.length === 0,
+          credentials: {
+            instanceUrl: credentials.instanceUrl,
+            username: credentials.username,
+            password: credentials.password,
+            snAuthType: credentials.snAuthType,
+            clientId: credentials.clientId,
+            clientSecret: credentials.clientSecret,
+            accessToken: credentials.accessToken,
+            refreshToken: credentials.refreshToken,
+            sessionCookies: credentials.sessionCookies,
+            sessionToken: credentials.sessionToken,
+          },
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string; connection?: SavedSystemConnectionSummary }
+        | null;
+
+      if (!response.ok || !payload?.connection) {
+        throw new Error(payload?.error || "Failed to save connection");
+      }
+
+      setConnectionNotice("Current ServiceNow instance saved to this project.");
+      onConnectionSaved?.(payload.connection.id);
+      await refreshSavedConnections();
+    } catch (error) {
+      setConnectionNotice(error instanceof Error ? error.message : "Failed to save connection");
+    } finally {
+      setConnectionAction(null);
+    }
+  }, [canUseSavedConnections, credentials, onConnectionSaved, projectId, refreshSavedConnections, savedConnections.length]);
+
+  const handleDeleteSavedConnection = useCallback(async (connectionId: string) => {
+    setConnectionAction(`delete:${connectionId}`);
+    setConnectionNotice(null);
+    try {
+      const response = await fetch(`/api/user/connections/${connectionId}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to delete saved instance");
+      }
+
+      setConnectionNotice("Saved instance removed.");
+      await refreshSavedConnections();
+    } catch (error) {
+      setConnectionNotice(error instanceof Error ? error.message : "Failed to delete saved instance");
+    } finally {
+      setConnectionAction(null);
+    }
+  }, [refreshSavedConnections]);
+
+  const handleUseConnection = useCallback(async (connectionId: string) => {
+    if (!onUseSavedConnection) return;
+    setConnectionAction(`connect:${connectionId}`);
+    setConnectionNotice(null);
+    try {
+      await onUseSavedConnection(connectionId);
+      setConnectionNotice("Connected using saved instance.");
+      await refreshSavedConnections();
+    } catch (error) {
+      setConnectionNotice(error instanceof Error ? error.message : "Failed to connect using saved instance");
+    } finally {
+      setConnectionAction(null);
+    }
+  }, [onUseSavedConnection, refreshSavedConnections]);
 
   const setSnAuthType = (nextAuthType: Credentials["snAuthType"]) => {
     setCredentials({
@@ -347,6 +595,114 @@ export default function SettingsPanel({
                   : "Browser Session opens a real browser using your ServiceNow username and password so you can finish SSO/MFA manually. The resulting ServiceNow session cookies stay in memory for this chat session only."}
               </div>
             )}
+
+            <div className="pt-3 space-y-2" style={{ borderTop: "1px solid var(--border-default)" }}>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <label className="block text-[11px] font-medium" style={{ color: "var(--text-secondary)" }}>Saved Instances</label>
+                  <p className="text-[10px] mt-1" style={{ color: "var(--text-disabled)" }}>
+                    Project-bound ServiceNow profiles let you reconnect without re-entering credentials.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveCurrentConnection}
+                  disabled={!canSaveCurrentConnection || isConnecting || connectionAction === "save-current"}
+                  className="px-3 py-2 rounded-md text-[11px] font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ background: "color-mix(in srgb, var(--color-primary) 10%, transparent)", color: "var(--color-primary)", border: "1px solid color-mix(in srgb, var(--color-primary) 25%, transparent)" }}
+                >
+                  {connectionAction === "save-current" ? "Saving..." : "Save Current"}
+                </button>
+              </div>
+
+              {!isAuthenticated ? (
+                <div className="px-3 py-2 rounded-md text-[10px]" style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-disabled)" }}>
+                  Sign in to store project-bound ServiceNow instances.
+                </div>
+              ) : !projectId ? (
+                <div className="px-3 py-2 rounded-md text-[10px]" style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-disabled)" }}>
+                  Workspace context is still loading. Saved instances will appear when the current project is ready.
+                </div>
+              ) : savedConnections.length === 0 ? (
+                <div className="px-3 py-2 rounded-md text-[10px]" style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-emphasis)", color: "var(--text-disabled)" }}>
+                  No saved instances for this project yet.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {savedConnections.map((connection) => {
+                    const isActive = activeConnectionId === connection.id;
+                    const actionKey = connectionAction || "";
+                    return (
+                      <div
+                        key={connection.id}
+                        className="rounded-md px-3 py-2"
+                        style={{
+                          background: isActive ? "color-mix(in srgb, var(--color-primary) 8%, transparent)" : "var(--surface-elevated)",
+                          border: `1px solid ${isActive ? "color-mix(in srgb, var(--color-primary) 22%, transparent)" : "var(--border-emphasis)"}`,
+                        }}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-[11px] font-medium truncate" style={{ color: "var(--text-primary)" }}>
+                              {connection.label}
+                            </div>
+                            <div className="text-[10px] truncate" style={{ color: "var(--text-disabled)" }}>
+                              {connection.instance_url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                            </div>
+                            <div className="text-[10px] mt-1" style={{ color: "var(--text-disabled)" }}>
+                              {connection.last_verified_at
+                                ? `Verified ${new Date(connection.last_verified_at).toLocaleString()}`
+                                : "Not yet verified"}
+                              {connection.is_default ? " • Default" : ""}
+                              {isActive ? " • Active" : ""}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void handleUseConnection(connection.id)}
+                              disabled={connected || isConnecting || actionKey === `connect:${connection.id}`}
+                              className="px-2.5 py-1.5 rounded text-[10px] font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                              style={{ background: "rgba(56,201,118,0.12)", color: "var(--color-success)", border: "1px solid rgba(56,201,118,0.2)" }}
+                            >
+                              {actionKey === `connect:${connection.id}` ? "Connecting..." : isActive ? "Active" : "Connect"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteSavedConnection(connection.id)}
+                              disabled={actionKey === `delete:${connection.id}`}
+                              className="px-2.5 py-1.5 rounded text-[10px] font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                              style={{ background: "rgba(249,115,115,0.12)", color: "var(--color-danger)", border: "1px solid rgba(249,115,115,0.18)" }}
+                            >
+                              {actionKey === `delete:${connection.id}` ? "Removing..." : "Delete"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {connectionNotice && (
+                <div
+                  className="px-3 py-2 rounded-md text-[10px]"
+                  style={{
+                    background: connectionNotice.toLowerCase().includes("failed") || connectionNotice.toLowerCase().includes("error")
+                      ? "rgba(249,115,115,0.08)"
+                      : "rgba(56,201,118,0.08)",
+                    border: connectionNotice.toLowerCase().includes("failed") || connectionNotice.toLowerCase().includes("error")
+                      ? "1px solid rgba(249,115,115,0.22)"
+                      : "1px solid rgba(56,201,118,0.18)",
+                    color: connectionNotice.toLowerCase().includes("failed") || connectionNotice.toLowerCase().includes("error")
+                      ? "var(--color-danger)"
+                      : "var(--color-success)",
+                  }}
+                >
+                  {connectionNotice}
+                </div>
+              )}
+            </div>
           </div>
         </div>{/* end Section 1 card */}
 
@@ -359,33 +715,22 @@ export default function SettingsPanel({
           </div>
           <div className="space-y-3">
             <div>
-              <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>AI Provider</label>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => !modelLocked && !fieldsDisabled && setAiProvider("anthropic")}
-                  disabled={modelLocked || fieldsDisabled}
-                  className={`flex-1 px-3 py-2 rounded-md text-[11px] font-medium transition-colors ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
-                  style={{
-                    background: aiProvider === "anthropic" ? "color-mix(in srgb, var(--color-primary) 10%, transparent)" : "var(--surface-elevated)",
-                    border: `1px solid ${aiProvider === "anthropic" ? "color-mix(in srgb, var(--color-primary) 30%, transparent)" : "var(--border-emphasis)"}`,
-                    color: aiProvider === "anthropic" ? "var(--color-primary)" : "var(--text-secondary)",
-                  }}
-                >
-                  Anthropic
-                </button>
-                <button
-                  onClick={() => !modelLocked && !fieldsDisabled && setAiProvider("openrouter")}
-                  disabled={modelLocked || fieldsDisabled}
-                  className={`flex-1 px-3 py-2 rounded-md text-[11px] font-medium transition-colors ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
-                  style={{
-                    background: aiProvider === "openrouter" ? "rgba(168,85,247,0.1)" : "var(--surface-elevated)",
-                    border: `1px solid ${aiProvider === "openrouter" ? "rgba(168,85,247,0.3)" : "var(--border-emphasis)"}`,
-                    color: aiProvider === "openrouter" ? OPENROUTER_COLOR : "var(--text-secondary)",
-                  }}
-                >
-                  OpenRouter
-                </button>
-              </div>
+              <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Model Catalog</label>
+              <ModelSelector
+                selectedModel={selectedModel}
+                onSelectModel={(modelId, transport) => {
+                  if (modelLocked || fieldsDisabled) return;
+                  setSelectedModel(modelId);
+                  setAiProvider(transport);
+                }}
+                disabled={fieldsDisabled}
+                modelLocked={modelLocked}
+                temporaryTransportAccess={temporaryTransportAccess}
+                reloadKey={catalogReloadKey}
+              />
+              <p className="text-[10px] mt-1.5 leading-relaxed" style={{ color: "var(--text-disabled)" }}>
+                Provider groups are independent from execution transports right now. Claude models stay on Anthropic, while OpenAI, Gemini, MiMo, MiniMax, GLM, and OpenRouter models route through OpenRouter.
+              </p>
               {(modelLocked || connected) && (
                 <p className="text-[10px] mt-1 flex items-center gap-1" style={{ color: "var(--text-disabled)" }}>
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
@@ -396,19 +741,19 @@ export default function SettingsPanel({
 
             {/* Key Source Toggle */}
             <div className="pt-3" style={{ borderTop: "1px solid var(--border-default)" }}>
-              <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>API Key Source (BYOK)</label>
+              <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Credential Source</label>
               <div className="flex gap-2">
                 <button
                   onClick={() => !fieldsDisabled && setKeyMode("server")}
-                  disabled={fieldsDisabled || !serverKeyAvailable}
-                  className={`flex-1 px-3 py-2 rounded-md text-[11px] font-medium transition-colors ${(fieldsDisabled || !serverKeyAvailable) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+                  disabled={fieldsDisabled}
+                  className={`flex-1 px-3 py-2 rounded-md text-[11px] font-medium transition-colors ${fieldsDisabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
                   style={{
                     background: keyMode === "server" ? "color-mix(in srgb, var(--color-primary) 10%, transparent)" : "var(--surface-elevated)",
                     border: `1px solid ${keyMode === "server" ? "color-mix(in srgb, var(--color-primary) 30%, transparent)" : "var(--border-emphasis)"}`,
                     color: keyMode === "server" ? "var(--color-primary)" : "var(--text-secondary)",
                   }}
                 >
-                  Server Keys
+                  Automatic
                 </button>
                 <button
                   onClick={() => !fieldsDisabled && allowUserApiKeys && setKeyMode("byok")}
@@ -420,50 +765,79 @@ export default function SettingsPanel({
                     color: keyMode === "byok" ? "var(--color-primary)" : "var(--text-secondary)",
                   }}
                 >
-                  BYOK
+                  Session Override
                 </button>
               </div>
               <p className="text-[10px] mt-1.5" style={{ color: "var(--text-disabled)" }}>
                 {keyMode === "server"
-                  ? "Using the app\u2019s shared AI capacity. During busy periods you may see temporary limits."
-                  : "Bring Your Own Key \u2014 your API account, your billing, your limits."}
+                  ? "Automatic mode uses your saved profile key for this transport when present, then falls back to shared system capacity."
+                  : "Session override keeps a key in browser memory for this tab only unless you explicitly save it to your profile."}
               </p>
             </div>
 
             {/* API Key Section */}
             <div className="pt-3" style={{ borderTop: "1px solid var(--border-default)" }}>
               {keyMode === "server" ? (
-                <>
-                  {serverKeyAvailable ? (
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
-                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-success)" }} />
-                      <span className="text-[11px]" style={{ color: "var(--color-success)" }}>Using shared server keys</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(249,115,115,0.06)", border: "1px solid rgba(249,115,115,0.15)" }}>
-                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-failed)" }} />
-                      <span className="text-[11px]" style={{ color: "var(--color-danger)" }}>No server key configured. Switch to BYOK or contact admin.</span>
+                <div className="space-y-2">
+                  {savedTransportKey && (
+                    <div className="px-3 py-2 rounded-md" style={{ background: "rgba(56,201,118,0.06)", border: "1px solid rgba(56,201,118,0.15)" }}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] font-medium" style={{ color: "var(--color-success)" }}>
+                            Saved {transportLabel} key active
+                          </p>
+                          <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                            {savedTransportKey.key_hint || savedTransportKey.label} will be used before shared system capacity for this transport.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleDeleteSavedKey}
+                          disabled={fieldsDisabled || apiKeyAction === "delete"}
+                          className="px-2 py-1 rounded text-[10px] font-medium"
+                          style={{ background: "rgba(249,115,115,0.12)", color: "var(--color-danger)", border: "1px solid rgba(249,115,115,0.18)" }}
+                        >
+                          {apiKeyAction === "delete" ? "Removing..." : "Remove"}
+                        </button>
+                      </div>
                     </div>
                   )}
-                </>
+
+                  {serverKeyAvailable && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.18)" }}>
+                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: OPENROUTER_COLOR }} />
+                      <span className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                        Shared {transportLabel} capacity is configured for this workspace.
+                      </span>
+                    </div>
+                  )}
+
+                  {!automaticKeyAvailable && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: "rgba(249,115,115,0.06)", border: "1px solid rgba(249,115,115,0.15)" }}>
+                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--status-failed)" }} />
+                      <span className="text-[11px]" style={{ color: "var(--color-danger)" }}>
+                        No saved {transportLabel} key or shared system access is available right now.
+                      </span>
+                    </div>
+                  )}
+                </div>
               ) : (
-                <>
+                <div className="space-y-2">
                   <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--text-secondary)" }}>
-                    {aiProvider === "openrouter" ? "BYOK \u2014 OpenRouter API Key" : "BYOK \u2014 Claude API Key"}
+                    Session override — {transportLabel} API Key
                   </label>
                   {rateLimitHit && (
                     <div className="mb-2 px-3 py-2 rounded-md" style={{ background: "rgba(245,196,81,0.06)", border: "1px solid rgba(245,196,81,0.15)" }}>
-                      <p className="text-[11px] font-medium" style={{ color: "var(--color-warning)" }}>Shared key hit a limit</p>
+                      <p className="text-[11px] font-medium" style={{ color: "var(--color-warning)" }}>Shared capacity hit a limit</p>
                       <p className="text-[10px] mt-0.5" style={{ color: "var(--text-disabled)" }}>Enter your own API key below to continue.</p>
                     </div>
                   )}
                   <input
                     type="password"
                     placeholder={aiProvider === "openrouter" ? "sk-or-v1-..." : "sk-ant-..."}
-                    value={aiProvider === "openrouter" ? credentials.openRouterApiKey : credentials.claudeApiKey}
+                    value={currentKeyValue}
                     onChange={(e) => {
-                      const field = aiProvider === "openrouter" ? "openRouterApiKey" : "claudeApiKey";
-                      update(field, e.target.value);
+                      update(currentKeyField, e.target.value);
                       if (e.target.value && rateLimitHit) onApiKeyProvided();
                     }}
                     className={INPUT_CLS}
@@ -485,6 +859,26 @@ export default function SettingsPanel({
                       <p className="text-[10px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{byokError}</p>
                     </div>
                   )}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSaveCurrentKey}
+                      disabled={fieldsDisabled || !allowUserApiKeys || !currentKeyValue.trim() || apiKeyAction === "save"}
+                      className="px-3 py-2 rounded-md text-[11px] font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ background: "color-mix(in srgb, var(--color-primary) 10%, transparent)", color: "var(--color-primary)", border: "1px solid color-mix(in srgb, var(--color-primary) 28%, transparent)" }}
+                    >
+                      {apiKeyAction === "save" ? "Saving..." : "Save To Profile"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setKeyMode("server")}
+                      disabled={fieldsDisabled}
+                      className="px-3 py-2 rounded-md text-[11px] font-medium"
+                      style={{ background: "var(--surface-elevated)", color: "var(--text-secondary)", border: "1px solid var(--border-emphasis)" }}
+                    >
+                      Use Automatic Mode
+                    </button>
+                  </div>
                   <p className="text-[10px] mt-1.5 leading-relaxed" style={{ color: "var(--text-disabled)" }}>
                     Get your key at{" "}
                     <a
@@ -494,6 +888,7 @@ export default function SettingsPanel({
                     >
                       {aiProvider === "openrouter" ? "openrouter.ai/keys" : "console.anthropic.com"}
                     </a>
+                    . Saved profile keys are encrypted at rest; unsaved session overrides remain in browser memory only.
                   </p>
 
                   {/* BYOK Security Disclosure */}
@@ -502,7 +897,7 @@ export default function SettingsPanel({
                       className="flex items-center gap-1.5 cursor-pointer text-[10px] font-medium select-none"
                       style={{ color: "var(--text-disabled)" }}
                     >
-                      <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                      <KeyRound className="w-3 h-3 flex-shrink-0" />
                       Key Security
                       <svg className="w-2.5 h-2.5 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                     </summary>
@@ -512,17 +907,12 @@ export default function SettingsPanel({
                     >
                       <p style={{ color: "var(--text-secondary)" }}>How your key is handled:</p>
                       <ul className="space-y-1 pl-3" style={{ color: "var(--text-disabled)", listStyleType: "disc" }}>
-                        <li>Stored in <strong style={{ color: "var(--text-secondary)" }}>browser memory only</strong> &mdash; cleared on tab close or disconnect</li>
-                        <li>Transmitted over <strong style={{ color: "var(--text-secondary)" }}>HTTPS</strong> to the app server for proxying API calls</li>
-                        <li>Used <strong style={{ color: "var(--text-secondary)" }}>transiently per-request</strong> &mdash; never written to disk, database, or any persistent storage</li>
-                        <li><strong style={{ color: "var(--text-secondary)" }}>Redacted from all logs</strong> &mdash; key values are stripped before logging</li>
-                        <li>Never exposed via config endpoints or returned in API responses</li>
+                        <li>Session override keys stay in <strong style={{ color: "var(--text-secondary)" }}>browser memory only</strong> unless you explicitly save them.</li>
+                        <li>Saved profile keys are <strong style={{ color: "var(--text-secondary)" }}>encrypted before storage</strong> in the database.</li>
+                        <li>All keys travel over <strong style={{ color: "var(--text-secondary)" }}>HTTPS</strong> to the backend when a request executes.</li>
+                        <li><strong style={{ color: "var(--text-secondary)" }}>Key values are redacted from logs</strong> and never returned in config responses.</li>
+                        <li>The backend still proxies model calls so ServiceNow tooling, guardrails, and app access controls stay enforced.</li>
                       </ul>
-                      <div className="pt-1" style={{ borderTop: "1px solid color-mix(in srgb, var(--color-primary) 10%, transparent)" }}>
-                        <p style={{ color: "var(--text-disabled)" }}>
-                          <strong style={{ color: "var(--color-warning)" }}>Note:</strong> This app sends chat requests to the backend, which calls {aiProvider === "openrouter" ? "OpenRouter" : "Anthropic"} with the API key for that request. Your BYOK key stays in the browser until you use it; it isn&apos;t saved on the server or written to disk. That keeps LLM access together with ServiceNow tooling and access controls on the backend.
-                        </p>
-                      </div>
                       <div className="pt-1" style={{ borderTop: "1px solid color-mix(in srgb, var(--color-primary) 10%, transparent)" }}>
                         <p style={{ color: "var(--text-secondary)" }}>
                           <strong>Recommendation:</strong> Create a <strong>dedicated API key with spend limits</strong> on your provider dashboard rather than using your primary key.
@@ -530,11 +920,30 @@ export default function SettingsPanel({
                       </div>
                     </div>
                   </details>
-                </>
+                </div>
+              )}
+
+              {apiKeyNotice && (
+                <div
+                  className="px-3 py-2 rounded-md text-[10px]"
+                  style={{
+                    background: apiKeyNotice.toLowerCase().includes("failed") || apiKeyNotice.toLowerCase().includes("error")
+                      ? "rgba(249,115,115,0.08)"
+                      : "rgba(56,201,118,0.08)",
+                    border: apiKeyNotice.toLowerCase().includes("failed") || apiKeyNotice.toLowerCase().includes("error")
+                      ? "1px solid rgba(249,115,115,0.22)"
+                      : "1px solid rgba(56,201,118,0.18)",
+                    color: apiKeyNotice.toLowerCase().includes("failed") || apiKeyNotice.toLowerCase().includes("error")
+                      ? "var(--color-danger)"
+                      : "var(--color-success)",
+                  }}
+                >
+                  {apiKeyNotice}
+                </div>
               )}
 
               {/* Usage info */}
-              {keyMode === "server" && usage && serverKeyAvailable && (
+              {keyMode === "server" && usage && serverKeyAvailable && !savedTransportKey && (
                 <UsageDisplay usage={usage} onRefresh={onRefreshUsage} />
               )}
 
@@ -562,184 +971,46 @@ export default function SettingsPanel({
                   </div>
                   {(trialStatus.trialExpired || trialStatus.dailyUsed >= trialStatus.dailyLimit) && allowUserApiKeys && (
                     <p className="text-[10px] mt-1" style={{ color: "var(--color-warning)" }}>
-                      Switch to BYOK to continue
+                      Switch to a saved key or session override to continue.
                     </p>
                   )}
                 </div>
               )}
             </div>
 
-            {/* Model selection */}
+            {/* Transport summary */}
             <div className="pt-3" style={{ borderTop: "1px solid var(--border-default)" }}>
-              <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>AI Model</label>
-              {aiProvider === "openrouter" && !modelsLoading && (
-                <p className="text-[10px] mt-0.5 mb-1.5" style={{ color: "var(--text-disabled)" }}>
-                  Pick a recent model from a top provider for reliable tool execution
-                </p>
-              )}
-
-              {modelsLoading ? (
-                <div className="flex items-center gap-2 px-3 py-3 rounded-md" style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-emphasis)" }}>
-                  <svg className="w-4 h-4 animate-spin" style={{ color: "var(--text-disabled)" }} fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  <span className="text-[11px]" style={{ color: "var(--text-disabled)" }}>Loading models...</span>
-                </div>
-              ) : aiProvider === "openrouter" && displayModels.length > 10 ? (
-                <div ref={modelComboRef} className="relative">
-                  {/* Selected model display / trigger */}
-                  <button
-                    type="button"
-                    onClick={() => !modelLocked && !fieldsDisabled && setModelDropdownOpen((v) => !v)}
-                    disabled={modelLocked || fieldsDisabled}
-                    className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-md text-left transition-colors ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
-                    style={{ background: "var(--surface-elevated)", border: `1px solid ${modelDropdownOpen ? "var(--color-info)" : "var(--border-emphasis)"}`, color: "var(--text-primary)" }}
-                  >
-                    <span className="flex-1 text-[11px] truncate">
-                      {displayModels.find((m) => m.key === selectedModel)?.label || "Select a model"}
-                    </span>
-                    <svg className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${modelDropdownOpen ? "rotate-180" : ""}`} style={{ color: "var(--text-disabled)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                  </button>
-
-                  {selectedModel && !modelDropdownOpen && (
-                    <p className="text-[10px] mt-1" style={{ color: "var(--text-disabled)" }}>
-                      {displayModels.find((m) => m.key === selectedModel)?.description || ""}
-                    </p>
-                  )}
-
-                  {/* Dropdown */}
-                  {modelDropdownOpen && (
+              <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Execution Transport</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { key: "anthropic", label: "Anthropic", desc: "Direct Claude transport" },
+                  { key: "openrouter", label: "OpenRouter", desc: "Routed multi-provider transport" },
+                ].map((transport) => {
+                  const active = aiProvider === transport.key;
+                  return (
                     <div
-                      className="absolute left-0 right-0 mt-1 rounded-md shadow-lg overflow-hidden z-20"
-                      style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-emphasis)" }}
+                      key={transport.key}
+                      className="rounded-md px-3 py-2"
+                      style={{
+                        background: active ? "color-mix(in srgb, var(--color-primary) 10%, transparent)" : "var(--surface-elevated)",
+                        border: `1px solid ${active ? "color-mix(in srgb, var(--color-primary) 28%, transparent)" : "var(--border-emphasis)"}`,
+                      }}
                     >
-                      {/* Search input */}
-                      <div className="p-1.5" style={{ borderBottom: "1px solid var(--border-default)" }}>
-                        <div className="relative">
-                          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3" style={{ color: "var(--text-disabled)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                          <input
-                            type="text"
-                            value={modelSearch}
-                            onChange={(e) => setModelSearch(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === "Escape") { setModelDropdownOpen(false); setModelSearch(""); } }}
-                            placeholder="Search models..."
-                            className="w-full pl-7 pr-2 py-1.5 rounded text-[11px] outline-none"
-                            style={{ background: "var(--surface-secondary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
-                            autoFocus
-                          />
-                        </div>
+                      <div className="text-[11px] font-medium" style={{ color: active ? "var(--color-primary)" : "var(--text-primary)" }}>
+                        {transport.label}
                       </div>
-
-                      {/* Results list */}
-                      <div className="max-h-[240px] overflow-y-auto">
-                        {filteredModels.length === 0 ? (
-                          <div className="px-3 py-4 text-center text-[11px]" style={{ color: "var(--text-disabled)" }}>
-                            No models match &ldquo;{modelSearch}&rdquo;
-                          </div>
-                        ) : (
-                          filteredModels.map((opt) => {
-                            const isSelected = selectedModel === opt.key;
-                            return (
-                              <button
-                                key={opt.key}
-                                type="button"
-                                onClick={() => {
-                                  setSelectedModel(opt.key);
-                                  setModelDropdownOpen(false);
-                                  setModelSearch("");
-                                }}
-                                className="w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors"
-                                style={{
-                                  background: isSelected ? "color-mix(in srgb, var(--color-primary) 8%, transparent)" : "transparent",
-                                  borderBottom: "1px solid var(--border-default)",
-                                }}
-                                onMouseEnter={(e) => !isSelected && (e.currentTarget.style.background = "var(--surface-secondary)")}
-                                onMouseLeave={(e) => !isSelected && (e.currentTarget.style.background = "transparent")}
-                              >
-                                <div
-                                  className="w-2.5 h-2.5 rounded-full flex-shrink-0 flex items-center justify-center"
-                                  style={{ border: `2px solid ${isSelected ? OPENROUTER_COLOR : "var(--text-disabled)"}` }}
-                                >
-                                  {isSelected && <div className="w-1 h-1 rounded-full" style={{ background: OPENROUTER_COLOR }} />}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-[11px] font-medium truncate" style={{ color: isSelected ? OPENROUTER_COLOR : "var(--text-primary)" }}>{opt.label}</p>
-                                  <p className="text-[10px] truncate" style={{ color: "var(--text-disabled)" }}>{opt.description}</p>
-                                </div>
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-
-                      {/* Footer count */}
-                      <div className="px-3 py-1.5 text-[10px]" style={{ borderTop: "1px solid var(--border-default)", color: "var(--text-disabled)" }}>
-                        {filteredModels.length === displayModels.length
-                          ? `${displayModels.length} models`
-                          : `${filteredModels.length} of ${displayModels.length} models`}
-                      </div>
+                      <div className="text-[10px]" style={{ color: "var(--text-disabled)" }}>{transport.desc}</div>
                     </div>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
-                  {displayModels.map((opt) => {
-                    const isSelected = selectedModel === opt.key;
-                    const accentColor = aiProvider === "openrouter" ? OPENROUTER_COLOR : "var(--color-primary)";
-                    return (
-                      <button
-                        key={opt.key}
-                        onClick={() => !modelLocked && !fieldsDisabled && setSelectedModel(opt.key)}
-                        disabled={modelLocked || fieldsDisabled}
-                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors ${(modelLocked || fieldsDisabled) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
-                        style={{
-                          background: isSelected ? `color-mix(in srgb, ${accentColor} 8%, transparent)` : "var(--surface-elevated)",
-                          border: `1px solid ${isSelected ? `color-mix(in srgb, ${accentColor} 30%, transparent)` : "var(--border-emphasis)"}`,
-                        }}
-                      >
-                        <div
-                          className="w-3 h-3 rounded-full flex-shrink-0 flex items-center justify-center"
-                          style={{ border: `2px solid ${isSelected ? accentColor : "var(--text-disabled)"}` }}
-                        >
-                          {isSelected && (
-                            <div className="w-1.5 h-1.5 rounded-full" style={{ background: accentColor }} />
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-medium" style={{ color: isSelected ? accentColor : "var(--text-primary)" }}>{opt.label}</p>
-                          <p className="text-[10px] truncate" style={{ color: "var(--text-disabled)" }}>{opt.description}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {(modelLocked || connected) && (
-                <p className="text-[10px] mt-1.5 flex items-center gap-1" style={{ color: "var(--text-disabled)" }}>
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                  Locked — disconnect to change
-                </p>
-              )}
-
-              {aiProvider === "openrouter" && displayModels.length > 0 && (
-                <div
-                  className="mt-2 px-3 py-2 rounded-md text-[10px] leading-relaxed"
-                  style={{
-                    background: "rgba(168,85,247,0.06)",
-                    border: "1px solid rgba(168,85,247,0.2)",
-                    color: "var(--text-secondary)",
-                  }}
-                >
-                  <span className="font-semibold" style={{ color: OPENROUTER_COLOR }}>Tip</span>{" "}
-                  For best results, select the latest model from a top provider &mdash; Claude (Anthropic), Gemini (Google), GPT/o-series (OpenAI), Qwen, or DeepSeek.
-                  All listed models report tool calling support, but some may not execute tools reliably. If a model fails, try switching to another.
-                  <span className="block mt-1" style={{ color: "var(--text-disabled)" }}>
-                    {displayModels.length} models available
-                  </span>
-                </div>
-              )}
+                  );
+                })}
+              </div>
+              <p className="text-[10px] mt-1.5 leading-relaxed" style={{ color: "var(--text-disabled)" }}>
+                Current selection uses <strong style={{ color: "var(--text-secondary)" }}>{transportLabel}</strong>.
+                {" "}
+                {aiProvider === "openrouter"
+                  ? "This lets the app expose OpenAI, Gemini, MiMo, MiniMax, GLM, and OpenRouter groups while execution still stays on the existing OpenRouter backend path."
+                  : "Claude models stay on the direct Anthropic execution path for the current implementation phase."}
+              </p>
             </div>
           </div>
         </div>{/* end Section 2 card */}

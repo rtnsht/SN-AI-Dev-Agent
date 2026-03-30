@@ -2361,6 +2361,87 @@ textarea.auth-input {
   text-decoration: underline;
 }
 
+/* ── Google Sign-In Button ── */
+.auth-google-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.6rem 1rem;
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--surface-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.auth-google-button:hover:not(:disabled) {
+  background: var(--surface-secondary);
+  border-color: var(--border-emphasis);
+}
+
+.auth-google-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.auth-google-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+
+/* ── Auth Divider ── */
+.auth-divider {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 1.25rem 0;
+  text-align: center;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-default);
+}
+
+.auth-divider-text {
+  padding: 0 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-disabled);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Auth Button Spinner ── */
+.auth-button-spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: authSpinner 0.6s linear infinite;
+}
+
+@keyframes authSpinner {
+  to { transform: rotate(360deg); }
+}
+
+.auth-link-text {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    ADMIN DASHBOARD
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -2506,6 +2587,7 @@ textarea.auth-input {
 .admin-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .admin-btn-approve { background: rgba(56, 201, 118, 0.15); color: var(--color-success); border-color: rgba(56, 201, 118, 0.3); }
 .admin-btn-reject { background: rgba(249, 115, 115, 0.15); color: var(--color-danger); border-color: rgba(249, 115, 115, 0.3); }
+.admin-btn-secondary { background: rgba(96, 165, 250, 0.12); color: var(--color-info); border-color: rgba(96, 165, 250, 0.24); }
 
 .admin-invite-form {
   display: flex;
@@ -2642,7 +2724,458 @@ textarea.auth-input {
   transition: all var(--transition-fast);
   animation: slideUp 0.25s ease-out;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PALANTIR-STYLE LANDING PAGE
+   Big typography · Two-column asymmetric layouts · Deep blacks
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Loading / Error states ── */
+.landing-loading,
+.landing-error {
+  text-align: center;
+  padding: var(--space-8);
+}
+.landing-loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--border-default);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto var(--space-4);
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Header link styling ── */
+.landing-header-link {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+.landing-header-link:hover {
+  color: var(--text-primary);
+  background: var(--surface-secondary);
+}
+
+/* ── Palantir Hero Section ── */
+.landing-hero-palantir {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 120px 48px 80px;
+  position: relative;
+  overflow: hidden;
+}
+.landing-hero-columns {
+  display: grid;
+  gap: 64px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  align-items: center;
+}
+.landing-hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.landing-hero-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.landing-hero-visual-placeholder {
+  width: 100%;
+  aspect-ratio: 4/3;
+  background: var(--surface-secondary);
+  border-radius: 16px;
+  border: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.landing-hero-logo-wrapper {
+  width: 200px;
+  height: 200px;
+}
+
+/* ── Palantir Badge ── */
+.landing-badge-palantir {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: color-mix(in srgb, var(--surface-secondary) 80%, transparent);
+  border: 1px solid var(--border-default);
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  width: fit-content;
+  backdrop-filter: blur(8px);
+}
+
+/* ── Palantir Headline (Big Type) ── */
+.landing-headline-palantir {
+  font-size: clamp(48px, 7vw, 96px);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+  margin: 0;
+}
+[data-theme="dark"] .landing-headline-palantir {
+  background: linear-gradient(135deg, var(--text-primary) 0%, var(--color-primary) 50%, var(--accent-secondary, #7C3AED) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Palantir Tagline ── */
+.landing-tagline-palantir {
+  font-size: clamp(18px, 2.5vw, 24px);
+  line-height: 1.5;
+  color: var(--text-secondary);
+  max-width: 540px;
+  margin: 0;
+}
+
+/* ── Palantir CTA Buttons ── */
+.landing-cta-palantir {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 8px;
+}
+.landing-cta-primary-palantir {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 28px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-primary);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+.landing-cta-primary-palantir:hover {
+  background: var(--color-primary-hover);
+  transform: translateY(-1px);
+}
+.landing-cta-secondary-palantir {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 24px;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+.landing-cta-secondary-palantir:hover {
+  background: var(--surface-secondary);
+  border-color: var(--text-disabled);
+}
+
+/* ── Two-Column Sections (Palantir asymmetric) ── */
+.landing-two-column-section {
+  padding: 120px 48px;
+}
+.landing-two-column-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  max-width: 1200px;
+  margin: 0 auto;
+  align-items: center;
+}
+.landing-two-column-grid.reversed {
+  direction: rtl;
+}
+.landing-two-column-grid.reversed > * {
+  direction: ltr;
+}
+.landing-two-column-text {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.landing-two-column-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.landing-two-column-image {
+  width: 100%;
+  max-width: 480px;
+  border-radius: 12px;
+  border: 1px solid var(--border-default);
+}
+.landing-two-column-placeholder {
+  width: 100%;
+  aspect-ratio: 4/3;
+  background: var(--surface-secondary);
+  border-radius: 12px;
+  border: 1px solid var(--border-default);
+  position: relative;
+  overflow: hidden;
+}
+.landing-placeholder-pattern {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    linear-gradient(45deg, var(--border-subtle) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--border-subtle) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--border-subtle) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--border-subtle) 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+  opacity: 0.5;
+}
+
+/* ── Section Headline (Palantir style) ── */
+.landing-section-headline-palantir {
+  font-size: clamp(36px, 5vw, 56px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  margin: 0;
+}
+.landing-section-description {
+  font-size: clamp(16px, 2vw, 20px);
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* ── Quote Block ── */
+.landing-quote {
+  margin: 16px 0 0;
+  padding: 20px 24px;
+  background: var(--surface-secondary);
+  border-left: 3px solid var(--color-primary);
+  border-radius: 0 8px 8px 0;
+}
+.landing-quote p {
+  font-size: 16px;
+  font-style: italic;
+  color: var(--text-secondary);
+  margin: 0 0 8px;
+}
+.landing-quote cite {
+  font-size: 14px;
+  font-style: normal;
+  color: var(--text-muted);
+}
+
+/* ── Stats Section ── */
+.landing-stats-section {
+  padding: 80px 48px;
+  background: var(--surface-secondary);
+}
+.landing-stats-palantir {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 48px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+.landing-stat-item {
+  text-align: center;
+}
+.landing-stat-value {
+  font-size: clamp(48px, 6vw, 72px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--color-primary);
+  margin-bottom: 8px;
+}
+.landing-stat-label {
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+.landing-stat-description {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+
+/* ── Feature Cards (Palantir refined) ── */
+.landing-features-palantir {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.landing-feature-card.highlighted {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--surface-primary) 95%, var(--color-primary));
+}
+.landing-feature-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-primary);
+  text-decoration: none;
+  margin-top: 16px;
+  transition: color var(--transition-fast);
+}
+.landing-feature-link:hover {
+  color: var(--color-primary-hover);
+}
+
+/* ── CTA Section (Palantir gradient) ── */
+.landing-cta-palantir-section {
+  padding: 120px 48px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.landing-cta-headline-palantir {
+  font-size: clamp(32px, 5vw, 56px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: #fff;
+  margin-bottom: 16px;
+}
+.landing-cta-palantir-section .landing-cta-subtext {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 32px;
+}
+.landing-cta-primary-palantir.landing-cta-button {
+  background: #fff;
+  color: var(--color-primary);
+}
+.landing-cta-primary-palantir.landing-cta-button:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+.landing-cta-outline-palantir {
+  background: transparent;
+  border: 2px solid #fff;
+  color: #fff;
+}
+.landing-cta-outline-palantir:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ── Mobile Responsive for Palantir styles ── */
+@media (max-width: 768px) {
+  .landing-hero-palantir {
+    padding: 100px 24px 60px;
+  }
+  .landing-hero-columns {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+  .landing-hero-visual {
+    order: -1;
+  }
+  .landing-headline-palantir {
+    font-size: 36px;
+  }
+  .landing-tagline-palantir {
+    font-size: 16px;
+  }
+  .landing-cta-palantir {
+    flex-direction: column;
+    width: 100%;
+  }
+  .landing-cta-primary-palantir,
+  .landing-cta-secondary-palantir {
+    width: 100%;
+    justify-content: center;
+  }
+  .landing-two-column-section {
+    padding: 60px 24px;
+  }
+  .landing-two-column-grid {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+  .landing-two-column-grid.reversed {
+    direction: ltr;
+  }
+  .landing-section-headline-palantir {
+    font-size: 28px;
+  }
+  .landing-section-description {
+    font-size: 16px;
+  }
+  .landing-stats-section {
+    padding: 60px 24px;
+  }
+  .landing-stats-palantir {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 32px;
+  }
+  .landing-stat-value {
+    font-size: 36px;
+  }
+  .landing-cta-palantir-section {
+    padding: 60px 24px;
+  }
+  .landing-cta-headline-palantir {
+    font-size: 28px;
+  }
+}
+
 .focus-mode-exit:hover {
   color: var(--text-primary);
   border-color: var(--color-primary);
+}
+
+/* ── FDE Layout overrides (Blueprint-style surface hierarchy) ── */
+[data-layout="fde"] {
+  --surface-app: var(--fde-surface-1);
+  --surface-primary: var(--fde-surface-2);
+  --surface-secondary: var(--fde-surface-3);
+  --surface-elevated: var(--fde-surface-4);
+  --surface-sidebar: var(--fde-surface-2);
+  --text-primary: var(--fde-text-primary);
+  --text-secondary: var(--fde-text-secondary);
+  --text-disabled: var(--fde-text-disabled);
+  --border-default: var(--fde-border-default);
+  --border-emphasis: var(--fde-border-emphasis);
+  --radius-sm: var(--fde-radius);
+  --radius-md: var(--fde-radius);
+  --radius-lg: var(--fde-radius-lg);
+}
+
+[data-layout="fde"] .hero-input-container,
+[data-layout="fde"] .hero-input-glow,
+[data-layout="fde"] .message-bubble,
+[data-layout="fde"] .inline-agent-activity,
+[data-layout="fde"] .suggestion-item,
+[data-layout="fde"] .suggestion-tab {
+  border-radius: var(--fde-radius);
+}
+
+[data-layout="fde"] .header-nav-btn,
+[data-layout="fde"] .header-btn {
+  border-radius: var(--fde-radius);
 }
