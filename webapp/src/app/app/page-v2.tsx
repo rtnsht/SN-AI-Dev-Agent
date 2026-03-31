@@ -54,6 +54,12 @@ import { ToolMenu } from "@/components/fde/ToolMenu";
 import { ToolWorkbench } from "@/components/fde/ToolWorkbench";
 import { ModePopup, type SubAgent } from "@/components/fde/ModePopup";
 import { buildToolCategoriesFromStatic, getCategoryTree } from "@/lib/tool-categories";
+
+// Populate the module-level TOOL_CATEGORIES singleton once at module load time.
+// Doing this here (rather than inside a useMemo) ensures server and client both
+// see the same populated tree on every render, eliminating a hydration mismatch
+// caused by the singleton being in different states during SSR vs first client paint.
+buildToolCategoriesFromStatic();
 import {
   deriveChatTitle,
   derivePhaseState,
@@ -2113,7 +2119,6 @@ export default function Home() {
   }, []);
 
   const toolCategoryTree = useMemo(() => {
-    buildToolCategoriesFromStatic();
     return getCategoryTree();
   }, []);
 

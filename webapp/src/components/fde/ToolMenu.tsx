@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from "react";
 import { ChevronDown, ChevronUp, ShieldCheck, Wrench } from 'lucide-react';
 import type { ToolSelectionMode } from '@/lib/tool-categories';
 
@@ -34,6 +35,11 @@ export function ToolMenu({
   onUseCategorySelection,
   customToolCount = 0,
 }: ToolMenuProps) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const totalCount = categories.reduce((sum, category) => sum + category.count, 0);
   const categoryEnabledCount = categories
     .filter((category) => activeCategories.includes(category.id))
@@ -44,6 +50,11 @@ export function ToolMenu({
       : selectionMode === "custom"
         ? customToolCount
         : categoryEnabledCount;
+  const displayedEnabledCount = mounted ? enabledCount : 0;
+  const displayedTotalCount = mounted ? totalCount : 0;
+  const displayedModeLabel = mounted
+    ? (selectionMode === "all" ? "All" : selectionMode === "custom" ? "Custom" : "Categories")
+    : "Categories";
 
   return (
     <div className="fde-card px-3 py-2">
@@ -56,10 +67,10 @@ export function ToolMenu({
         <Wrench className="w-4 h-4" style={{ color: 'var(--fde-accent-build)' }} />
         <span className="text-sm font-medium capitalize">{mode} mode</span>
         <span className="text-xs" style={{ color: 'var(--fde-text-secondary)' }}>
-          {enabledCount} of {totalCount} tools enabled
+          {displayedEnabledCount} of {displayedTotalCount} tools enabled
         </span>
         <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full" style={{ color: 'var(--fde-text-disabled)', border: '1px solid var(--fde-border-default)' }}>
-          {selectionMode === "all" ? "All" : selectionMode === "custom" ? "Custom" : "Categories"}
+          {displayedModeLabel}
         </span>
         <div className="flex-1" />
         {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}

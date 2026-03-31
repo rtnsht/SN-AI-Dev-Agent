@@ -20,46 +20,56 @@ const MODEL_KEY_MIGRATION: Record<string, string> = {
   "claude-sonnet-4.6": "claude-sonnet-4-6",
   "claude-opus-4.0": "claude-opus-4-6",
 };
+const DEFAULT_PROVIDER: AIProvider = "anthropic";
+const DEFAULT_MODEL = "claude-sonnet-4-6";
+const DEFAULT_TOOL_SELECTION_MODE: ToolSelectionMode = "categories";
+const DEFAULT_TOOL_CATEGORIES = ["analysis"];
 
 function readFromStorage(keys: string[]) {
   if (typeof window === "undefined") return null;
 
-  for (const key of keys) {
-    const value = window.sessionStorage.getItem(key);
-    if (value) return value;
+  try {
+    for (const key of keys) {
+      const value = window.sessionStorage.getItem(key);
+      if (value) return value;
+    }
+  } catch {
+    return null;
   }
 
   return null;
 }
 
-function getInitialProvider(): AIProvider {
+function getStoredProvider(): AIProvider {
   const storedProvider = readFromStorage([PROVIDER_STORAGE_KEY, ...LEGACY_PROVIDER_STORAGE_KEYS]);
-  return (storedProvider as AIProvider) || "anthropic";
+  return (storedProvider as AIProvider) || DEFAULT_PROVIDER;
 }
 
-function getInitialModel(): string {
+function getStoredModel(): string {
   const storedModel = readFromStorage([MODEL_STORAGE_KEY, ...LEGACY_MODEL_STORAGE_KEYS]);
-  if (!storedModel) return "claude-sonnet-4-6";
+  if (!storedModel) return DEFAULT_MODEL;
   return MODEL_KEY_MIGRATION[storedModel] || storedModel;
 }
 
-function getInitialToolSelectionMode(): ToolSelectionMode {
+function getStoredToolSelectionMode(): ToolSelectionMode {
   const storedMode = readFromStorage([TOOL_SELECTION_MODE_STORAGE_KEY]);
-  return storedMode === "all" || storedMode === "custom" ? storedMode : "categories";
+  return storedMode === "all" || storedMode === "custom" ? storedMode : DEFAULT_TOOL_SELECTION_MODE;
 }
 
-function getInitialToolCategories(): string[] {
+function getStoredToolCategories(): string[] {
   const stored = readFromStorage([TOOL_SELECTION_CATEGORIES_STORAGE_KEY]);
-  if (!stored) return ["analysis"];
+  if (!stored) return [...DEFAULT_TOOL_CATEGORIES];
   try {
     const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string") : ["analysis"];
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === "string")
+      : [...DEFAULT_TOOL_CATEGORIES];
   } catch {
-    return ["analysis"];
+    return [...DEFAULT_TOOL_CATEGORIES];
   }
 }
 
-function getInitialSelectedToolNames(): string[] {
+function getStoredSelectedToolNames(): string[] {
   const stored = readFromStorage([TOOL_SELECTION_TOOLS_STORAGE_KEY]);
   if (!stored) return [];
   try {
@@ -71,42 +81,79 @@ function getInitialSelectedToolNames(): string[] {
 }
 
 export function useComposerState() {
-  const [aiProvider, setAiProvider] = useState<AIProvider>(getInitialProvider);
-  const [selectedModel, setSelectedModel] = useState(getInitialModel);
+  const [aiProvider, setAiProvider] = useState<AIProvider>(DEFAULT_PROVIDER);
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
   const [providerError, setProviderError] = useState<string | null>(null);
   const [fdeMode, setFdeMode] = useState("explore");
   const [contextBlocks, setContextBlocks] = useState<ContextChip[]>([]);
   const [toolMenuOpen, setToolMenuOpen] = useState(false);
-  const [toolSelectionMode, setToolSelectionMode] = useState<ToolSelectionMode>(getInitialToolSelectionMode);
-  const [activeToolCategories, setActiveToolCategories] = useState<string[]>(getInitialToolCategories);
-  const [selectedToolNames, setSelectedToolNames] = useState<string[]>(getInitialSelectedToolNames);
+  const [toolSelectionMode, setToolSelectionMode] = useState<ToolSelectionMode>(DEFAULT_TOOL_SELECTION_MODE);
+  const [activeToolCategories, setActiveToolCategories] = useState<string[]>([...DEFAULT_TOOL_CATEGORIES]);
+  const [selectedToolNames, setSelectedToolNames] = useState<string[]>([]);
   const [showToolWorkbench, setShowToolWorkbench] = useState(false);
   const [showModePopup, setShowModePopup] = useState(false);
+  const [storageLoaded, setStorageLoaded] = useState(false);
+
+  // Load client-only composer preferences after mount to avoid hydration mismatches.
+  useEffect(() => {
+    setAiProvider(getStoredProvider());
+    setSelectedModel(getStoredModel());
+    setToolSelectionMode(getStoredToolSelectionMode());
+    setActiveToolCategories(getStoredToolCategories());
+    setSelectedToolNames(getStoredSelectedToolNames());
+    setStorageLoaded(true);
+  }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.sessionStorage.setItem(PROVIDER_STORAGE_KEY, aiProvider);
-  }, [aiProvider]);
+    if (!storageLoaded || typeof window === "undefined") return;
+    try {
+      window.sessionStorage.setItem(PROVIDER_STORAGE_KEY, aiProvider);
+    } catch {
+      // Ignore storage write failures and keep the in-memory state.
+    }
+  }, [aiProvider, storageLoaded]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.sessionStorage.setItem(MODEL_STORAGE_KEY, selectedModel);
-  }, [selectedModel]);
+    if (!storageLoaded || typeof window === "undefined") return;
+    try {
+      window.sessionStorage.setItem(MODEL_STORAGE_KEY, selectedModel);
+    } catch {
+      // Ignore storage write failures and keep the in-memory state.
+    }
+  }, [selectedModel, storageLoaded]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.sessionStorage.setItem(TOOL_SELECTION_MODE_STORAGE_KEY, toolSelectionMode);
-  }, [toolSelectionMode]);
+    if (!storageLoaded || typeof window === "undefined") return;
+    try {
+      window.sessionStorage.setItem(TOOL_SELECTION_MODE_STORAGE_KEY, toolSelectionMode);
+    } catch {
+      // Ignore storage write failures and keep the in-memory state.
+    }
+  }, [toolSelectionMode, storageLoaded]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.sessionStorage.setItem(TOOL_SELECTION_CATEGORIES_STORAGE_KEY, JSON.stringify(activeToolCategories));
-  }, [activeToolCategories]);
+    if (!storageLoaded || typeof window === "undefined") return;
+    try {
+      window.sessionStorage.setItem(
+        TOOL_SELECTION_CATEGORIES_STORAGE_KEY,
+        JSON.stringify(activeToolCategories)
+      );
+    } catch {
+      // Ignore storage write failures and keep the in-memory state.
+    }
+  }, [activeToolCategories, storageLoaded]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.sessionStorage.setItem(TOOL_SELECTION_TOOLS_STORAGE_KEY, JSON.stringify(selectedToolNames));
-  }, [selectedToolNames]);
+    if (!storageLoaded || typeof window === "undefined") return;
+    try {
+      window.sessionStorage.setItem(
+        TOOL_SELECTION_TOOLS_STORAGE_KEY,
+        JSON.stringify(selectedToolNames)
+      );
+    } catch {
+      // Ignore storage write failures and keep the in-memory state.
+    }
+  }, [selectedToolNames, storageLoaded]);
 
   return useMemo(
     () => ({
